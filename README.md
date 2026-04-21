@@ -1,0 +1,1 @@
+# rubocop-ai-output

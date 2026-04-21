@@ -1,0 +1,58 @@
+name: Automated Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build_and_release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 4.0
+        bundler-cache: true
+        
+    - name: Recover Private Key for Code Signing
+      env:
+        GEM_PRIVATE_KEY: ${{ secrets.GEM_PRIVATE_KEY }}
+      run: |
+        mkdir -p ~/.gem
+        printf '%s\n' "$GEM_PRIVATE_KEY" > ~/.gem/gem-private_key.pem
+        chmod 0600 ~/.gem/gem-private_key.pem
+        
+    - name: Extract Release Version
+      id: extract_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+        
+    - name: Synchronize Version
+      run: |
+        sed -i "s/T.let('.*', String)/T.let('${{ env.VERSION }}', String)/" lib/rubocop/ai/version.rb
+        
+    - name: Build Gem
+      run: gem build rubocop-ai.gemspec
+      
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: rubocop-ai-${{ env.VERSION }}.gem
+        
+    - name: Configure RubyGems Credentials (OIDC)
+      uses: rubygems/configure-rubygems-credentials@main
+
+    - name: Publish to RubyGems
+      run: |
+        gem push rubocop-ai-${{ env.VERSION }}.gem
