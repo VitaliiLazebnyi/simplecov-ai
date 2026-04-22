@@ -30,9 +30,13 @@ jobs:
       env:
         GEM_PRIVATE_KEY: ${{ secrets.GEM_PRIVATE_KEY }}
       run: |
-        mkdir -p ~/.gem
-        printf '%s\n' "$GEM_PRIVATE_KEY" > ~/.gem/gem-private_key.pem
-        chmod 0600 ~/.gem/gem-private_key.pem
+        if [ -n "$GEM_PRIVATE_KEY" ]; then
+          mkdir -p ~/.gem
+          printf '%s\n' "$GEM_PRIVATE_KEY" > ~/.gem/gem-private_key.pem
+          chmod 0600 ~/.gem/gem-private_key.pem
+        else
+          echo "No GEM_PRIVATE_KEY secret found, skipping signature recovery."
+        fi
         
     - name: Extract Release Version
       id: extract_version

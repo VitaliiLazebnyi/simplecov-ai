@@ -26,7 +26,10 @@ Gem::Specification.new do |spec|
   if File.exist?(cert_path)
     spec.cert_chain = [cert_path]
     private_key_path = File.expand_path('~/.gem/gem-private_key.pem')
-    spec.signing_key = private_key_path if File.exist?(private_key_path)
+    # Ensure the key file actually has substantial content (not just a newline from an empty secret)
+    if File.exist?(private_key_path) && File.size(private_key_path) > 100
+      spec.signing_key = private_key_path
+    end
   end
 
   # Requirements explicitly refined per updated SCMD-REQ-015
