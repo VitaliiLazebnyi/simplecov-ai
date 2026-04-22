@@ -4,13 +4,21 @@
 module SimpleCov
   module Formatter
     class AIFormatter
+      # Encapsulates all global tuning parameters that dictate the execution size,
+      # structure, and output verbosity of the AST-driven Markdown report generator.
+      # Exposes strongly-typed attributes through Sorbet to preempt runtime invalidities.
       class Configuration
         extend T::Sig
 
+        # The absolute or relative system path where the final token-efficient markdown
+        # document acts as an artifact.
+        # @return [String]
         sig { returns(String) }
         attr_accessor :report_path
 
-        sig { returns(Integer) }
+        # The maximum allowed byte limit to prevent the generation pipeline from overflowing
+        # LLM token bounds before terminating the traversal algorithm.
+        # @return [Integer]
         attr_accessor :max_file_size_kb
 
         sig { returns(Integer) }

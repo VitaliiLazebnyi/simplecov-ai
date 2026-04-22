@@ -1,16 +1,16 @@
 # typed: strict
 # frozen_string_literal: true
 
-version_content = File.read(File.expand_path('lib/simplecov-ai-formatter/version.rb', __dir__))
+version_content = File.read(File.expand_path('lib/simplecov-ai/version.rb', __dir__))
 version_match = version_content.match(/VERSION\s*=\s*T\.let\(['"]([^'"]+)['"],\s*String\)/)
 version = version_match ? version_match[1] : '0.0.0'
 
 Gem::Specification.new do |spec|
-  spec.name        = 'simplecov-ai-formatter'
+  spec.name        = 'simplecov-ai'
   spec.version     = version
   spec.authors     = ['Vitalii Lazebnyi']
   spec.email       = ['vitalii@example.com']
-  spec.homepage    = 'https://github.com/VitaliiLazebnyi/rubocop-ai-output'
+  spec.homepage    = 'https://github.com/VitaliiLazebnyi/simplecov-ai'
   spec.summary     = 'An AI-optimized Markdown formatter for SimpleCov utilizing AST mapping.'
   spec.description = 'Generates highly concise, deterministic Markdown coverage digests tailored ' \
                      'for LLMs and autonomous agents by matching coverage deficits to their ' \
@@ -37,6 +37,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'rubocop-rspec', '~> 2.11'
   spec.add_development_dependency 'rubocop-thread_safety'
   spec.add_development_dependency 'yard'
+  spec.add_development_dependency 'yard-sorbet'
 
   # Gem files (strict native globbing)
   spec.files = Dir.glob('{lib}/**/*') + ['LICENSE.txt', 'README.md']

@@ -6,9 +6,15 @@ require 'parser/current'
 module SimpleCov
   module Formatter
     class AIFormatter
+      # Employs statically-parsed Abstract Syntax Tree processing via the `parser` gem
+      # to correlate raw line-based deficits with high-level semantically meaningful concepts
+      # like Classes and Methods. This negates the line-number volatility often experienced
+      # by Large Language Models when patching test coverage.
       class ASTResolver
         extend T::Sig
 
+        # An immutable struct housing bounds, identification metrics, and static bypassing
+        # definitions derived from traversing the AST nodes.
         class SemanticNode
           extend T::Sig
 
@@ -39,6 +45,11 @@ module SimpleCov
           end
         end
 
+        # Orchestrates the initial mapping algorithm on a target file to extract structural
+        # metadata, circumventing potential syntax violations explicitly.
+        #
+        # @param file_path [String] The absolute path to the Ruby script to parse.
+        # @return [Array<SemanticNode>] A collection of resolvable structural entities.
         sig { params(file_path: String).returns(T::Array[SemanticNode]) }
         def self.resolve(file_path)
           return [] unless File.exist?(file_path)
@@ -52,6 +63,13 @@ module SimpleCov
           end
         end
 
+        # Recursively navigates an abstract node hierarchy, building SemanticNodes mappings 
+        # around modules, classes, singleton, and instance methods while aggregating parent paths.
+        #
+        # @param node [Parser::AST::Node] The root AST node from which traversal executes.
+        # @param comments [Array<Parser::Source::Comment>] Lexical comments corresponding to nodes.
+        # @param context [String] An accumulated identifier linking namespaces to inner entities.
+        # @return [Array<SemanticNode>] Accumulation of all sub-tree defined endpoints.
         sig do
           params(node: Parser::AST::Node, comments: T::Array[Parser::Source::Comment],
                  context: String).returns(T::Array[SemanticNode])

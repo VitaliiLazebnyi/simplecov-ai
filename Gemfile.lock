@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    simplecov-ai-formatter (0.1.0)
+    simplecov-ai (0.1.0)
       parser (>= 3.1.0)
       simplecov (>= 0.18.0)
       sorbet-runtime (~> 0.5)
@@ -66,6 +66,9 @@ GEM
     sorbet-runtime (0.5.10461)
     unicode-display_width (2.6.0)
     yard (0.9.43)
+    yard-sorbet (0.6.1)
+      sorbet-runtime (>= 0.5)
+      yard (>= 0.9)
 
 PLATFORMS
   ruby
@@ -76,8 +79,9 @@ DEPENDENCIES
   rubocop-performance (~> 1.14)
   rubocop-rspec (~> 2.11)
   rubocop-thread_safety
-  simplecov-ai-formatter!
+  simplecov-ai!
   yard
+  yard-sorbet
 
 BUNDLED WITH
    1.17.2

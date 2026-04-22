@@ -1,1 +1,1 @@
-# rubocop-ai-output
+# simplecov-ai

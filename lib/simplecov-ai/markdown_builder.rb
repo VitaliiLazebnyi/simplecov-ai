@@ -4,9 +4,16 @@
 module SimpleCov
   module Formatter
     class AIFormatter
+      # Responsible for compiling static text representations from evaluated coverage metrics,
+      # optimizing layout size, orchestrating string IO buffers, and halting upon token exhaustion.
+      # Serves as the primary mutation boundary to format AI consumption targets.
       class MarkdownBuilder
         extend T::Sig
 
+        # Initializes the Markdown sequence compilation.
+        #
+        # @param result [SimpleCov::Result] Application-wide coverage aggregation metrics
+        # @param config [Configuration] Pre-registered runtime toggles
         sig { params(result: SimpleCov::Result, config: Configuration).void }
         def initialize(result, config)
           @result = T.let(result, SimpleCov::Result)
@@ -16,6 +23,10 @@ module SimpleCov
           @truncated = T.let(false, T::Boolean)
         end
 
+        # Executes the primary buffer composition logic yielding a monolithic compiled output.
+        # Deficits are intrinsically sorted to surface the most crucial test gaps immediately.
+        #
+        # @return [String] Synthesized string digest of resolved target files and metrics
         sig { returns(String) }
         def build
           write_header

@@ -10,7 +10,7 @@ SimpleCov.start do
   add_filter '/config/'
 end
 
-require_relative '../lib/simplecov-ai-formatter'
+require_relative '../lib/simplecov-ai'
 
 require 'sorbet-runtime'
 # Disable runtime type errors for RSpec testing of failure paths
