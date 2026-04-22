@@ -2,3 +2,5 @@ coverage/
 vendor/
 .bundle/
 *.gem
+.yardoc/
+doc/
