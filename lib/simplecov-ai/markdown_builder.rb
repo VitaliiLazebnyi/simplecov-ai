@@ -40,19 +40,19 @@ module SimpleCov
 
         sig { void }
         def write_header
-          status = @result.covered_percent >= 100.0 ? 'PASSED' : 'FAILED'
+          status = T.cast(@result.covered_percent, Float) >= 100.0 ? 'PASSED' : 'FAILED'
           time_str = Time.now.to_s # UI timezone requirement
 
           @buffer.puts '# AI Coverage Digest'
           @buffer.puts "**Status:** #{status}"
-          @buffer.puts "**Global Line Coverage:** #{@result.covered_percent.round(1)}%"
+          @buffer.puts "**Global Line Coverage:** #{T.cast(@result.covered_percent, Float).round(1)}%"
 
           branch_pct = begin
-            @result.covered_branches.to_f / @result.total_branches * 100
+            T.cast(@result.covered_branches, Float) / T.cast(@result.total_branches, Numeric) * 100
           rescue StandardError
             0.0
           end
-          @buffer.puts "**Global Branch Coverage:** #{branch_pct.round(1)}%"
+          @buffer.puts "**Global Branch Coverage:** #{T.cast(branch_pct, Float).round(1)}%"
           @buffer.puts "**Generated At:** #{time_str}"
           @buffer.puts ''
         end
@@ -62,8 +62,11 @@ module SimpleCov
           @buffer.puts "## Coverage Deficits\n\n"
 
           # SCMD-REQ-014: Sort by coverage percent ASC, then by filename
-          files = @result.files.reject { |f| f.covered_percent >= 100.0 }
-                         .sort_by { |f| [f.covered_percent, f.filename] }
+          files = T.let(
+            T.cast(@result.files, T::Array[SimpleCov::SourceFile]).reject { |f| T.cast(f.covered_percent, Float) >= 100.0 }
+             .sort_by { |f| [T.cast(f.covered_percent, Float), T.cast(f.filename, String)] },
+            T::Array[SimpleCov::SourceFile]
+          )
 
           files.each do |file|
             # Check size limits SCMD-REQ-012
@@ -72,10 +75,10 @@ module SimpleCov
               break
             end
 
-            @buffer.puts "### `#{file.project_filename}`"
+            @buffer.puts "### `#{T.cast(file.project_filename, String)}`"
 
             begin
-              nodes = ASTResolver.resolve(file.filename)
+              nodes = ASTResolver.resolve(T.cast(file.filename, String))
             rescue StandardError => e
               @buffer.puts "- **ERROR:** AST Parsing Failed (`#{e.class}`)"
               next
@@ -87,16 +90,19 @@ module SimpleCov
 
         sig { params(file: SimpleCov::SourceFile, nodes: T::Array[ASTResolver::SemanticNode]).void }
         def process_deficits(file, nodes)
-          file.missed_lines.each do |line|
-            node = nodes.find { |n| line.line_number >= n.start_line && line.line_number <= n.end_line }
-            node_name = node ? node.name : "Line #{line.line_number}"
+          T.cast(file.missed_lines, T::Array[SimpleCov::SourceFile::Line]).each do |line|
+            line_num = T.cast(line.line_number, Integer)
+            node = nodes.find { |n| line_num >= n.start_line && line_num <= n.end_line }
+            node_name = node ? node.name : "Line #{line_num}"
             @buffer.puts "- `#{node_name}`\n  - **Line Deficit:** Unexecuted code."
           end
 
-          if file.respond_to?(:branches) && file.branches
-            file.missed_branches.each do |branch|
-              node = nodes.find { |n| branch.start_line >= n.start_line && branch.end_line <= n.end_line }
-              node_name = node ? node.name : "Lines #{branch.start_line}-#{branch.end_line}"
+          if file.respond_to?(:branches) && T.cast(file.branches, T::Boolean)
+            T.cast(file.missed_branches, T::Array[SimpleCov::SourceFile::Branch]).each do |branch|
+              start_line = T.cast(branch.start_line, Integer)
+              end_line = T.cast(branch.end_line, Integer)
+              node = nodes.find { |n| start_line >= n.start_line && end_line <= n.end_line }
+              node_name = node ? node.name : "Lines #{start_line}-#{end_line}"
               @buffer.puts "- `#{node_name}`\n  - **Branch Deficit:** Missing coverage for conditional."
             end
           end
@@ -107,11 +113,11 @@ module SimpleCov
         sig { void }
         def write_bypasses
           has_bypasses = T.let(false, T::Boolean)
-          bypass_buffer = StringIO.new
+          bypass_buffer = T.let(StringIO.new, StringIO)
 
-          @result.files.each do |file|
+          T.cast(@result.files, T::Array[SimpleCov::SourceFile]).each do |file|
             begin
-              nodes = ASTResolver.resolve(file.filename)
+              nodes = ASTResolver.resolve(T.cast(file.filename, String))
             rescue StandardError
               next
             end

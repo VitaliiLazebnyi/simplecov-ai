@@ -40,10 +40,10 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'rubocop-performance', '~> 1.14'
   spec.add_development_dependency 'rubocop-rspec', '~> 2.11'
   spec.add_development_dependency 'rubocop-thread_safety'
+  spec.add_development_dependency 'sorbet', '~> 0.5'
   spec.add_development_dependency 'tsort'
   spec.add_development_dependency 'yard'
   spec.add_development_dependency 'yard-sorbet'
-  spec.add_development_dependency 'sorbet', '~> 0.5'
 
   # Gem files (strict native globbing)
   spec.files = Dir.glob('{lib}/**/*') + ['LICENSE.txt', 'README.md']
