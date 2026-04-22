@@ -16,9 +16,18 @@ Gem::Specification.new do |spec|
                      'for LLMs and autonomous agents by matching coverage deficits to their ' \
                      'AST semantic boundaries rather than line numbers.'
 
-  spec.metadata['homepage_uri'] = spec.homepage
+  spec.license     = 'MIT'
+
   spec.metadata['source_code_uri'] = spec.homepage
   spec.metadata['allowed_push_host'] = 'https://rubygems.org'
+
+  # Code signing configuration
+  cert_path = File.expand_path('certs/simplecov-ai-public_cert.pem', __dir__)
+  if File.exist?(cert_path)
+    spec.cert_chain = [cert_path]
+    private_key_path = File.expand_path('~/.gem/gem-private_key.pem')
+    spec.signing_key = private_key_path if File.exist?(private_key_path)
+  end
 
   # Requirements explicitly refined per updated SCMD-REQ-015
   spec.required_ruby_version = '>= 3.0.0'
@@ -46,7 +55,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'yard-sorbet'
 
   # Gem files (strict native globbing)
-  spec.files = Dir.glob('{lib}/**/*') + ['LICENSE.txt', 'README.md']
+  spec.files = Dir.glob('{lib,certs}/**/*') + ['LICENSE.txt', 'README.md']
   spec.require_paths = ['lib']
   spec.metadata['rubygems_mfa_required'] = 'true'
 end

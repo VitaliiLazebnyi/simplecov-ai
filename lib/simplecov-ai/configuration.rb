@@ -22,15 +22,23 @@ module SimpleCov
         sig { returns(Integer) }
         attr_accessor :max_file_size_kb
 
+        # Limits the number of lines included in code snippets to conserve token usage
+        # while maintaining enough structural context for the AI to reason about the logic.
         sig { returns(Integer) }
         attr_accessor :max_snippet_lines
 
+        # Determines whether the generated markdown report is printed directly to standard output,
+        # facilitating pipeline integrations where artifacts are piped rather than read from disk.
         sig { returns(T::Boolean) }
         attr_accessor :output_to_console
 
+        # Specifies the level of detail in the coverage report (e.g., :fine, :coarse)
+        # to balance between comprehensive reporting and strict token constraints.
         sig { returns(Symbol) }
         attr_accessor :granularity
 
+        # Controls whether to include lines skipped via coverage bypass directives (e.g., :nocov:),
+        # allowing the AI to audit skipped regions for potential testing mandate violations.
         sig { returns(T::Boolean) }
         attr_accessor :include_bypasses
 
