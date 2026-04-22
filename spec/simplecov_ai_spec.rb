@@ -93,10 +93,11 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
         instance_double(SimpleCov::Result, covered_percent: 100.0, covered_branches: 20, total_branches: 20, files: [])
       end
 
-      it 'reports PASSED' do
+      it 'reports PASSED and omits Coverage Deficits section' do
         formatter.format(mock_result_pass)
         content = File.read(config.report_path)
         expect(content).to include('**Status:** PASSED')
+        expect(content).not_to include('## Coverage Deficits')
       end
     end
 
@@ -105,7 +106,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
 
       before do
         allow(mock_file).to receive(:respond_to?).with(:branches).and_return(true)
-        allow(mock_file).to receive(:branches).and_return(true)
+        allow(mock_file).to receive(:branches).and_return([mock_branch])
         allow(mock_file).to receive(:missed_branches).and_return([mock_branch])
       end
 

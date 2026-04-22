@@ -2,15 +2,21 @@
 # frozen_string_literal: true
 
 require 'simplecov'
+require_relative '../lib/simplecov-ai'
+
+SimpleCov::Formatter::AIFormatter.configure do |config|
+  config.output_to_console = true
+  config.granularity = :fine
+  config.include_bypasses = true
+end
 
 # Coverage mandates (SimpleCov)
 SimpleCov.start do
   enable_coverage :branch
   add_filter '/spec/'
   add_filter '/config/'
+  formatter SimpleCov::Formatter::AIFormatter
 end
-
-require_relative '../lib/simplecov-ai'
 
 require 'sorbet-runtime'
 # Disable runtime type errors for RSpec testing of failure paths

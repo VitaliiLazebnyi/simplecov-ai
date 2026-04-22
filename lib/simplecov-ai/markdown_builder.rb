@@ -59,14 +59,16 @@ module SimpleCov
 
         sig { void }
         def write_deficits
-          @buffer.puts "## Coverage Deficits\n\n"
-
           # SCMD-REQ-014: Sort by coverage percent ASC, then by filename
           files = T.let(
-            T.cast(@result.files, T::Array[SimpleCov::SourceFile]).reject { |f| T.cast(f.covered_percent, Float) >= 100.0 }
+            T.cast(@result.files.to_a, T::Array[SimpleCov::SourceFile]).reject { |f| T.cast(f.covered_percent, Float) >= 100.0 }
              .sort_by { |f| [T.cast(f.covered_percent, Float), T.cast(f.filename, String)] },
             T::Array[SimpleCov::SourceFile]
           )
+
+          return if files.empty?
+
+          @buffer.puts "## Coverage Deficits\n\n"
 
           files.each do |file|
             # Check size limits SCMD-REQ-012
@@ -97,7 +99,7 @@ module SimpleCov
             @buffer.puts "- `#{node_name}`\n  - **Line Deficit:** Unexecuted code."
           end
 
-          if file.respond_to?(:branches) && T.cast(file.branches, T::Boolean)
+          if file.respond_to?(:branches) && file.branches.is_a?(Array) && file.branches.any?
             T.cast(file.missed_branches, T::Array[SimpleCov::SourceFile::Branch]).each do |branch|
               start_line = T.cast(branch.start_line, Integer)
               end_line = T.cast(branch.end_line, Integer)
@@ -115,7 +117,7 @@ module SimpleCov
           has_bypasses = T.let(false, T::Boolean)
           bypass_buffer = T.let(StringIO.new, StringIO)
 
-          T.cast(@result.files, T::Array[SimpleCov::SourceFile]).each do |file|
+          T.cast(@result.files.to_a, T::Array[SimpleCov::SourceFile]).each do |file|
             begin
               nodes = ASTResolver.resolve(T.cast(file.filename, String))
             rescue StandardError
