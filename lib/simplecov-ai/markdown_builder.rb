@@ -59,9 +59,12 @@ module SimpleCov
 
         sig { void }
         def write_deficits
+          files_enum = T.cast(@result.files, T::Enumerable[T.untyped])
+          files_array = T.let(files_enum.to_a, T::Array[SimpleCov::SourceFile])
+          
           # SCMD-REQ-014: Sort by coverage percent ASC, then by filename
           files = T.let(
-            T.cast(@result.files.to_a, T::Array[SimpleCov::SourceFile]).reject { |f| T.cast(f.covered_percent, Float) >= 100.0 }
+            files_array.reject { |f| T.cast(f.covered_percent, Float) >= 100.0 }
              .sort_by { |f| [T.cast(f.covered_percent, Float), T.cast(f.filename, String)] },
             T::Array[SimpleCov::SourceFile]
           )
@@ -99,13 +102,19 @@ module SimpleCov
             @buffer.puts "- `#{node_name}`\n  - **Line Deficit:** Unexecuted code."
           end
 
-          if file.respond_to?(:branches) && file.branches.is_a?(Array) && file.branches.any?
-            T.cast(file.missed_branches, T::Array[SimpleCov::SourceFile::Branch]).each do |branch|
-              start_line = T.cast(branch.start_line, Integer)
-              end_line = T.cast(branch.end_line, Integer)
-              node = nodes.find { |n| start_line >= n.start_line && end_line <= n.end_line }
-              node_name = node ? node.name : "Lines #{start_line}-#{end_line}"
-              @buffer.puts "- `#{node_name}`\n  - **Branch Deficit:** Missing coverage for conditional."
+          if file.respond_to?(:branches)
+            branches = file.branches
+            case branches
+            when Array
+              if branches.any?
+                T.cast(file.missed_branches, T::Array[SimpleCov::SourceFile::Branch]).each do |branch|
+                  start_line = T.cast(branch.start_line, Integer)
+                  end_line = T.cast(branch.end_line, Integer)
+                  node = nodes.find { |n| start_line >= n.start_line && end_line <= n.end_line }
+                  node_name = node ? node.name : "Lines #{start_line}-#{end_line}"
+                  @buffer.puts "- `#{node_name}`\n  - **Branch Deficit:** Missing coverage for conditional."
+                end
+              end
             end
           end
 
@@ -117,7 +126,10 @@ module SimpleCov
           has_bypasses = T.let(false, T::Boolean)
           bypass_buffer = T.let(StringIO.new, StringIO)
 
-          T.cast(@result.files.to_a, T::Array[SimpleCov::SourceFile]).each do |file|
+          files_enum = T.cast(@result.files, T::Enumerable[T.untyped])
+          files_array = T.let(files_enum.to_a, T::Array[SimpleCov::SourceFile])
+
+          files_array.each do |file|
             begin
               nodes = ASTResolver.resolve(T.cast(file.filename, String))
             rescue StandardError
