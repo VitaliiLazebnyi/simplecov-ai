@@ -16,7 +16,7 @@ jobs:
       id-token: write
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0
     
@@ -50,12 +50,12 @@ jobs:
       run: gem build simplecov-ai.gemspec
       
     - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v3
       with:
         files: simplecov-ai-${{ env.VERSION }}.gem
         
     - name: Configure RubyGems Credentials (OIDC)
-      uses: rubygems/configure-rubygems-credentials@main
+      uses: rubygems/configure-rubygems-credentials@v1.0.0
 
     - name: Publish to RubyGems
       run: |
