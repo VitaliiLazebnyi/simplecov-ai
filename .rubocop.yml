@@ -15,7 +15,7 @@ Style/FrozenStringLiteralComment:
 
 Naming/FileName:
   Exclude:
-    - 'lib/simplecov-ai-formatter.rb'
+    - 'lib/simplecov-ai.rb'
 
 Metrics/BlockLength:
   Enabled: false

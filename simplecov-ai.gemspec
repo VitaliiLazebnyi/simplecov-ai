@@ -31,11 +31,16 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'simplecov', '>= 0.18.0'
 
   # Development & Testing framework expectations
+  spec.add_development_dependency 'base64'
+  spec.add_development_dependency 'benchmark'
+  spec.add_development_dependency 'logger'
+  spec.add_development_dependency 'ostruct'
   spec.add_development_dependency 'rspec', '~> 3.12'
   spec.add_development_dependency 'rubocop', '~> 1.28'
   spec.add_development_dependency 'rubocop-performance', '~> 1.14'
   spec.add_development_dependency 'rubocop-rspec', '~> 2.11'
   spec.add_development_dependency 'rubocop-thread_safety'
+  spec.add_development_dependency 'tsort'
   spec.add_development_dependency 'yard'
   spec.add_development_dependency 'yard-sorbet'
 

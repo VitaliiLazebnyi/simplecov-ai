@@ -63,7 +63,7 @@ module SimpleCov
           end
         end
 
-        # Recursively navigates an abstract node hierarchy, building SemanticNodes mappings 
+        # Recursively navigates an abstract node hierarchy, building SemanticNodes mappings
         # around modules, classes, singleton, and instance methods while aggregating parent paths.
         #
         # @param node [Parser::AST::Node] The root AST node from which traversal executes.
