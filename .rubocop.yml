@@ -57,3 +57,5 @@ Style/MultilineBlockChain:
   Enabled: false
 Layout/LineLength:
   Enabled: false
+RSpec/DescribedClass:
+  Enabled: false

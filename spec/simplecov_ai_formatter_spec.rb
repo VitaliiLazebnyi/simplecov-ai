@@ -7,11 +7,11 @@ require 'stringio'
 require 'tmpdir'
 
 RSpec.describe SimpleCov::Formatter::AIFormatter do
-  let(:config) { described_class.configuration }
+  let(:config) { SimpleCov::Formatter::AIFormatter.configuration }
 
   before do
-    described_class.instance_variable_set(:@configuration, nil)
-    described_class.configure do |c|
+    SimpleCov::Formatter::AIFormatter.instance_variable_set(:@configuration, nil)
+    SimpleCov::Formatter::AIFormatter.configure do |c|
       c.report_path = 'coverage/test_ai_report.md'
       c.output_to_console = false
       c.max_file_size_kb = 50

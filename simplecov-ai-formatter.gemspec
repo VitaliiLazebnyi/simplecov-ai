@@ -30,6 +30,14 @@ Gem::Specification.new do |spec|
   # Ensure SimpleCov is available and meets the hard minimum SCMD-REQ-016
   spec.add_dependency 'simplecov', '>= 0.18.0'
 
+  # Development & Testing framework expectations
+  spec.add_development_dependency 'rspec', '~> 3.12'
+  spec.add_development_dependency 'rubocop', '~> 1.28'
+  spec.add_development_dependency 'rubocop-performance', '~> 1.14'
+  spec.add_development_dependency 'rubocop-rspec', '~> 2.11'
+  spec.add_development_dependency 'rubocop-thread_safety'
+  spec.add_development_dependency 'yard'
+
   # Gem files (strict native globbing)
   spec.files = Dir.glob('{lib}/**/*') + ['LICENSE.txt', 'README.md']
   spec.require_paths = ['lib']

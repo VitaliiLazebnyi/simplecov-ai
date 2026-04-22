@@ -20,9 +20,9 @@ module SimpleCov
         @configuration ||= T.let(Configuration.new, T.nilable(Configuration))
       end
 
-      sig { params(block: T.nilable(T.proc.params(config: Configuration).void)).void }
-      def self.configure
-        yield(configuration) if block
+      sig { params(blk: T.nilable(T.proc.params(config: Configuration).void)).void }
+      def self.configure(&blk)
+        blk&.call(configuration)
       end
 
       sig { params(result: SimpleCov::Result).void }
