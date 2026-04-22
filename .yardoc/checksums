@@ -1,5 +1,5 @@
 lib/simplecov-ai.rb 8df28d5c7bea7de202703caf18c1012188136419
 lib/simplecov-ai/version.rb 578586ae53fc5cd46a1aa6b84bf556702671c5fb
-lib/simplecov-ai/ast_resolver.rb ccb43938f9c6b0e5a8a2bb1c3acf530a96c2f7f6
+lib/simplecov-ai/ast_resolver.rb 8c23a0f4078cbbf755916fba9ed53f4c4b4998fb
 lib/simplecov-ai/configuration.rb 93a44d3f9873bb76856d3bb1812dd7936886e152
 lib/simplecov-ai/markdown_builder.rb 42d49276afcc05a2bbb7e5443c1b482c95d64d2d
