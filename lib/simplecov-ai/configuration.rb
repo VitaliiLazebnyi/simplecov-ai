@@ -19,6 +19,7 @@ module SimpleCov
         # The maximum allowed byte limit to prevent the generation pipeline from overflowing
         # LLM token bounds before terminating the traversal algorithm.
         # @return [Integer]
+        sig { returns(Integer) }
         attr_accessor :max_file_size_kb
 
         sig { returns(Integer) }

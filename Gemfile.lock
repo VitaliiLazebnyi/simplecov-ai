@@ -67,7 +67,10 @@ GEM
       simplecov_json_formatter (~> 0.1)
     simplecov-html (0.13.2)
     simplecov_json_formatter (0.1.4)
+    sorbet (0.6.13153)
+      sorbet-static (= 0.6.13153)
     sorbet-runtime (0.5.10461)
+    sorbet-static (0.6.13153-universal-darwin)
     tsort (0.2.0)
     unicode-display_width (2.6.0)
     yard (0.9.43)
@@ -76,7 +79,7 @@ GEM
       yard (>= 0.9)
 
 PLATFORMS
-  ruby
+  arm64-darwin-25
 
 DEPENDENCIES
   base64
@@ -89,6 +92,7 @@ DEPENDENCIES
   rubocop-rspec (~> 2.11)
   rubocop-thread_safety
   simplecov-ai!
+  sorbet (~> 0.5)
   tsort
   yard
   yard-sorbet

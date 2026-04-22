@@ -106,7 +106,7 @@ module SimpleCov
 
         sig { void }
         def write_bypasses
-          has_bypasses = false
+          has_bypasses = T.let(false, T::Boolean)
           bypass_buffer = StringIO.new
 
           @result.files.each do |file|
