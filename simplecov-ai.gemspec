@@ -9,7 +9,7 @@ Gem::Specification.new do |spec|
   spec.name        = 'simplecov-ai'
   spec.version     = version
   spec.authors     = ['Vitalii Lazebnyi']
-  spec.email       = ['vitalii@example.com']
+  spec.email       = ['vitalii.lazebnyi.github@gmail.com']
   spec.homepage    = 'https://github.com/VitaliiLazebnyi/simplecov-ai'
   spec.summary     = 'An AI-optimized Markdown formatter for SimpleCov utilizing AST mapping.'
   spec.description = 'Generates highly concise, deterministic Markdown coverage digests tailored ' \

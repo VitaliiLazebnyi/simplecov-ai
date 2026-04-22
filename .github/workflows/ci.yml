@@ -56,7 +56,7 @@ jobs:
         ruby-version: ${{ matrix.ruby }}
         bundler-cache: true
     - name: Run Sorbet Typechecker
-      run: bundle exec srb tc
+      run: bundle exec srb tc --typed strong
 
   docs:
     runs-on: ubuntu-latest
