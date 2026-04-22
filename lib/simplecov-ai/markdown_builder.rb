@@ -61,7 +61,6 @@ module SimpleCov
         def write_deficits
           files_enum = T.cast(@result.files, T::Enumerable[T.untyped])
           files_array = T.let(files_enum.to_a, T::Array[SimpleCov::SourceFile])
-          
           # SCMD-REQ-014: Sort by coverage percent ASC, then by filename
           files = T.let(
             files_array.reject { |f| T.cast(f.covered_percent, Float) >= 100.0 }
@@ -102,19 +101,24 @@ module SimpleCov
             @buffer.puts "- `#{node_name}`\n  - **Line Deficit:** Unexecuted code."
           end
 
-          if file.respond_to?(:branches)
-            branches = file.branches
-            case branches
-            when Array
-              if branches.any?
-                T.cast(file.missed_branches, T::Array[SimpleCov::SourceFile::Branch]).each do |branch|
-                  start_line = T.cast(branch.start_line, Integer)
-                  end_line = T.cast(branch.end_line, Integer)
-                  node = nodes.find { |n| start_line >= n.start_line && end_line <= n.end_line }
-                  node_name = node ? node.name : "Lines #{start_line}-#{end_line}"
-                  @buffer.puts "- `#{node_name}`\n  - **Branch Deficit:** Missing coverage for conditional."
-                end
-              end
+          process_branch_deficits(file, nodes) if file.respond_to?(:branches)
+
+          @buffer.puts ''
+        end
+
+        sig { params(file: SimpleCov::SourceFile, nodes: T::Array[ASTResolver::SemanticNode]).void }
+        def process_branch_deficits(file, nodes)
+          branches = file.branches
+          case branches
+          when Array
+            return unless branches.any?
+
+            T.cast(file.missed_branches, T::Array[SimpleCov::SourceFile::Branch]).each do |branch|
+              start_line = T.cast(branch.start_line, Integer)
+              end_line = T.cast(branch.end_line, Integer)
+              node = nodes.find { |n| start_line >= n.start_line && end_line <= n.end_line }
+              node_name = node ? node.name : "Lines #{start_line}-#{end_line}"
+              @buffer.puts "- `#{node_name}`\n  - **Branch Deficit:** Missing coverage for conditional."
             end
           end
 
