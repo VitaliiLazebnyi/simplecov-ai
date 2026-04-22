@@ -21,7 +21,7 @@ Gem::Specification.new do |spec|
   spec.metadata['allowed_push_host'] = 'https://rubygems.org'
 
   # Requirements explicitly refined per updated SCMD-REQ-015
-  spec.required_ruby_version = '>= 2.6.0'
+  spec.required_ruby_version = '>= 3.0.0'
 
   # Core execution footprint dependencies
   spec.add_dependency 'parser', '>= 3.1.0'
