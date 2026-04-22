@@ -1,0 +1,37 @@
+# typed: strict
+# frozen_string_literal: true
+
+version_content = File.read(File.expand_path('lib/simplecov-ai-formatter/version.rb', __dir__))
+version_match = version_content.match(/VERSION\s*=\s*T\.let\(['"]([^'"]+)['"],\s*String\)/)
+version = version_match ? version_match[1] : '0.0.0'
+
+Gem::Specification.new do |spec|
+  spec.name        = 'simplecov-ai-formatter'
+  spec.version     = version
+  spec.authors     = ['Vitalii Lazebnyi']
+  spec.email       = ['vitalii@example.com']
+  spec.homepage    = 'https://github.com/VitaliiLazebnyi/rubocop-ai-output'
+  spec.summary     = 'An AI-optimized Markdown formatter for SimpleCov utilizing AST mapping.'
+  spec.description = 'Generates highly concise, deterministic Markdown coverage digests tailored ' \
+                     'for LLMs and autonomous agents by matching coverage deficits to their ' \
+                     'AST semantic boundaries rather than line numbers.'
+
+  spec.metadata['homepage_uri'] = spec.homepage
+  spec.metadata['source_code_uri'] = spec.homepage
+  spec.metadata['allowed_push_host'] = 'https://rubygems.org'
+
+  # Requirements explicitly refined per updated SCMD-REQ-015
+  spec.required_ruby_version = '>= 2.6.0'
+
+  # Core execution footprint dependencies
+  spec.add_dependency 'parser', '>= 3.1.0'
+  spec.add_dependency 'sorbet-runtime', '~> 0.5'
+
+  # Ensure SimpleCov is available and meets the hard minimum SCMD-REQ-016
+  spec.add_dependency 'simplecov', '>= 0.18.0'
+
+  # Gem files (strict native globbing)
+  spec.files = Dir.glob('{lib}/**/*') + ['LICENSE.txt', 'README.md']
+  spec.require_paths = ['lib']
+  spec.metadata['rubygems_mfa_required'] = 'true'
+end

@@ -94,4 +94,4 @@ jobs:
         ruby-version: ${{ matrix.ruby }}
         bundler-cache: true
     - name: Verify Gem Build
-      run: gem build rubocop-ai.gemspec
+      run: gem build simplecov-ai-formatter.gemspec

@@ -40,19 +40,19 @@ jobs:
         
     - name: Synchronize Version
       run: |
-        sed -i "s/T.let('.*', String)/T.let('${{ env.VERSION }}', String)/" lib/rubocop/ai/version.rb
+        sed -i "s/T.let('.*', String)/T.let('${{ env.VERSION }}', String)/" lib/simplecov-ai-formatter/version.rb
         
     - name: Build Gem
-      run: gem build rubocop-ai.gemspec
+      run: gem build simplecov-ai-formatter.gemspec
       
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
-        files: rubocop-ai-${{ env.VERSION }}.gem
+        files: simplecov-ai-formatter-${{ env.VERSION }}.gem
         
     - name: Configure RubyGems Credentials (OIDC)
       uses: rubygems/configure-rubygems-credentials@main
 
     - name: Publish to RubyGems
       run: |
-        gem push rubocop-ai-${{ env.VERSION }}.gem
+        gem push simplecov-ai-formatter-${{ env.VERSION }}.gem

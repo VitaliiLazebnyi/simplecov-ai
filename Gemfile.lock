@@ -1,0 +1,83 @@
+PATH
+  remote: .
+  specs:
+    simplecov-ai-formatter (0.1.0)
+      parser (>= 3.1.0)
+      simplecov (>= 0.18.0)
+      sorbet-runtime (~> 0.5)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    ast (2.4.3)
+    diff-lcs (1.6.2)
+    docile (1.4.1)
+    json (2.7.6)
+    parallel (1.24.0)
+    parser (3.3.11.1)
+      ast (~> 2.4.1)
+      racc
+    racc (1.8.1)
+    rainbow (3.1.1)
+    regexp_parser (2.12.0)
+    rexml (3.4.4)
+    rspec (3.13.2)
+      rspec-core (~> 3.13.0)
+      rspec-expectations (~> 3.13.0)
+      rspec-mocks (~> 3.13.0)
+    rspec-core (3.13.6)
+      rspec-support (~> 3.13.0)
+    rspec-expectations (3.13.5)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.13.0)
+    rspec-mocks (3.13.8)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.13.0)
+    rspec-support (3.13.7)
+    rubocop (1.50.2)
+      json (~> 2.3)
+      parallel (~> 1.10)
+      parser (>= 3.2.0.0)
+      rainbow (>= 2.2.2, < 4.0)
+      regexp_parser (>= 1.8, < 3.0)
+      rexml (>= 3.2.5, < 4.0)
+      rubocop-ast (>= 1.28.0, < 2.0)
+      ruby-progressbar (~> 1.7)
+      unicode-display_width (>= 2.4.0, < 3.0)
+    rubocop-ast (1.30.0)
+      parser (>= 3.2.1.0)
+    rubocop-capybara (2.18.0)
+      rubocop (~> 1.41)
+    rubocop-performance (1.17.1)
+      rubocop (>= 1.7.0, < 2.0)
+      rubocop-ast (>= 0.4.0)
+    rubocop-rspec (2.20.0)
+      rubocop (~> 1.33)
+      rubocop-capybara (~> 2.17)
+    rubocop-thread_safety (0.5.1)
+      rubocop (>= 0.90.0)
+    ruby-progressbar (1.13.0)
+    simplecov (0.22.0)
+      docile (~> 1.1)
+      simplecov-html (~> 0.11)
+      simplecov_json_formatter (~> 0.1)
+    simplecov-html (0.13.2)
+    simplecov_json_formatter (0.1.4)
+    sorbet-runtime (0.5.10461)
+    unicode-display_width (2.6.0)
+    yard (0.9.43)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  rspec (~> 3.12)
+  rubocop (~> 1.28)
+  rubocop-performance (~> 1.14)
+  rubocop-rspec (~> 2.11)
+  rubocop-thread_safety
+  simplecov-ai-formatter!
+  yard
+
+BUNDLED WITH
+   1.17.2

@@ -1,0 +1,5 @@
+--markup markdown
+--plugin sorbet
+--title "SimpleCov AI Formatter Docs"
+--readme README.md
+lib/**/*.rb

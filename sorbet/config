@@ -1,0 +1,12 @@
+--dir
+.
+--ignore
+vendor/
+--ignore
+coverage/
+--ignore
+doc/
+--ignore
+spec/
+--ignore
+.git/

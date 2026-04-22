@@ -1,0 +1,59 @@
+AllCops:
+  TargetRubyVersion: 3.0
+  NewCops: enable
+  SuggestExtensions: false
+
+require:
+  - rubocop-performance
+  - rubocop-rspec
+  - rubocop-thread_safety
+
+Style/FrozenStringLiteralComment:
+  Enabled: true
+  EnforcedStyle: always
+
+
+Naming/FileName:
+  Exclude:
+    - 'lib/simplecov-ai-formatter.rb'
+
+Metrics/BlockLength:
+  Enabled: false
+Metrics/ModuleLength:
+  Enabled: false
+Metrics/ClassLength:
+  Enabled: false
+RSpec/ExampleLength:
+  Enabled: false
+RSpec/MultipleExpectations:
+  Enabled: false
+RSpec/MultipleMemoizedHelpers:
+  Enabled: false
+Metrics/AbcSize:
+  Enabled: false
+Metrics/MethodLength:
+  Enabled: false
+Metrics/CyclomaticComplexity:
+  Enabled: false
+Metrics/PerceivedComplexity:
+  Enabled: false
+Gemspec/DevelopmentDependencies:
+  Enabled: false
+Gemspec/RequiredRubyVersion:
+  Enabled: false
+Style/Documentation:
+  Enabled: false
+Lint/MissingCopEnableDirective:
+  Enabled: false
+Style/ClassVars:
+  Enabled: false
+Style/ClassMethods:
+  Enabled: false
+RSpec/FilePath:
+  Enabled: false
+ThreadSafety/InstanceVariableInClassMethod:
+  Enabled: false
+Style/MultilineBlockChain:
+  Enabled: false
+Layout/LineLength:
+  Enabled: false
