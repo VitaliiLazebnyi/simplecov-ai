@@ -63,6 +63,4 @@ Gem::Specification.new do |spec|
   spec.require_paths = ['lib']
   spec.metadata['rubygems_mfa_required'] = 'true'
 
-  # Add self-dependency for AI coverage reports
-  spec.add_development_dependency 'simplecov-ai', '~> 0.10'
 end
