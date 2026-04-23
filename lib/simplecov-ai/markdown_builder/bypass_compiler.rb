@@ -30,7 +30,7 @@ module SimpleCov
 
           sig { params(buffer: StringIO).returns(T::Boolean) }
           def compile_all_bypasses(buffer)
-            has_bypasses = false
+            has_bypasses = T.let(false, T::Boolean)
             T.let(@result.files.to_a, T::Array[SimpleCov::SourceFile]).each do |file|
               bypassed = fetch_bypassed_nodes(file.filename)
               next if bypassed.empty?

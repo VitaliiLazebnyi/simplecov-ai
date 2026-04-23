@@ -14335,7 +14335,6 @@ class Net::HTTP
 
   def self.default_configuration=(default_configuration); end
 
-  def self.new(address, port=T.unsafe(nil), p_addr=T.unsafe(nil), p_port=T.unsafe(nil), p_user=T.unsafe(nil), p_pass=T.unsafe(nil), p_no_proxy=T.unsafe(nil), p_use_ssl=T.unsafe(nil)); end
 
   def self.proxy_use_ssl(); end
 

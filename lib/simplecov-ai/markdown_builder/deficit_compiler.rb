@@ -46,8 +46,8 @@ module SimpleCov
           def format_raw_deficits(buffer, file)
             buffer.puts "  - **ERROR:** AST Parsing Failed. Showing raw line numbers instead.\n"
             group = MarkdownBuilder::DeficitGroup.new(
-              lines: T.cast(file.missed_lines, T::Array[SimpleCov::SourceFile::Line]),
-              branches: T.cast(file.missed_branches, T::Array[SimpleCov::SourceFile::Branch])
+              lines: file.missed_lines,
+              branches: file.missed_branches
             )
             format_deficit_group(buffer, group, fetch_source_lines(file.filename))
             buffer.puts ''
