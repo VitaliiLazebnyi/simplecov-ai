@@ -82,9 +82,10 @@ module SimpleCov
           nodes << semantic_node if semantic_node
 
           node.children.each do |child|
-            next unless child.is_a?(Parser::AST::Node)
-
-            nodes.concat(traverse(child, comments, current_context))
+            case child
+            when Parser::AST::Node
+              nodes.concat(traverse(child, comments, current_context))
+            end
           end
 
           nodes
