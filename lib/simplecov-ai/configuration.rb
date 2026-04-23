@@ -9,6 +9,7 @@ module SimpleCov
       # Exposes strongly-typed attributes through Sorbet to preempt runtime invalidities.
       class Configuration
         extend T::Sig
+
         # The absolute or relative system path where the final token-efficient markdown
         # document acts as an artifact.
         # @return [String]

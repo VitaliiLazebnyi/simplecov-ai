@@ -3,7 +3,8 @@ AllCops:
   NewCops: enable
   SuggestExtensions: false
 
-require:
+plugins:
+  - standard-sorbet
   - rubocop-performance
   - rubocop-rspec
   - rubocop-thread_safety
@@ -29,53 +30,56 @@ Metrics/ModuleLength:
   Enabled: true
 Metrics/ClassLength:
   Enabled: true
-  Max: 210
 RSpec/ExampleLength:
   Enabled: true
-  Max: 30
-RSpec/MultipleExpectations:
-  Enabled: true
-  Max: 15
-RSpec/MultipleMemoizedHelpers:
-  Enabled: true
   Max: 10
-Metrics/AbcSize:
-  Enabled: true
-  Max: 65
-Metrics/MethodLength:
-  Enabled: true
-  Max: 50
-Metrics/CyclomaticComplexity:
-  Enabled: true
-  Max: 20
-Metrics/PerceivedComplexity:
-  Enabled: true
-  Max: 20
+
 Gemspec/DevelopmentDependencies:
   Enabled: false
+
+RSpec/MultipleMemoizedHelpers:
+  Enabled: true
+  Max: 7
+
+RSpec/NestedGroups:
+  Enabled: true
+  Max: 4
+RSpec/MultipleExpectations:
+  Enabled: true
+
+Metrics/AbcSize:
+  Enabled: true
+Metrics/MethodLength:
+  Enabled: true
+Metrics/CyclomaticComplexity:
+  Enabled: true
+Metrics/PerceivedComplexity:
+  Enabled: true
+
 Gemspec/RequiredRubyVersion:
   Enabled: true
 Style/Documentation:
-  Enabled: false
+  Enabled: true
 Lint/MissingCopEnableDirective:
   Enabled: true
 Style/ClassVars:
   Enabled: true
 Style/ClassMethods:
   Enabled: true
-RSpec/FilePath:
-  Enabled: false
+RSpec/SpecFilePathFormat:
+  Enabled: true
+RSpec/SpecFilePathSuffix:
+  Enabled: true
 RSpec/DescribedClass:
-  Enabled: false
-ThreadSafety/InstanceVariableInClassMethod:
+  Enabled: true
+ThreadSafety/ClassInstanceVariable:
   Enabled: true
   Exclude:
     - 'lib/simplecov-ai.rb'
 Style/MultilineBlockChain:
-  Enabled: false
+  Enabled: true
 Layout/LineLength:
   Enabled: true
-  Max: 140
   AllowedPatterns:
     - '> The total coverage deficit report exceeded'
 
@@ -95,10 +99,16 @@ Sorbet/KeywordArgumentOrdering:
   Enabled: false
 
 Sorbet/ForbidRBIOutsideOfAllowedPaths:
-  Enabled: false
+  Enabled: true
+  Include:
+    - '**/*.rbi'
+  AllowedPaths:
+    - 'sorbet/rbi/**/*.rbi'
 
 Sorbet/ForbidExtendTSigHelpersInShims:
-  Enabled: false
+  Enabled: true
+  Include:
+    - '**/*.rbi'
 
 Sorbet/StrictSigil:
   Enabled: true

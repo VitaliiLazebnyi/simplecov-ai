@@ -12,10 +12,12 @@ module SimpleCov
       # by Large Language Models when patching test coverage.
       class ASTResolver
         extend T::Sig
+
         # An immutable struct housing bounds, identification metrics, and static bypassing
         # definitions derived from traversing the AST nodes.
         class SemanticNode
           extend T::Sig
+
           sig { returns(String) }
           attr_reader :name, :type
 
@@ -76,31 +78,13 @@ module SimpleCov
           return [] unless node.is_a?(Parser::AST::Node)
 
           nodes = T.let([], T::Array[SemanticNode])
-          current_context = context
-
-          case node.type
-          when :class, :module
-            const_node = T.cast(node.children[0], Parser::AST::Node)
-            const_node_loc = T.cast(const_node.loc, Parser::Source::Map::Constant)
-            const_node_name = T.cast(const_node_loc.name, Parser::Source::Range)
-            name = T.cast(const_node_name.source, String)
-            current_context = context.empty? ? name : "#{context}::#{name}"
-            nodes << build_node(node, comments, current_context, node.type.to_s.capitalize)
-          when :def
-            name = T.cast(node.children.first, Symbol).to_s
-            current_context = context.empty? ? "##{name}" : "#{context}##{name}"
-            nodes << build_node(node, comments, current_context, 'Instance Method')
-          when :defs
-            name = T.cast(node.children[1], Symbol).to_s
-            current_context = context.empty? ? ".#{name}" : "#{context}.#{name}"
-            nodes << build_node(node, comments, current_context, 'Singleton Method')
-          end
+          current_context, semantic_node = extract_node_metadata(node, comments, context)
+          nodes << semantic_node if semantic_node
 
           node.children.each do |child|
-            case child
-            when Parser::AST::Node
-              nodes.concat(traverse(child, comments, current_context))
-            end
+            next unless child.is_a?(Parser::AST::Node)
+
+            nodes.concat(traverse(child, comments, current_context))
           end
 
           nodes
@@ -109,28 +93,78 @@ module SimpleCov
         private
 
         sig do
+          params(node: Parser::AST::Node, comments: T::Array[Parser::Source::Comment], context: String)
+            .returns([String, T.nilable(SemanticNode)])
+        end
+        def extract_node_metadata(node, comments, context)
+          case node.type
+          when :class, :module
+            extract_class_metadata(node, comments, context)
+          when :def
+            extract_instance_method_metadata(node, comments, context)
+          when :defs
+            extract_singleton_method_metadata(node, comments, context)
+          else
+            [context, nil]
+          end
+        end
+
+        sig do
+          params(node: Parser::AST::Node, comments: T::Array[Parser::Source::Comment], context: String)
+            .returns([String, T.nilable(SemanticNode)])
+        end
+        def extract_class_metadata(node, comments, context)
+          const_node = T.cast(node.children[0], Parser::AST::Node)
+          const_node_name = T.cast(T.cast(const_node.loc, Parser::Source::Map::Constant).name, Parser::Source::Range)
+          name = T.cast(const_node_name.source, String)
+          ctx = context.empty? ? name : "#{context}::#{name}"
+          [ctx, build_node(node, comments, ctx, node.type.to_s.capitalize)]
+        end
+
+        sig do
+          params(node: Parser::AST::Node, comments: T::Array[Parser::Source::Comment], context: String)
+            .returns([String, T.nilable(SemanticNode)])
+        end
+        def extract_instance_method_metadata(node, comments, context)
+          name = T.cast(node.children.first, Symbol).to_s
+          ctx = context.empty? ? "##{name}" : "#{context}##{name}"
+          [ctx, build_node(node, comments, ctx, 'Instance Method')]
+        end
+
+        sig do
+          params(node: Parser::AST::Node, comments: T::Array[Parser::Source::Comment], context: String)
+            .returns([String, T.nilable(SemanticNode)])
+        end
+        def extract_singleton_method_metadata(node, comments, context)
+          name = T.cast(node.children[1], Symbol).to_s
+          ctx = context.empty? ? ".#{name}" : "#{context}.#{name}"
+          [ctx, build_node(node, comments, ctx, 'Singleton Method')]
+        end
+
+        sig do
           params(node: Parser::AST::Node, comments: T::Array[Parser::Source::Comment], name: String,
                  type: String).returns(SemanticNode)
         end
         def build_node(node, comments, name, type)
-          node_loc = T.cast(node.loc, Parser::Source::Map)
-          node_line = T.cast(node_loc.line, Integer)
-          node_last_line = T.cast(node_loc.last_line, Integer)
+          loc = T.cast(node.loc, Parser::Source::Map)
+          start_ln = T.cast(loc.line, Integer)
+          end_ln = T.cast(loc.last_line, Integer)
+          bypasses = extract_bypasses(comments, start_ln, end_ln)
+          SemanticNode.new(name: name, type: type, start_line: start_ln, end_line: end_ln, bypasses: bypasses)
+        end
 
-          bypasses = comments.select do |c|
+        sig do
+          params(comments: T::Array[Parser::Source::Comment], start_line: Integer, end_line: Integer)
+            .returns(T::Array[String])
+        end
+        def extract_bypasses(comments, start_line, end_line)
+          matched = comments.select do |c|
             c_loc = T.cast(c.loc, Parser::Source::Map)
             c_line = T.cast(c_loc.line, Integer)
             c_text = T.cast(c.text, String)
-            c_line >= node_line - 1 && c_line <= node_last_line + 1 && c_text.include?(':nocov:')
-          end.map { |c| T.cast(c.text, String).strip }
-
-          SemanticNode.new(
-            name: name,
-            type: type,
-            start_line: node_line,
-            end_line: node_last_line,
-            bypasses: bypasses
-          )
+            c_line.between?(start_line - 1, end_line + 1) && c_text.include?(':nocov:')
+          end
+          matched.map { |c| T.cast(c.text, String).strip }
         end
       end
     end
