@@ -21,7 +21,7 @@ GEM
     logger (1.7.0)
     netrc (0.11.0)
     ostruct (0.6.3)
-    parallel (2.0.1)
+    parallel (1.28.0)
     parser (3.3.11.1)
       ast (~> 2.4.1)
       racc
@@ -136,6 +136,7 @@ DEPENDENCIES
   benchmark
   logger
   ostruct
+  parallel (< 2.0)
   rspec (~> 3.12)
   rubocop (>= 1.28)
   rubocop-performance (>= 1.14)

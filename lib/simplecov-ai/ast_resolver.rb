@@ -81,11 +81,8 @@ module SimpleCov
           current_context, semantic_node = extract_node_metadata(node, comments, context)
           nodes << semantic_node if semantic_node
 
-          node.children.each do |child|
-            case child
-            when Parser::AST::Node
-              nodes.concat(traverse(child, comments, current_context))
-            end
+          node.children.grep(Parser::AST::Node).each do |child|
+            nodes.concat(traverse(child, comments, current_context))
           end
 
           nodes
