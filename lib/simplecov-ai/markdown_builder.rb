@@ -9,10 +9,13 @@ module SimpleCov
       # Serves as the primary mutation boundary to format AI consumption targets.
       class MarkdownBuilder
         extend T::Sig
-
+        # Groups unexecuted lines and branches under their common semantic node.
         class DeficitGroup < T::Struct
+          # @return [ASTResolver::SemanticNode, nil] The corresponding structural boundary
           prop :semantic_node, T.nilable(ASTResolver::SemanticNode), default: nil
+          # @return [Array<SimpleCov::SourceFile::Line>] The missed source lines
           prop :lines, T::Array[SimpleCov::SourceFile::Line], default: []
+          # @return [Array<SimpleCov::SourceFile::Branch>] The missed conditional branches
           prop :branches, T::Array[SimpleCov::SourceFile::Branch], default: []
         end
 
@@ -297,7 +300,9 @@ module SimpleCov
         # @param buffer [StringIO] The temporary buffer isolating bypass text.
         # @param file [SimpleCov::SourceFile] The file containing bypasses.
         # @param bypasses [Array<ASTResolver::SemanticNode>] AST nodes decorated with bypass comments.
-        sig { params(buffer: StringIO, file: SimpleCov::SourceFile, bypasses: T::Array[ASTResolver::SemanticNode]).void }
+        sig do
+          params(buffer: StringIO, file: SimpleCov::SourceFile, bypasses: T::Array[ASTResolver::SemanticNode]).void
+        end
         def write_file_bypasses(buffer, file, bypasses)
           buffer.puts "### `#{file.project_filename}`"
           bypasses.each do |node|

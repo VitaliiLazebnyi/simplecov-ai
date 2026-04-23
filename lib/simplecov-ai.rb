@@ -20,7 +20,6 @@ module SimpleCov
     # or classes with deficient coverage.
     class AIFormatter
       extend T::Sig
-
       # Retrieves the global configuration for the AI formatter.
       # The instantiation pattern ensures that defaults are securely lazily loaded
       # before any coverage processing begins.

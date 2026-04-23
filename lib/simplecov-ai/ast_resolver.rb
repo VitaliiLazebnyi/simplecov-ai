@@ -12,12 +12,10 @@ module SimpleCov
       # by Large Language Models when patching test coverage.
       class ASTResolver
         extend T::Sig
-
         # An immutable struct housing bounds, identification metrics, and static bypassing
         # definitions derived from traversing the AST nodes.
         class SemanticNode
           extend T::Sig
-
           sig { returns(String) }
           attr_reader :name, :type
 

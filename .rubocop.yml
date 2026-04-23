@@ -16,53 +16,68 @@ Style/FrozenStringLiteralComment:
   Enabled: true
   EnforcedStyle: always
 
-
 Naming/FileName:
   Exclude:
     - 'lib/simplecov-ai.rb'
 
 Metrics/BlockLength:
-  Enabled: false
+  Enabled: true
+  Exclude:
+    - 'spec/**/*'
+    - 'simplecov-ai.gemspec'
 Metrics/ModuleLength:
-  Enabled: false
+  Enabled: true
 Metrics/ClassLength:
-  Enabled: false
+  Enabled: true
+  Max: 210
 RSpec/ExampleLength:
-  Enabled: false
+  Enabled: true
+  Max: 30
 RSpec/MultipleExpectations:
-  Enabled: false
+  Enabled: true
+  Max: 15
 RSpec/MultipleMemoizedHelpers:
-  Enabled: false
+  Enabled: true
+  Max: 10
 Metrics/AbcSize:
-  Enabled: false
+  Enabled: true
+  Max: 65
 Metrics/MethodLength:
-  Enabled: false
+  Enabled: true
+  Max: 50
 Metrics/CyclomaticComplexity:
-  Enabled: false
+  Enabled: true
+  Max: 20
 Metrics/PerceivedComplexity:
-  Enabled: false
+  Enabled: true
+  Max: 20
 Gemspec/DevelopmentDependencies:
   Enabled: false
 Gemspec/RequiredRubyVersion:
-  Enabled: false
+  Enabled: true
 Style/Documentation:
   Enabled: false
 Lint/MissingCopEnableDirective:
-  Enabled: false
+  Enabled: true
 Style/ClassVars:
-  Enabled: false
+  Enabled: true
 Style/ClassMethods:
-  Enabled: false
+  Enabled: true
 RSpec/FilePath:
-  Enabled: false
-ThreadSafety/InstanceVariableInClassMethod:
-  Enabled: false
-Style/MultilineBlockChain:
-  Enabled: false
-Layout/LineLength:
   Enabled: false
 RSpec/DescribedClass:
   Enabled: false
+ThreadSafety/InstanceVariableInClassMethod:
+  Enabled: true
+  Exclude:
+    - 'lib/simplecov-ai.rb'
+Style/MultilineBlockChain:
+  Enabled: false
+Layout/LineLength:
+  Enabled: true
+  Max: 140
+  AllowedPatterns:
+    - '> The total coverage deficit report exceeded'
 
 Sorbet/ForbidTUntyped:
   Enabled: true
