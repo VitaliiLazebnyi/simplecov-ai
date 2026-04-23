@@ -34,6 +34,9 @@ jobs:
         ruby: ["3.2", "3.3", "4.0"]
     steps:
     - uses: actions/checkout@v6
+    - name: Remove Gemfile.lock for older Rubies
+      if: matrix.ruby == '3.2'
+      run: rm -f Gemfile.lock
     - name: Set up Ruby
       uses: ruby/setup-ruby@v1
       with:

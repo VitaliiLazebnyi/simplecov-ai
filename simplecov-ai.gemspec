@@ -62,7 +62,4 @@ Gem::Specification.new do |spec|
   spec.files = Dir.glob('{lib,certs}/**/*') + ['LICENSE.txt', 'README.md']
   spec.require_paths = ['lib']
   spec.metadata['rubygems_mfa_required'] = 'true'
-
-  # Constrain parallel for Ruby 3.2 CI compatibility
-  spec.add_development_dependency 'parallel', '< 2.0'
 end
