@@ -42,7 +42,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
         filename: 'lib/dummy.rb',
         project_filename: 'lib/dummy.rb',
         covered_percent: 50.0,
-        missed_lines: [mock_line]
+        missed_lines: [mock_line, instance_double(SimpleCov::SourceFile::Line, line_number: 3)]
       )
     end
     let(:mock_result) do
@@ -64,6 +64,20 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
         name: 'DummyClass', type: 'Class', start_line: 1, end_line: 10, bypasses: []
       )
       allow(SimpleCov::Formatter::AIFormatter::ASTResolver).to receive(:resolve).and_return([node])
+
+      # Mock file reading to simulate reading source lines for snippets
+      allow(File).to receive(:readlines).with('lib/dummy.rb').and_return([
+                                                                           "class DummyClass\n",
+                                                                           "  def initialize\n",
+                                                                           "    @foo = 1\n",
+                                                                           "  end\n",
+                                                                           "  def branch_test\n",
+                                                                           "    break if stream.closed?\n",
+                                                                           "  end\n",
+                                                                           "  def branch_test_2\n",
+                                                                           "    break if stream.closed?\n",
+                                                                           "  end\n"
+                                                                         ])
     end
 
     it 'writes a markdown digest to the configured report tree' do
@@ -113,8 +127,54 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
       it 'reports branch deficits' do
         formatter.format(mock_result)
         content = File.read(config.report_path)
-        expect(content).to include('**Branch Deficit:** Missing coverage for conditional.')
+        expect(content).to include('**Branch Deficit:** Missing coverage for conditional')
         expect(content).to include('`DummyClass`')
+      end
+
+      it 'reports exact code snippets from source file' do
+        formatter.format(mock_result)
+        content = File.read(config.report_path)
+        expect(content).to include('`def initialize`') # from line 2 being mock_line
+        expect(content).to include('`@foo = 1`') # from line 3 being mock_line2
+      end
+
+      it 'groups multiple missed lines under a single semantic node header' do
+        formatter.format(mock_result)
+        content = File.read(config.report_path)
+        # Should only list `DummyClass` once, not twice
+        expect(content.scan('- `DummyClass`').size).to eq(1)
+        expect(content.scan('- **Line Deficit:**').size).to eq(2)
+      end
+
+      it 'outputs summarized nodes without snippets when granularity is coarse' do
+        config.granularity = :coarse
+        formatter.format(mock_result)
+        content = File.read(config.report_path)
+        expect(content).to include('Contains unexecuted lines or branches.')
+        expect(content).not_to include('`def initialize`')
+      end
+
+      it 'truncates extremely long snippets using max_snippet_lines' do
+        long_line = "  def initialize #{'A' * 100}\n"
+        allow(File).to receive(:readlines).with('lib/dummy.rb').and_return([
+                                                                             "class DummyClass\n",
+                                                                             long_line,
+                                                                             "  end\n"
+                                                                           ])
+        config.max_snippet_lines = 1 # 80 chars max
+        formatter.format(mock_result)
+        content = File.read(config.report_path)
+        expect(content).to include('A' * 50)
+        expect(content).to include('...')
+        expect(content).not_to include('A' * 100)
+      end
+
+      it 'calculates occurrence counts for identical snippets' do
+        allow(mock_line).to receive(:line_number).and_return(9) # The second `break if stream.closed?`
+        formatter.format(mock_result)
+        content = File.read(config.report_path)
+        expect(content).to include('(Occurrence 2 of 2)')
+        expect(content).to include('break if stream.closed?')
       end
 
       it 'reports unknown lines if AST node not found' do
@@ -141,6 +201,23 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
         formatter.format(mock_result)
         content = File.read(config.report_path)
         expect(content).to include('**ERROR:** AST Parsing Failed')
+      end
+    end
+
+    context 'when evaluating AST performance' do
+      it 'caches the resolved AST preventing redundant file system reads' do
+        # Clear the allow from the before block for this specific test
+        allow(SimpleCov::Formatter::AIFormatter::ASTResolver).to receive(:resolve).and_call_original
+
+        node = SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.new(
+          name: 'DummyClass', type: 'Class', start_line: 1, end_line: 10, bypasses: [':nocov:']
+        )
+        allow(SimpleCov::Formatter::AIFormatter::ASTResolver).to receive(:resolve).with('lib/dummy.rb').and_return([node])
+
+        config.include_bypasses = true
+        formatter.format(mock_result)
+
+        expect(SimpleCov::Formatter::AIFormatter::ASTResolver).to have_received(:resolve).with('lib/dummy.rb').once
       end
     end
 
@@ -200,8 +277,8 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
               # :nocov:
               def track
               end
-              
-              #    :nocov:  
+          #{'    '}
+              #    :nocov:#{'  '}
               def track_spaced
               end
 

@@ -21,6 +21,7 @@ module SimpleCov
           @buffer = T.let(StringIO.new, StringIO)
           @file_count = T.let(0, Integer)
           @truncated = T.let(false, T::Boolean)
+          @ast_cache = T.let({}, T::Hash[String, T::Array[ASTResolver::SemanticNode]])
         end
 
         # Executes the primary buffer composition logic yielding a monolithic compiled output.
@@ -38,6 +39,7 @@ module SimpleCov
 
         private
 
+        # Writes the summary header containing global coverage percentages and generation metadata.
         sig { void }
         def write_header
           status = T.cast(@result.covered_percent, Float) >= 100.0 ? 'PASSED' : 'FAILED'
@@ -57,6 +59,7 @@ module SimpleCov
           @buffer.puts ''
         end
 
+        # Iterates through files with coverage deficits and coordinates their AST parsing and snippet generation.
         sig { void }
         def write_deficits
           files_enum = T.cast(@result.files, T::Enumerable[T.untyped])
@@ -82,7 +85,7 @@ module SimpleCov
             @buffer.puts "### `#{T.cast(file.project_filename, String)}`"
 
             begin
-              nodes = ASTResolver.resolve(T.cast(file.filename, String))
+              nodes = resolve_ast(T.cast(file.filename, String))
             rescue StandardError => e
               @buffer.puts "- **ERROR:** AST Parsing Failed (`#{e.class}`)"
               next
@@ -92,39 +95,166 @@ module SimpleCov
           end
         end
 
+        # Groups deficit lines and branches by their corresponding AST semantic nodes and delegates formatting.
+        #
+        # @param file [SimpleCov::SourceFile] The file being processed.
+        # @param nodes [Array<ASTResolver::SemanticNode>] The resolved semantic nodes for the file.
         sig { params(file: SimpleCov::SourceFile, nodes: T::Array[ASTResolver::SemanticNode]).void }
         def process_deficits(file, nodes)
+          node_deficits = T.let({}, T::Hash[String, T::Hash[Symbol, T.untyped]])
+
           T.cast(file.missed_lines, T::Array[SimpleCov::SourceFile::Line]).each do |line|
             line_num = T.cast(line.line_number, Integer)
             node = nodes.find { |n| line_num >= n.start_line && line_num <= n.end_line }
             node_name = node ? node.name : "Line #{line_num}"
-            @buffer.puts "- `#{node_name}`\n  - **Line Deficit:** Unexecuted code."
+            node_deficits[node_name] ||= { lines: [], branches: [], semantic_node: node }
+            T.cast(T.must(node_deficits[node_name])[:lines], T::Array[SimpleCov::SourceFile::Line]) << line
           end
 
-          process_branch_deficits(file, nodes) if file.respond_to?(:branches)
-
-          @buffer.puts ''
-        end
-
-        sig { params(file: SimpleCov::SourceFile, nodes: T::Array[ASTResolver::SemanticNode]).void }
-        def process_branch_deficits(file, nodes)
-          branches = file.branches
-          case branches
-          when Array
-            return unless branches.any?
-
+          if file.respond_to?(:branches) && file.branches.is_a?(Array) && file.branches.any?
             T.cast(file.missed_branches, T::Array[SimpleCov::SourceFile::Branch]).each do |branch|
               start_line = T.cast(branch.start_line, Integer)
               end_line = T.cast(branch.end_line, Integer)
               node = nodes.find { |n| start_line >= n.start_line && end_line <= n.end_line }
               node_name = node ? node.name : "Lines #{start_line}-#{end_line}"
-              @buffer.puts "- `#{node_name}`\n  - **Branch Deficit:** Missing coverage for conditional."
+              node_deficits[node_name] ||= { lines: [], branches: [], semantic_node: node }
+              T.cast(T.must(node_deficits[node_name])[:branches], T::Array[SimpleCov::SourceFile::Branch]) << branch
+            end
+          end
+
+          source_lines = T.let(nil, T.nilable(T::Array[String]))
+
+          node_deficits.each do |node_name, deficits|
+            if @buffer.size / 1024.0 > @config.max_file_size_kb
+              @truncated = true
+              break
+            end
+
+            @buffer.puts "- `#{node_name}`"
+
+            if @config.granularity == :coarse
+              @buffer.puts '  - **Deficit:** Contains unexecuted lines or branches.'
+              next
+            end
+
+            source_lines ||= begin
+              File.readlines(T.cast(file.filename, String))
+            rescue StandardError
+              []
+            end
+
+            node = T.cast(deficits[:semantic_node], T.nilable(ASTResolver::SemanticNode))
+            lines = T.cast(deficits[:lines], T::Array[SimpleCov::SourceFile::Line])
+            branches = T.cast(deficits[:branches], T::Array[SimpleCov::SourceFile::Branch])
+
+            lines.each do |line|
+              write_line_snippet(line, source_lines, node)
+            end
+
+            branches.each do |branch|
+              write_branch_snippet(branch, source_lines, node)
             end
           end
 
           @buffer.puts ''
         end
 
+        # Formats and appends a single line deficit snippet to the markdown buffer.
+        #
+        # @param line [SimpleCov::SourceFile::Line] The unexecuted source line.
+        # @param source_lines [Array<String>] The raw text lines of the file.
+        # @param node [ASTResolver::SemanticNode, nil] The semantic node enclosing the deficit.
+        sig do
+          params(line: SimpleCov::SourceFile::Line, source_lines: T::Array[String],
+                 node: T.nilable(ASTResolver::SemanticNode)).void
+        end
+        def write_line_snippet(line, source_lines, node)
+          line_num = T.cast(line.line_number, Integer)
+          text = fetch_snippet_text([line_num], source_lines)
+          occurrence_str = calculate_occurrence(line_num, source_lines, node)
+          @buffer.puts "  - **Line Deficit:** #{occurrence_str}`#{truncate_snippet(text)}`"
+        end
+
+        # Formats and appends a branch conditional deficit snippet to the markdown buffer.
+        #
+        # @param branch [SimpleCov::SourceFile::Branch] The unexecuted conditional branch.
+        # @param source_lines [Array<String>] The raw text lines of the file.
+        # @param node [ASTResolver::SemanticNode, nil] The semantic node enclosing the deficit.
+        sig do
+          params(branch: SimpleCov::SourceFile::Branch, source_lines: T::Array[String],
+                 node: T.nilable(ASTResolver::SemanticNode)).void
+        end
+        def write_branch_snippet(branch, source_lines, node)
+          start_line = T.cast(branch.start_line, Integer)
+          end_line = T.cast(branch.end_line, Integer)
+          lines_range = (start_line..end_line).to_a
+          text = fetch_snippet_text(lines_range, source_lines)
+          occurrence_str = calculate_occurrence(start_line, source_lines, node)
+          @buffer.puts "  - **Branch Deficit:** Missing coverage for conditional `#{truncate_snippet(text)}` #{occurrence_str}".rstrip
+        end
+
+        # Extracts and normalizes exact string literals from the source file arrays.
+        #
+        # @param line_nums [Array<Integer>] Target line coordinates.
+        # @param source_lines [Array<String>] The raw text lines of the file.
+        # @return [String] Joined snippet text.
+        sig { params(line_nums: T::Array[Integer], source_lines: T::Array[String]).returns(String) }
+        def fetch_snippet_text(line_nums, source_lines)
+          line_nums.filter_map { |ln| source_lines[ln - 1]&.strip }.reject(&:empty?).join(' ')
+        end
+
+        # Disambiguates identical code snippets within the same semantic block (e.g., "(Occurrence 2 of 3)").
+        #
+        # @param line_num [Integer] The target coordinate of the deficit.
+        # @param source_lines [Array<String>] Raw file contents.
+        # @param node [ASTResolver::SemanticNode, nil] The semantic node boundary to search within.
+        # @return [String] Occurrence label or empty string if unique.
+        sig do
+          params(line_num: Integer, source_lines: T::Array[String],
+                 node: T.nilable(ASTResolver::SemanticNode)).returns(String)
+        end
+        def calculate_occurrence(line_num, source_lines, node)
+          return '' if node.nil?
+
+          first_line_of_snippet = source_lines[line_num - 1]&.strip
+          return '' if first_line_of_snippet.nil? || first_line_of_snippet.empty?
+
+          occurrences = 0
+          current_occurrence = 1
+
+          (node.start_line..node.end_line).each do |ln|
+            line_content = source_lines[ln - 1]&.strip
+            next unless line_content
+
+            if line_content == first_line_of_snippet
+              occurrences += 1
+              current_occurrence = occurrences if ln == line_num
+            end
+          end
+
+          occurrences > 1 ? "(Occurrence #{current_occurrence} of #{occurrences}) " : ''
+        end
+
+        # Safely limits the character length of a code snippet according to global configurations.
+        #
+        # @param text [String] The snippet to potentially truncate.
+        # @return [String] Truncated string with trailing ellipses if limit exceeded.
+        sig { params(text: String).returns(String) }
+        def truncate_snippet(text)
+          max_chars = @config.max_snippet_lines * 80
+          text.length > max_chars ? "#{text[0...max_chars]}..." : text
+        end
+
+        # Caches and retrieves AST resolutions to eliminate redundant filesystem I/O operations.
+        #
+        # @param filename [String] The absolute path to parse.
+        # @return [Array<ASTResolver::SemanticNode>] Parsed AST semantic blocks.
+        sig { params(filename: String).returns(T::Array[ASTResolver::SemanticNode]) }
+        def resolve_ast(filename)
+          @ast_cache[filename] ||= ASTResolver.resolve(filename)
+        end
+
+        # Scans resolved AST blocks to report explicitly defined coverage ignores (e.g., :nocov:).
         sig { void }
         def write_bypasses
           has_bypasses = T.let(false, T::Boolean)
@@ -135,7 +265,7 @@ module SimpleCov
 
           files_array.each do |file|
             begin
-              nodes = ASTResolver.resolve(T.cast(file.filename, String))
+              nodes = resolve_ast(T.cast(file.filename, String))
             rescue StandardError
               next
             end
@@ -153,6 +283,11 @@ module SimpleCov
           @buffer.puts bypass_buffer.string
         end
 
+        # Formats the Markdown layout for files explicitly bypassing test coverage.
+        #
+        # @param buffer [StringIO] The temporary buffer isolating bypass text.
+        # @param file [SimpleCov::SourceFile] The file containing bypasses.
+        # @param bypasses [Array<ASTResolver::SemanticNode>] AST nodes decorated with bypass comments.
         sig { params(buffer: StringIO, file: SimpleCov::SourceFile, bypasses: T::Array[ASTResolver::SemanticNode]).void }
         def write_file_bypasses(buffer, file, bypasses)
           buffer.puts "### `#{file.project_filename}`"
@@ -162,6 +297,7 @@ module SimpleCov
           buffer.puts ''
         end
 
+        # Appends a critical alert if the output hit the token-ceiling constraint and was forcibly terminated.
         sig { void }
         def write_truncation_warning
           @buffer.puts '> **[WARNING] TRUNCATION NOTIFICATION:**'
