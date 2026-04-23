@@ -7,6 +7,10 @@ require:
   - rubocop-performance
   - rubocop-rspec
   - rubocop-thread_safety
+  - rubocop-sorbet
+
+inherit_gem:
+  standard-sorbet: config/base.yml
 
 Style/FrozenStringLiteralComment:
   Enabled: true
@@ -59,3 +63,41 @@ Layout/LineLength:
   Enabled: false
 RSpec/DescribedClass:
   Enabled: false
+
+Sorbet/ForbidTUntyped:
+  Enabled: true
+
+Sorbet/ForbidTUnsafe:
+  Enabled: true
+
+Sorbet/EnforceSignatures:
+  Enabled: true
+
+Sorbet/SignatureBuildOrder:
+  Enabled: false
+
+Sorbet/KeywordArgumentOrdering:
+  Enabled: false
+
+Sorbet/ForbidRBIOutsideOfAllowedPaths:
+  Enabled: false
+
+Sorbet/ForbidExtendTSigHelpersInShims:
+  Enabled: false
+
+Sorbet/StrictSigil:
+  Enabled: true
+  Exclude:
+    - 'bin/tapioca'
+    - 'sorbet/tapioca/require.rb'
+    - 'spec/**/*'
+
+Sorbet/HasSigil:
+  Enabled: true
+  Exclude:
+    - 'bin/tapioca'
+
+Sorbet/FalseSigil:
+  Enabled: true
+  Exclude:
+    - 'bin/tapioca'
