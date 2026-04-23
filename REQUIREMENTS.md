@@ -25,7 +25,7 @@ This gem provides the best approach because it introduces **Semantic Resolution*
 - **SCAI-REQ-004 (Semantic Resolution via AST):** The library MUST parse the source of under-covered files (using standard parsers like `parser`) to cross-reference `SimpleCov`'s exact coordinates (including line strings and column bounds) with the AST structure. Missing coverage MUST be translated by traversing up the AST to resolve the deficit into immutable semantic groupings (e.g., Class, Module, Instance Method, Singleton Method, or Root Script Scope).
 - **SCAI-REQ-005 (Coverage Type Segmentation):** The report MUST distinguish clearly between `Line Deficits` (unexecuted statements) and `Branch Deficits` (unexecuted conditionals) to clarify the scope of the required test.
 - **SCAI-REQ-012 (Token Ceiling / Truncation):** To prevent prompt bloat, if the generated report exceeds a predefined file size limit (calculated in strict Metric units, e.g., 50 kB), the formatter MUST prioritize the lowest-coverage files first and explicitly state the truncation in the report.
-- **SCAI-REQ-013 (Directive Auditing):** The library MUST parse source file comments to identify the presence of SimpleCov exclusion directives (e.g., `# :nocov:`). The formatter MUST explicitly report the semantic envelope (e.g., Method or Class) encasing any such bypass in the final markdown document. This ensures that any artificial inflation of coverage metrics is fully transparent to the auditing AI.
+- **SCAI-REQ-013 (Directive Auditing):** The library MUST parse source file comments to identify the presence of SimpleCov exclusion directives (e.g., `:nocov:`). The formatter MUST explicitly report the semantic envelope (e.g., Method or Class) encasing any such bypass in the final markdown document. This ensures that any artificial inflation of coverage metrics is fully transparent to the auditing AI.
 - **SCAI-REQ-019 (Parallel Result Merging):** Modern automated infrastructures execute tests in parallel (e.g., via `parallel_tests`), generating partial coverage sets. The formatter MUST possess explicit support for natively ingesting and deterministically processing merged `SimpleCov::Result` objects containing aggregated coverage data assembled at the culmination of a parallel test run.
 
 ### 3.2. Formatter Implementation & UX
@@ -34,7 +34,7 @@ This gem provides the best approach because it introduces **Semantic Resolution*
 - **SCAI-REQ-014 (Deterministic Output Sorting):** To ensure output consistency and prioritize the most critical work, the detailed file reports MUST be strictly sorted. The primary sort index MUST be the **Coverage Percentage (Ascending order)** so that the worst-covered files appear sequentially at the top. The secondary tie-breaking sort MUST be the **File Path (Alphabetical order)**. Inside individual file blocks, the AST semantic nodes MUST be grouped and sorted chronologically/vertically as they naturally appear top-down within the source file.
 
 ### 3.3. Internal Gem Standards
-- **SCAI-REQ-008 (Maximum Rigor Test Coverage):** The gem's test suite MUST rigorously establish and maintain 100% deterministic line and branch coverage. Tests MUST NOT be tautological or lack meaningful assertions. The use of coverage-dodging directives (e.g., `# :nocov:`) is strictly forbidden by default. They are permitted ONLY when absolute compliance is technically impossible (e.g., genuinely untestable system crashes), and any such bypass MUST be immediately preceded by a comment explicitly justifying the architectural limitation. Any randomness or time-based execution must be explicitly mocked.
+- **SCAI-REQ-008 (Maximum Rigor Test Coverage):** The gem's test suite MUST rigorously establish and maintain 100% deterministic line and branch coverage. Tests MUST NOT be tautological or lack meaningful assertions. The use of coverage-dodging directives (e.g., `:nocov:`) is strictly forbidden by default. They are permitted ONLY when absolute compliance is technically impossible (e.g., genuinely untestable system crashes), and any such bypass MUST be immediately preceded by a comment explicitly justifying the architectural limitation. Any randomness or time-based execution must be explicitly mocked.
 - **SCAI-REQ-009 (Strict Analytical Compliance):** The gem MUST implement maximum-rigor RuboCop static analysis checks. `rubocop:disable` directives are systematically banned unless mathematically impossible to avoid (e.g., flawed upstream library typings). Any permitted bypass MUST be immediately preceded by an inline comment explicitly justifying the architectural limitation.
 - **SCAI-REQ-010 (Strict Type Safety):** The gem MUST utilize a static typing overlay (e.g., Sorbet with `# typed: strict` typing globally) to mathematically eliminate runtime type anomalies.
 - **SCAI-REQ-011 (Graceful Degradation & Fail-Fast Boundaries):** The system MUST enforce fail-fast error handling at integration boundaries (e.g., encountering fatally corrupt SimpleCov telemetry raises an explicit `SCAI::PayloadError`). However, if the AST parser encounters structurally unparseable Ruby code (e.g., a dynamically generated file), it MUST gracefully degrade. Instead of crashing the entire test suite run, it MUST formally record the file as a deficit and optionally log the raw SimpleCov line coordinates for that file, explicitly denoting the parsing failure in the markdown output, before safely continuing to process the remaining valid files.
@@ -80,7 +80,7 @@ SimpleCov::Formatter::AIFormatter.configure do |config|
   config.granularity = :fine            # Default: :fine. Options: :fine (statements) or :coarse (methods)
 
   # Fine-grained control over what data is stored in the digest:
-  config.include_bypasses = true        # Default: true. Audits explicit # :nocov: ignores.
+  config.include_bypasses = true        # Default: true. Audits explicit :nocov: ignores.
 end
 
 SimpleCov.start do
@@ -140,7 +140,7 @@ In strict adherence to the project's **Fail-Fast** mandate (`SCAI-REQ-011`), the
 
 ### `lib/my_gem/legacy_handler.rb`
 - `MyGem::LegacyHandler#obsolete_action`
-  - **Bypass Present:** Contains `# :nocov:` directive artificially ignoring coverage (Occurrence 1 of 1).
+  - **Bypass Present:** Contains `:nocov:` directive artificially ignoring coverage (Occurrence 1 of 1).
 
 > **[WARNING] TRUNCATION NOTIFICATION:**
 > The total coverage deficit report exceeded the maximum token constraint (50 kB). The report was truncated. The deficits detailed above represent the lowest-coverage (most critical) files. Please resolve these deficits to reveal the remaining uncovered files in subsequent test runs.

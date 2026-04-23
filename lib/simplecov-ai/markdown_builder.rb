@@ -157,7 +157,7 @@ module SimpleCov
         def write_file_bypasses(buffer, file, bypasses)
           buffer.puts "### `#{file.project_filename}`"
           bypasses.each do |node|
-            buffer.puts "- `#{node.name}`\n  - **Bypass Present:** Contains `# :nocov:` directive artificially ignoring coverage."
+            buffer.puts "- `#{node.name}`\n  - **Bypass Present:** Contains `:nocov:` directive artificially ignoring coverage."
           end
           buffer.puts ''
         end

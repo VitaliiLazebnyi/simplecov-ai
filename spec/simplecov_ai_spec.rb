@@ -193,15 +193,19 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
         expect(described_class.resolve(invalid_file)).to eq([])
       end
 
-      it 'resolves an AST structure accurately with modules and classes' do
+      it 'resolves an AST structure accurately with modules and classes and handles :nocov: variations' do
         code = <<~RUBY
           module Analytics
             class Event
               # :nocov:
               def track
               end
-              # :nocov:
-          #{'    '}
+              
+              #    :nocov:  
+              def track_spaced
+              end
+
+              # rubocop:disable Metrics/MethodLength, :nocov:
               def self.name_event
               end
             end
@@ -219,14 +223,20 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
         expect(nodes[1].name).to eq('Analytics::Event')
         expect(nodes[1].type).to eq('Class')
 
-        # Instance Method
+        # Instance Method 1
         expect(nodes[2].name).to eq('Analytics::Event#track')
         expect(nodes[2].type).to eq('Instance Method')
         expect(nodes[2].bypasses).to include('# :nocov:')
 
+        # Instance Method 2
+        expect(nodes[3].name).to eq('Analytics::Event#track_spaced')
+        expect(nodes[3].type).to eq('Instance Method')
+        expect(nodes[3].bypasses).to include('#    :nocov:')
+
         # Singleton Method
-        expect(nodes[3].name).to eq('Analytics::Event.name_event')
-        expect(nodes[3].type).to eq('Singleton Method')
+        expect(nodes[4].name).to eq('Analytics::Event.name_event')
+        expect(nodes[4].type).to eq('Singleton Method')
+        expect(nodes[4].bypasses).to include('# rubocop:disable Metrics/MethodLength, :nocov:')
       end
 
       it 'resolves root level methods correctly' do
