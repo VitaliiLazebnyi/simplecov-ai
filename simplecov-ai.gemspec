@@ -31,7 +31,7 @@ Gem::Specification.new do |spec|
   end
 
   # Requirements explicitly refined per updated SCMD-REQ-015
-  spec.required_ruby_version = '>= 2.6.0'
+  spec.required_ruby_version = '>= 2.7.0'
 
   # Core execution footprint dependencies
   spec.add_dependency 'parser', '>= 3.1.0'

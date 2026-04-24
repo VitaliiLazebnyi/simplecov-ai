@@ -41,7 +41,7 @@ This gem provides the best approach because it introduces **Semantic Resolution*
 - **SCAI-REQ-020 (AST Caching & Performance):** To eliminate redundant file system I/O and overhead, the formatter MUST maintain an internal AST cache memory buffer mapping file paths to resolved syntax trees. This ensures a file is fully parsed mathematically exactly once, even when subjected to multiple traversals for deficit detection and bypass auditing.
 
 ### 3.4. System Prerequisites & Dependencies
-- **SCAI-REQ-015 (Ruby Version Constraint):** The gem MUST enforce a minimum Ruby version of `>= 2.6.0`. **[Refined Requirement]** Due to local environment execution constraints prohibiting the native installation of Ruby >= 3.0.0, the requirement for `prism` was archived in favor of the production-tested `whitequark/parser` gem. This ensures the environment can thoroughly execute and achieve the 100% testing mandate.
+- **SCAI-REQ-015 (Ruby Version Constraint):** The gem MUST enforce a minimum Ruby version of `>= 2.7.0`. **[Refined Requirement]** Due to local environment execution constraints prohibiting the native installation of Ruby `>= 3.0.0`, the requirement for `prism` was archived in favor of the production-tested `whitequark/parser` gem. This ensures the environment can thoroughly execute and achieve the 100% testing mandate, while standardizing on `2.7.0` to permit modern analysis tools like `standard-sorbet`.
 - **SCAI-REQ-016 (SimpleCov Version Constraint):** The gem MUST enforce a minimum `simplecov` dependency of `>= 0.18.0`. This is a hard structural requirement because versions older than `0.18.0` entirely lack the internal Branch Coverage telemetry required by `SCAI-REQ-005`.
 
 ## 4. Usage & Configuration
