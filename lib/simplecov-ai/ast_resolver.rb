@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require 'parser/current'
+require_relative 'ast_resolver/semantic_node'
 
 module SimpleCov
   module Formatter
@@ -13,42 +14,11 @@ module SimpleCov
       class ASTResolver
         extend T::Sig
 
-        # An immutable struct housing bounds, identification metrics, and static bypassing
-        # definitions derived from traversing the AST nodes.
-        class SemanticNode
-          extend T::Sig
-
-          sig { returns(String) }
-          attr_reader :name, :type
-
-          sig { returns(Integer) }
-          attr_reader :start_line, :end_line
-
-          sig { returns(T::Array[String]) }
-          attr_reader :bypasses
-
-          sig do
-            params(
-              name: String,
-              type: String,
-              start_line: Integer,
-              end_line: Integer,
-              bypasses: T::Array[String]
-            ).void
-          end
-          def initialize(name:, type:, start_line:, end_line:, bypasses: [])
-            @name = name
-            @type = type
-            @start_line = start_line
-            @end_line = end_line
-            @bypasses = bypasses
-          end
-
-          sig { params(bypass: String).void }
-          def add_bypass(bypass)
-            @bypasses << bypass
-          end
-        end
+        NAMESPACE_SEPARATOR = T.let('::', String)
+        INSTANCE_SEPARATOR = T.let('#', String)
+        SINGLETON_SEPARATOR = T.let('.', String)
+        TYPE_INSTANCE_METHOD = T.let('Instance Method', String)
+        TYPE_SINGLETON_METHOD = T.let('Singleton Method', String)
 
         # Orchestrates the initial mapping algorithm on a target file to extract structural
         # metadata, circumventing potential syntax violations explicitly.
@@ -94,23 +64,21 @@ module SimpleCov
 
         sig { params(nodes: T::Array[SemanticNode], comments: T::Array[Parser::Source::Comment]).void }
         def assign_bypasses(nodes, comments)
-          comments.each do |c|
-            c_text = T.cast(c.text, String)
-            next unless c_text.include?(':nocov:')
-
-            assign_bypass(nodes, c, c_text.strip)
+          comments.each do |comment|
+            comment_text = T.cast(comment.text, String)
+            assign_bypass(nodes, comment, comment_text.strip) if comment_text.include?(Constants::NOCOV_DIRECTIVE)
           end
         end
 
         private
 
-        sig { params(nodes: T::Array[SemanticNode], comment: Parser::Source::Comment, text: String).void }
-        def assign_bypass(nodes, comment, text)
-          c_loc = T.cast(comment.loc, Parser::Source::Map)
-          c_line = T.cast(c_loc.line, Integer)
+        sig { params(nodes: T::Array[SemanticNode], comment: Parser::Source::Comment, bypass_reason: String).void }
+        def assign_bypass(nodes, comment, bypass_reason)
+          comment_loc = T.cast(comment.loc, Parser::Source::Map)
+          comment_line = T.cast(comment_loc.line, Integer)
 
-          innermost_node = nodes.reverse.find { |n| c_line.between?(n.start_line - 1, n.end_line + 1) }
-          innermost_node&.add_bypass(text)
+          innermost_node = nodes.reverse.find { |node| comment_line.between?(node.start_line - 1, node.end_line + 1) }
+          innermost_node&.add_bypass(bypass_reason)
         end
 
         sig do
@@ -138,8 +106,8 @@ module SimpleCov
           const_node = T.cast(node.children[0], Parser::AST::Node)
           const_node_name = T.cast(T.cast(const_node.loc, Parser::Source::Map::Constant).name, Parser::Source::Range)
           name = T.cast(const_node_name.source, String)
-          ctx = context.empty? ? name : "#{context}::#{name}"
-          [ctx, build_node(node, ctx, node.type.to_s.capitalize)]
+          new_context = context.empty? ? name : "#{context}#{NAMESPACE_SEPARATOR}#{name}"
+          [new_context, build_node(node, new_context, node.type.to_s.capitalize)]
         end
 
         sig do
@@ -148,8 +116,8 @@ module SimpleCov
         end
         def extract_instance_method_metadata(node, context)
           name = T.cast(node.children.first, Symbol).to_s
-          ctx = context.empty? ? "##{name}" : "#{context}##{name}"
-          [ctx, build_node(node, ctx, 'Instance Method')]
+          new_context = context.empty? ? "#{INSTANCE_SEPARATOR}#{name}" : "#{context}#{INSTANCE_SEPARATOR}#{name}"
+          [new_context, build_node(node, new_context, TYPE_INSTANCE_METHOD)]
         end
 
         sig do
@@ -158,8 +126,8 @@ module SimpleCov
         end
         def extract_singleton_method_metadata(node, context)
           name = T.cast(node.children[1], Symbol).to_s
-          ctx = context.empty? ? ".#{name}" : "#{context}.#{name}"
-          [ctx, build_node(node, ctx, 'Singleton Method')]
+          new_context = context.empty? ? "#{SINGLETON_SEPARATOR}#{name}" : "#{context}#{SINGLETON_SEPARATOR}#{name}"
+          [new_context, build_node(node, new_context, TYPE_SINGLETON_METHOD)]
         end
 
         sig do
@@ -168,9 +136,9 @@ module SimpleCov
         end
         def build_node(node, name, type)
           loc = T.cast(node.loc, Parser::Source::Map)
-          start_ln = T.cast(loc.line, Integer)
-          end_ln = T.cast(loc.last_line, Integer)
-          SemanticNode.new(name: name, type: type, start_line: start_ln, end_line: end_ln, bypasses: [])
+          start_line = T.cast(loc.line, Integer)
+          end_line = T.cast(loc.last_line, Integer)
+          SemanticNode.new(name: name, type: type, start_line: start_line, end_line: end_line, bypass_reasons: [])
         end
       end
     end

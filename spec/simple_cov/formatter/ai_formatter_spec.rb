@@ -69,10 +69,10 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
 
       # Mock the AST resolver to avoid file system reads during basic format test
       node = SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.new(
-        name: 'DummyClass', type: 'Class', start_line: 1, end_line: 10, bypasses: []
+        name: 'DummyClass', type: 'Class', start_line: 1, end_line: 10, bypass_reasons: []
       )
       child_node = SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.new(
-        name: 'DummyClass#initialize', type: 'Instance Method', start_line: 2, end_line: 4, bypasses: []
+        name: 'DummyClass#initialize', type: 'Instance Method', start_line: 2, end_line: 4, bypass_reasons: []
       )
       allow(SimpleCov::Formatter::AIFormatter::ASTResolver).to receive(:resolve).and_return([node, child_node])
 
@@ -240,7 +240,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
         allow(SimpleCov::Formatter::AIFormatter::ASTResolver).to receive(:resolve).and_call_original
 
         node = SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.new(
-          name: 'DummyClass', type: 'Class', start_line: 1, end_line: 10, bypasses: [':nocov:']
+          name: 'DummyClass', type: 'Class', start_line: 1, end_line: 10, bypass_reasons: [':nocov:']
         )
         allow(SimpleCov::Formatter::AIFormatter::ASTResolver).to receive(:resolve)
                                                              .with('lib/dummy.rb')
@@ -258,7 +258,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
         node = SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.new(name: 'DummyClass', type: 'Class',
                                                                                 start_line: 1,
                                                                                 end_line: 10,
-                                                                                bypasses: [':nocov:'])
+                                                                                bypass_reasons: [':nocov:'])
         allow(SimpleCov::Formatter::AIFormatter::ASTResolver).to receive(:resolve).and_return([node])
         formatter.format(mock_result)
       end
@@ -277,7 +277,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
         node = SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.new(name: 'DummyClass', type: 'Class',
                                                                                 start_line: 1,
                                                                                 end_line: 10,
-                                                                                bypasses: [':nocov:'])
+                                                                                bypass_reasons: [':nocov:'])
         allow(SimpleCov::Formatter::AIFormatter::ASTResolver).to receive(:resolve).and_return([node])
         formatter.format(mock_result)
       end
@@ -315,12 +315,15 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
           <<~RUBY
             module Analytics
               class Event
+                # Justification: Mock string for testing
                 # :nocov:
                 def track
                 end
+                # Justification: Mock string for testing
                 #    :nocov:#{'  '}
                 def track_spaced
                 end
+                # Justification: Mock string for testing
                 # rubocop:disable Metrics/MethodLength, :nocov:
                 def self.name_event
                 end
@@ -336,18 +339,22 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
         it('resolves Module type') { expect(nodes[0].type).to eq('Module') }
         it('resolves Class name') { expect(nodes[1].name).to eq('Analytics::Event') }
         it('resolves Class type') { expect(nodes[1].type).to eq('Class') }
-        it('resolves Class bypasses as empty because they belong to children') { expect(nodes[1].bypasses).to be_empty }
+
+        it('resolves Class bypasses as empty because they belong to children') do
+          expect(nodes[1].bypass_reasons).to be_empty
+        end
+
         it('resolves Instance Method 1 name') { expect(nodes[2].name).to eq('Analytics::Event#track') }
         it('resolves Instance Method 1 type') { expect(nodes[2].type).to eq('Instance Method') }
-        it('resolves Instance Method 1 bypass') { expect(nodes[2].bypasses).to include('# :nocov:') }
+        it('resolves Instance Method 1 bypass') { expect(nodes[2].bypass_reasons).to include('# :nocov:') }
         it('resolves Instance Method 2 name') { expect(nodes[3].name).to eq('Analytics::Event#track_spaced') }
         it('resolves Instance Method 2 type') { expect(nodes[3].type).to eq('Instance Method') }
-        it('resolves Instance Method 2 bypass') { expect(nodes[3].bypasses).to include('#    :nocov:') }
+        it('resolves Instance Method 2 bypass') { expect(nodes[3].bypass_reasons).to include('#    :nocov:') }
         it('resolves Singleton Method name') { expect(nodes[4].name).to eq('Analytics::Event.name_event') }
         it('resolves Singleton Method type') { expect(nodes[4].type).to eq('Singleton Method') }
 
         it('resolves Singleton Method bypass') {
-          expect(nodes[4].bypasses).to include('# rubocop:disable Metrics/MethodLength, :nocov:')
+          expect(nodes[4].bypass_reasons).to include('# rubocop:disable Metrics/MethodLength, :nocov:')
         }
       end
 

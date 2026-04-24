@@ -10,6 +10,13 @@ module SimpleCov
       class Configuration
         extend T::Sig
 
+        DEFAULT_REPORT_PATH = T.let('coverage/ai_report.md', String)
+        DEFAULT_MAX_FILE_SIZE_KB = T.let(50, Integer)
+        DEFAULT_MAX_SNIPPET_LINES = T.let(5, Integer)
+        DEFAULT_OUTPUT_TO_CONSOLE = T.let(false, T::Boolean)
+        DEFAULT_GRANULARITY = T.let(:fine, Symbol)
+        DEFAULT_INCLUDE_BYPASSES = T.let(true, T::Boolean)
+
         # The absolute or relative system path where the final token-efficient markdown
         # document acts as an artifact.
         # @return [String]
@@ -44,12 +51,12 @@ module SimpleCov
 
         sig { void }
         def initialize
-          @report_path = T.let('coverage/ai_report.md', String)
-          @max_file_size_kb = T.let(50, Integer)
-          @max_snippet_lines = T.let(5, Integer)
-          @output_to_console = T.let(false, T::Boolean)
-          @granularity = T.let(:fine, Symbol)
-          @include_bypasses = T.let(true, T::Boolean)
+          @report_path = T.let(DEFAULT_REPORT_PATH, String)
+          @max_file_size_kb = T.let(DEFAULT_MAX_FILE_SIZE_KB, Integer)
+          @max_snippet_lines = T.let(DEFAULT_MAX_SNIPPET_LINES, Integer)
+          @output_to_console = T.let(DEFAULT_OUTPUT_TO_CONSOLE, T::Boolean)
+          @granularity = T.let(DEFAULT_GRANULARITY, Symbol)
+          @include_bypasses = T.let(DEFAULT_INCLUDE_BYPASSES, T::Boolean)
         end
       end
     end

@@ -10,22 +10,28 @@ module SimpleCov
           extend T::Sig
           include SnippetFormatter
 
-          sig { params(result: SimpleCov::Result, config: Configuration, builder: MarkdownBuilder).void }
-          def initialize(result, config, builder)
-            @result = result
+          HEADING = T.let("## Coverage Deficits\n\n", String)
+          FILE_HEADING_TEMPLATE = T.let('### `%s`', String)
+          ERROR_AST_FAILED = T.let("  - **ERROR:** AST Parsing Failed. Showing raw line numbers instead.\n", String)
+          NODE_HEADING_TEMPLATE = T.let('- `%s`', String)
+          DEFICIT_COARSE = T.let('  - **Deficit:** Contains unexecuted lines or branches.', String)
+          LINE_DEFICIT_TEMPLATE = T.let('  - **Line Deficit:** `%s` %s', String)
+          BRANCH_DEFICIT_TEMPLATE = T.let('  - **Branch Deficit:** Missing coverage for conditional `%s` %s', String)
+
+          sig { params(coverage_metrics: SimpleCov::Result, config: Configuration, builder: MarkdownBuilder).void }
+          def initialize(coverage_metrics, config, builder)
+            @coverage_metrics = coverage_metrics
             @config = config
             @builder = builder
           end
 
           sig { params(buffer: StringIO).void }
           def write_deficits(buffer)
-            files = T.let(
-              @result.files.reject { |f| f.covered_percent >= 100.0 }.sort_by { |f| [f.covered_percent, f.filename] },
-              T::Array[SimpleCov::SourceFile]
-            )
+            files_with_deficits = @coverage_metrics.files.reject { |f| f.covered_percent >= Constants::PERFECT_COVERAGE_PERCENT }
+            files = T.let(files_with_deficits.sort_by { |file| [file.covered_percent, file.filename] }, T::Array[SimpleCov::SourceFile])
             return if files.empty?
 
-            buffer.puts "## Coverage Deficits\n\n"
+            buffer.puts HEADING
             files.each do |file|
               break if @builder.truncate_if_needed?
 
@@ -37,19 +43,17 @@ module SimpleCov
 
           sig { params(buffer: StringIO, file: SimpleCov::SourceFile).void }
           def process_file(buffer, file)
-            buffer.puts "### `#{file.project_filename}`"
+            buffer.puts format(FILE_HEADING_TEMPLATE, file.project_filename)
             nodes = @builder.try_resolve_ast(file.filename)
             nodes ? process_deficits(buffer, file, nodes) : format_raw_deficits(buffer, file)
           end
 
           sig { params(buffer: StringIO, file: SimpleCov::SourceFile).void }
           def format_raw_deficits(buffer, file)
-            buffer.puts "  - **ERROR:** AST Parsing Failed. Showing raw line numbers instead.\n"
-            group = MarkdownBuilder::DeficitGroup.new(
-              lines: file.missed_lines,
-              branches: file.missed_branches
-            )
-            format_deficit_group(buffer, group, fetch_source_lines(file.filename))
+            buffer.puts ERROR_AST_FAILED
+            deficit_group = MarkdownBuilder::DeficitGroup.new(lines: file.missed_lines, branches: file.missed_branches)
+            source = safe_readlines(file.filename)
+            format_deficit_group(buffer, deficit_group, source)
             buffer.puts ''
           end
 
@@ -60,42 +64,38 @@ module SimpleCov
             node_deficits = DeficitGrouper.build(file, nodes)
             source_lines = T.let(nil, T.nilable(T::Array[String]))
 
-            node_deficits.each do |node_name, group|
+            node_deficits.each do |node_name, deficit_group|
               break if @builder.truncate_if_needed?
 
-              source_lines ||= fetch_source_lines(file.filename)
-              format_node_deficit(buffer, node_name, group, source_lines)
+              source_lines ||= safe_readlines(file.filename)
+              format_node_deficit(buffer, node_name, deficit_group, source_lines)
             end
 
             buffer.puts ''
           end
 
-          sig { params(buffer: StringIO, node_name: String, group: DeficitGroup, source_lines: T::Array[String]).void }
-          def format_node_deficit(buffer, node_name, group, source_lines)
-            buffer.puts "- `#{node_name}`"
+          sig do
+            params(buffer: StringIO, node_name: String, deficit_group: DeficitGroup,
+                   source_lines: T::Array[String]).void
+          end
+          def format_node_deficit(buffer, node_name, deficit_group, source_lines)
+            buffer.puts format(NODE_HEADING_TEMPLATE, node_name)
 
             if @config.granularity == :coarse
-              buffer.puts '  - **Deficit:** Contains unexecuted lines or branches.'
+              buffer.puts DEFICIT_COARSE
             else
-              format_deficit_group(buffer, group, source_lines)
+              format_deficit_group(buffer, deficit_group, source_lines)
             end
           end
 
-          sig { params(filename: String).returns(T::Array[String]) }
-          def fetch_source_lines(filename)
-            File.readlines(filename)
-          rescue StandardError
-            []
-          end
-
-          sig { params(buffer: StringIO, group: DeficitGroup, source_lines: T::Array[String]).void }
-          def format_deficit_group(buffer, group, source_lines)
-            group.lines.each do |line|
-              write_line_snippet(buffer, line, source_lines, group.semantic_node)
+          sig { params(buffer: StringIO, deficit_group: DeficitGroup, source_lines: T::Array[String]).void }
+          def format_deficit_group(buffer, deficit_group, source_lines)
+            deficit_group.lines.each do |line|
+              write_line_snippet(buffer, line, source_lines, deficit_group.semantic_node)
             end
 
-            group.branches.each do |branch|
-              write_branch_snippet(buffer, branch, source_lines, group.semantic_node)
+            deficit_group.branches.each do |branch|
+              write_branch_snippet(buffer, branch, source_lines, deficit_group.semantic_node)
             end
           end
 
@@ -104,10 +104,9 @@ module SimpleCov
                    node: T.nilable(ASTResolver::SemanticNode)).void
           end
           def write_line_snippet(buffer, line, source_lines, node)
-            line_num = line.line_number
-            text = truncate_snippet(fetch_snippet_text([line_num], source_lines), @config.max_snippet_lines)
-            occurrence_str = calculate_occurrence(line_num, source_lines, node)
-            buffer.puts "  - **Line Deficit:** `#{text}` #{occurrence_str}".rstrip
+            text = truncate_snippet(fetch_snippet_text([line.line_number], source_lines), @config.max_snippet_lines)
+            occurrence_str = calculate_occurrence(line.line_number, source_lines, node)
+            buffer.puts format(LINE_DEFICIT_TEMPLATE, text, occurrence_str).rstrip
           end
 
           sig do
@@ -115,12 +114,17 @@ module SimpleCov
                    node: T.nilable(ASTResolver::SemanticNode)).void
           end
           def write_branch_snippet(buffer, branch, source_lines, node)
-            start_line = branch.start_line
-            end_line = branch.end_line
-            lines_range = T.cast((start_line..end_line).to_a, T::Array[Integer])
+            lines_range = T.cast((branch.start_line..branch.end_line).to_a, T::Array[Integer])
             text = truncate_snippet(fetch_snippet_text(lines_range, source_lines), @config.max_snippet_lines)
-            occurrence_str = calculate_occurrence(start_line, source_lines, node)
-            buffer.puts "  - **Branch Deficit:** Missing coverage for conditional `#{text}` #{occurrence_str}".rstrip
+            occurrence_str = calculate_occurrence(branch.start_line, source_lines, node)
+            buffer.puts format(BRANCH_DEFICIT_TEMPLATE, text, occurrence_str).rstrip
+          end
+
+          sig { params(filename: String).returns(T::Array[String]) }
+          def safe_readlines(filename)
+            File.readlines(filename)
+          rescue StandardError
+            []
           end
         end
       end

@@ -9,9 +9,18 @@ module SimpleCov
         class BypassCompiler
           extend T::Sig
 
-          sig { params(result: SimpleCov::Result, builder: MarkdownBuilder).void }
-          def initialize(result, builder)
-            @result = result
+          HEADING = T.let("## Ignored Coverage Bypasses\n\n", String)
+          FILE_HEADING_TEMPLATE = T.let('### `%s`', String)
+          BYPASS_TEMPLATE = T.let(
+            "- `%s`\n  " \
+            '- **Bypass Present:** Contains `%s` directive artificially ' \
+            'ignoring coverage (Occurrence %d of %d).',
+            String
+          )
+
+          sig { params(coverage_metrics: SimpleCov::Result, builder: MarkdownBuilder).void }
+          def initialize(coverage_metrics, builder)
+            @coverage_metrics = coverage_metrics
             @builder = builder
           end
 
@@ -22,7 +31,7 @@ module SimpleCov
 
             return unless has_bypasses
 
-            buffer.puts "## Ignored Coverage Bypasses\n\n"
+            buffer.puts HEADING
             buffer.puts bypass_buffer.string
           end
 
@@ -31,12 +40,12 @@ module SimpleCov
           sig { params(buffer: StringIO).returns(T::Boolean) }
           def compile_all_bypasses(buffer)
             has_bypasses = T.let(false, T::Boolean)
-            T.let(@result.files.to_a, T::Array[SimpleCov::SourceFile]).each do |file|
-              bypassed = fetch_bypassed_nodes(file.filename)
-              next if bypassed.empty?
+            T.let(@coverage_metrics.files.to_a, T::Array[SimpleCov::SourceFile]).each do |file|
+              bypassed_nodes = fetch_bypassed_nodes(file.filename)
+              next if bypassed_nodes.empty?
 
               has_bypasses = true
-              write_file_bypasses(buffer, file, bypassed)
+              write_file_bypasses(buffer, file, bypassed_nodes)
             end
             has_bypasses
           end
@@ -44,19 +53,17 @@ module SimpleCov
           sig { params(filename: String).returns(T::Array[ASTResolver::SemanticNode]) }
           def fetch_bypassed_nodes(filename)
             nodes = @builder.try_resolve_ast(filename)
-            nodes ? nodes.select { |n| n.bypasses.any? } : []
+            nodes ? nodes.select { |node| node.bypass_reasons.any? } : []
           end
 
           sig do
-            params(buffer: StringIO, file: SimpleCov::SourceFile, bypasses: T::Array[ASTResolver::SemanticNode]).void
+            params(buffer: StringIO, file: SimpleCov::SourceFile, bypassed_nodes: T::Array[ASTResolver::SemanticNode]).void
           end
-          def write_file_bypasses(buffer, file, bypasses)
-            buffer.puts "### `#{file.project_filename}`"
-            total = bypasses.size
-            bypasses.each_with_index do |node, idx|
-              buffer.puts "- `#{node.name}`\n  " \
-                          '- **Bypass Present:** Contains `:nocov:` directive artificially ' \
-                          "ignoring coverage (Occurrence #{idx + 1} of #{total})."
+          def write_file_bypasses(buffer, file, bypassed_nodes)
+            buffer.puts format(FILE_HEADING_TEMPLATE, file.project_filename)
+            total = bypassed_nodes.size
+            bypassed_nodes.each_with_index do |node, idx|
+              buffer.puts format(BYPASS_TEMPLATE, node.name, Constants::NOCOV_DIRECTIVE, idx + 1, total)
             end
             buffer.puts ''
           end

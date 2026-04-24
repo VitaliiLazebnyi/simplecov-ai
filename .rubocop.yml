@@ -72,6 +72,8 @@ RSpec/SpecFilePathSuffix:
   Enabled: true
 RSpec/DescribedClass:
   Enabled: true
+RSpec/DescribeClass:
+  Enabled: true
 ThreadSafety/ClassInstanceVariable:
   Enabled: true
   Exclude:
@@ -126,3 +128,8 @@ Sorbet/FalseSigil:
   Enabled: true
   Exclude:
     - 'bin/tapioca'
+
+
+Style/DisableCopsWithinSourceCodeDirective:
+  Enabled: true
+

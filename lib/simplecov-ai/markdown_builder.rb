@@ -18,6 +18,29 @@ module SimpleCov
         extend T::Sig
         include SnippetFormatter
 
+        BYTES_PER_KB = T.let(1024.0, Float)
+        STATUS_PASSED = T.let('PASSED', String)
+        STATUS_FAILED = T.let('FAILED', String)
+
+        HEADER_TEMPLATE = T.let(
+          "# AI Coverage Digest\n" \
+          "**Status:** %<status>s\n" \
+          "**Global Line Coverage:** %<line_pct>s%%\n" \
+          "**Global Branch Coverage:** %<branch_pct>s%%\n" \
+          "**Generated At:** %<time>s (Local Timezone)\n",
+          String
+        )
+
+        TRUNCATION_ALERT_HEADING = T.let('> **[WARNING] TRUNCATION NOTIFICATION:**', String)
+        TRUNCATION_ALERT_BODY = T.let(
+          '> The total coverage deficit report exceeded the maximum token ' \
+          'constraint (%<limit>d kB). ' \
+          'The report was truncated. The deficits detailed above represent ' \
+          'the lowest-coverage (most critical) files. ' \
+          'Please resolve these deficits to reveal the remaining uncovered files in subsequent test runs.',
+          String
+        )
+
         # Groups unexecuted lines and branches under their common semantic node.
         class DeficitGroup < T::Struct
           # @return [ASTResolver::SemanticNode, nil] The corresponding structural boundary
@@ -30,11 +53,11 @@ module SimpleCov
 
         # Initializes the Markdown sequence compilation.
         #
-        # @param result [SimpleCov::Result] Application-wide coverage aggregation metrics
+        # @param coverage_metrics [SimpleCov::Result] Application-wide coverage aggregation metrics
         # @param config [Configuration] Pre-registered runtime toggles
-        sig { params(result: SimpleCov::Result, config: Configuration).void }
-        def initialize(result, config)
-          @result = T.let(result, SimpleCov::Result)
+        sig { params(coverage_metrics: SimpleCov::Result, config: Configuration).void }
+        def initialize(coverage_metrics, config)
+          @coverage_metrics = T.let(coverage_metrics, SimpleCov::Result)
           @config = T.let(config, Configuration)
           @buffer = T.let(StringIO.new, StringIO)
           @file_count = T.let(0, Integer)
@@ -49,8 +72,8 @@ module SimpleCov
         sig { returns(String) }
         def build
           write_header
-          DeficitCompiler.new(@result, @config, self).write_deficits(@buffer)
-          BypassCompiler.new(@result, self).write_bypasses(@buffer) if @config.include_bypasses
+          DeficitCompiler.new(@coverage_metrics, @config, self).write_deficits(@buffer)
+          BypassCompiler.new(@coverage_metrics, self).write_bypasses(@buffer) if @config.include_bypasses
           write_truncation_warning if @truncated
           @buffer.string
         end
@@ -64,7 +87,7 @@ module SimpleCov
 
         sig { returns(T::Boolean) }
         def truncate_if_needed?
-          return false unless @buffer.size / 1024.0 > @config.max_file_size_kb
+          return false unless @buffer.size / BYTES_PER_KB > @config.max_file_size_kb
 
           @truncated = true
           true
@@ -75,36 +98,36 @@ module SimpleCov
         # Writes the summary header containing global coverage percentages and generation metadata.
         sig { void }
         def write_header
-          status = @result.covered_percent >= 100.0 ? 'PASSED' : 'FAILED'
-          @buffer.puts '# AI Coverage Digest'
-          @buffer.puts "**Status:** #{status}"
-          @buffer.puts "**Global Line Coverage:** #{@result.covered_percent.round(1)}%"
-          @buffer.puts "**Global Branch Coverage:** #{calculate_branch_pct.round(1)}%"
-          @buffer.puts "**Generated At:** #{Time.now.iso8601} (Local Timezone)"
-          @buffer.puts ''
+          covered_pct = @coverage_metrics.covered_percent
+          status = covered_pct >= Constants::PERFECT_COVERAGE_PERCENT ? STATUS_PASSED : STATUS_FAILED
+          @buffer.puts format(
+            HEADER_TEMPLATE,
+            status: status,
+            line_pct: covered_pct.round(1),
+            branch_pct: calculate_branch_pct.round(1),
+            time: Time.now.iso8601
+          )
         end
 
         sig { returns(Float) }
         def calculate_branch_pct
-          return 0.0 unless @result.respond_to?(:covered_branches) && @result.respond_to?(:total_branches)
+          unless @coverage_metrics.respond_to?(:covered_branches) &&
+                 @coverage_metrics.respond_to?(:total_branches)
+            return 0.0
+          end
 
-          total = @result.total_branches
+          total = @coverage_metrics.total_branches
           return 0.0 if total.to_i.zero?
 
-          covered = @result.covered_branches
-          covered.to_f / total * 100.0
+          covered = @coverage_metrics.covered_branches
+          covered.to_f / total * Constants::PERFECT_COVERAGE_PERCENT
         end
 
         # Appends a critical alert if the output hit the token-ceiling constraint and was forcibly terminated.
         sig { void }
         def write_truncation_warning
-          @buffer.puts '> **[WARNING] TRUNCATION NOTIFICATION:**'
-          msg = '> The total coverage deficit report exceeded the maximum token ' \
-                "constraint (#{@config.max_file_size_kb} kB). " \
-                'The report was truncated. The deficits detailed above represent ' \
-                'the lowest-coverage (most critical) files. ' \
-                'Please resolve these deficits to reveal the remaining uncovered files in subsequent test runs.'
-          @buffer.puts msg
+          @buffer.puts TRUNCATION_ALERT_HEADING
+          @buffer.puts format(TRUNCATION_ALERT_BODY, limit: @config.max_file_size_kb)
         end
       end
     end

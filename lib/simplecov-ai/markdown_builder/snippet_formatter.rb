@@ -9,6 +9,10 @@ module SimpleCov
         module SnippetFormatter
           extend T::Sig
 
+          ESTIMATED_CHARS_PER_LINE = T.let(80, Integer)
+          TRUNCATION_ELLIPSIS = T.let('...', String)
+          OCCURRENCE_TEMPLATE = T.let('(Occurrence %d of %d).', String)
+
           # Extracts and normalizes exact string literals from the source file arrays.
           #
           # @param line_nums [Array<Integer>] Target line coordinates.
@@ -16,18 +20,22 @@ module SimpleCov
           # @return [String] Joined snippet text.
           sig { params(line_nums: T::Array[Integer], source_lines: T::Array[String]).returns(String) }
           def fetch_snippet_text(line_nums, source_lines)
-            line_nums.filter_map { |ln| source_lines[ln - 1]&.strip }.reject(&:empty?).join(' ')
+            line_nums.filter_map { |line_number| source_lines[line_number - 1]&.strip }.reject(&:empty?).join(' ')
           end
 
           # Safely limits the character length of a code snippet according to global configurations.
           #
-          # @param text [String] The snippet to potentially truncate.
+          # @param snippet_text [String] The snippet to potentially truncate.
           # @param max_snippet_lines [Integer] The configured max lines.
           # @return [String] Truncated string with trailing ellipses if limit exceeded.
-          sig { params(text: String, max_snippet_lines: Integer).returns(String) }
-          def truncate_snippet(text, max_snippet_lines)
-            max_chars = max_snippet_lines * 80
-            text.length > max_chars ? "#{text[0...max_chars]}..." : text
+          sig { params(snippet_text: String, max_snippet_lines: Integer).returns(String) }
+          def truncate_snippet(snippet_text, max_snippet_lines)
+            max_chars = max_snippet_lines * ESTIMATED_CHARS_PER_LINE
+            if snippet_text.length > max_chars
+              "#{snippet_text[0...max_chars]}#{TRUNCATION_ELLIPSIS}"
+            else
+              snippet_text
+            end
           end
 
           # Disambiguates identical code snippets within the same semantic block (e.g., "(Occurrence 2 of 3)").
@@ -48,23 +56,23 @@ module SimpleCov
 
             occurrences, current = count_snippet_occurrences(first_line_of_snippet, line_num, source_lines, node)
 
-            occurrences > 1 ? "(Occurrence #{current} of #{occurrences})." : ''
+            occurrences > 1 ? Kernel.format(OCCURRENCE_TEMPLATE, current, occurrences) : ''
           end
 
           sig do
-            params(snippet: String, target_ln: Integer, source_lines: T::Array[String],
+            params(snippet: String, target_line_number: Integer, source_lines: T::Array[String],
                    node: ASTResolver::SemanticNode).returns([Integer, Integer])
           end
-          def count_snippet_occurrences(snippet, target_ln, source_lines, node)
+          def count_snippet_occurrences(snippet, target_line_number, source_lines, node)
             occurrences = 0
             current_occurrence = 1
 
-            (node.start_line..node.end_line).each do |ln|
-              line_content = source_lines[ln - 1]&.strip
+            (node.start_line..node.end_line).each do |line_number|
+              line_content = source_lines[line_number - 1]&.strip
               next unless line_content == snippet
 
               occurrences += 1
-              current_occurrence = occurrences if ln == target_ln
+              current_occurrence = occurrences if line_number == target_line_number
             end
 
             [occurrences, current_occurrence]
