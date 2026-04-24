@@ -25,3 +25,9 @@
 - **Zero-Tolerance Quality Gates**: Every modification I make to any file—be it Markdown or Ruby—MUST strictly comply with the project’s mandates (e.g., zero markdownlint warnings, 0 RuboCop errors, 100% test coverage).
 - **Architectural Traceability**: Whenever I mutate the `REQUIREMENTS.md` file based on "здоровий глузд", I will explicitly annotate the rationale and link the new state clearly to the project's vision, ensuring historical evolution is perfectly transparent to human auditors.
 - **Git Version Control & Syncing**: Changes should be regularly committed using Git to maintain a clean project history. Every commit must have an explicit, descriptive, and clear message. Code should be frequently pushed to the remote server to ensure data safety and state parity.
+
+## 5. Intent-Driven Naming & Structural Refactoring
+- **Ban Single-Letter and Structural Variables**: Single-letter block iterators (e.g., `f`, `n`, `c`) or generic structural placeholders (e.g., `result`, `group`, `data`) are strictly forbidden. Variables and parameters must accurately describe the domain object they represent.
+- **Grammatical Accuracy in Iterables**: Collections must accurately reflect what they store. An array storing reason strings must be named `bypass_reasons`—not `bypasses` (which implies the occurrences themselves).
+- **Structural Refactoring Over Directives**: When employing expressive naming, lines or methods may exceed strict RuboCop thresholds. You are explicitly forbidden from using inline directives (e.g., `# rubocop:disable`) to bypass these limits. Instead, structurally refactor the code by extracting logic or utilizing multiline block syntax (e.g., `do ... end`).
+- **Exception Handling (No Rescue Modifiers)**: Inline rescue modifiers (e.g., `File.readlines(f) rescue []`) are forbidden as they obfuscate error boundaries. Instead, strictly extract volatile logic into isolated, safe wrapper methods (e.g., `safe_readlines`).
