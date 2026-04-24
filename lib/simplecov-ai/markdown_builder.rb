@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require_relative 'ast_resolver'
+require 'time'
 require_relative 'markdown_builder/snippet_formatter'
 require_relative 'markdown_builder/bypass_compiler'
 require_relative 'markdown_builder/deficit_grouper'
@@ -79,7 +80,7 @@ module SimpleCov
           @buffer.puts "**Status:** #{status}"
           @buffer.puts "**Global Line Coverage:** #{@result.covered_percent.round(1)}%"
           @buffer.puts "**Global Branch Coverage:** #{calculate_branch_pct.round(1)}%"
-          @buffer.puts "**Generated At:** #{Time.now}"
+          @buffer.puts "**Generated At:** #{Time.now.iso8601} (Local Timezone)"
           @buffer.puts ''
         end
 
@@ -87,18 +88,22 @@ module SimpleCov
         def calculate_branch_pct
           return 0.0 unless @result.respond_to?(:covered_branches) && @result.respond_to?(:total_branches)
 
-          T.cast(@result.covered_branches, Float) / @result.total_branches * 100
-        rescue StandardError
-          0.0
+          total = @result.total_branches
+          return 0.0 if total.to_i.zero?
+
+          covered = @result.covered_branches
+          covered.to_f / total * 100.0
         end
 
         # Appends a critical alert if the output hit the token-ceiling constraint and was forcibly terminated.
         sig { void }
         def write_truncation_warning
           @buffer.puts '> **[WARNING] TRUNCATION NOTIFICATION:**'
-          msg = "> The total coverage deficit report exceeded the maximum token constraint (#{@config.max_file_size_kb} kB). " \
-                'The report was truncated. The deficits detailed above represent the lowest-coverage files. ' \
-                'Please resolve these deficits to reveal the remaining uncovered files.'
+          msg = '> The total coverage deficit report exceeded the maximum token ' \
+                "constraint (#{@config.max_file_size_kb} kB). " \
+                'The report was truncated. The deficits detailed above represent ' \
+                'the lowest-coverage (most critical) files. ' \
+                'Please resolve these deficits to reveal the remaining uncovered files in subsequent test runs.'
           @buffer.puts msg
         end
       end

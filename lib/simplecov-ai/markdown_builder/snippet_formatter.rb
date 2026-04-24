@@ -48,7 +48,7 @@ module SimpleCov
 
             occurrences, current = count_snippet_occurrences(first_line_of_snippet, line_num, source_lines, node)
 
-            occurrences > 1 ? "(Occurrence #{current} of #{occurrences}) " : ''
+            occurrences > 1 ? "(Occurrence #{current} of #{occurrences})." : ''
           end
 
           sig do

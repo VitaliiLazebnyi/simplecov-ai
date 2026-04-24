@@ -107,7 +107,7 @@ module SimpleCov
             line_num = line.line_number
             text = truncate_snippet(fetch_snippet_text([line_num], source_lines), @config.max_snippet_lines)
             occurrence_str = calculate_occurrence(line_num, source_lines, node)
-            buffer.puts "  - **Line Deficit:** #{occurrence_str}`#{text}`"
+            buffer.puts "  - **Line Deficit:** `#{text}` #{occurrence_str}".rstrip
           end
 
           sig do

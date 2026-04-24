@@ -71,7 +71,10 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
       node = SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.new(
         name: 'DummyClass', type: 'Class', start_line: 1, end_line: 10, bypasses: []
       )
-      allow(SimpleCov::Formatter::AIFormatter::ASTResolver).to receive(:resolve).and_return([node])
+      child_node = SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.new(
+        name: 'DummyClass#initialize', type: 'Instance Method', start_line: 2, end_line: 4, bypasses: []
+      )
+      allow(SimpleCov::Formatter::AIFormatter::ASTResolver).to receive(:resolve).and_return([node, child_node])
 
       # Mock file reading to simulate reading source lines for snippets
       allow(File).to receive(:readlines).with('lib/dummy.rb').and_return([
@@ -105,7 +108,13 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
       it('includes the main title') { expect(read_report).to include('# AI Coverage Digest') }
       it('includes the overall status') { expect(read_report).to include('**Status:** FAILED') }
       it('includes the targeted filename') { expect(read_report).to include('`lib/dummy.rb`') }
-      it('includes the semantic class name') { expect(read_report).to include('`DummyClass`') }
+      it('includes the semantic method name') { expect(read_report).to include('`DummyClass#initialize`') }
+      it('includes the correct branch coverage') { expect(read_report).to include('**Global Branch Coverage:** 50.0%') }
+
+      it('includes the formatted generated at timestamp') do
+        regex = /\*\*Generated At:\*\* \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2}) \(Local Timezone\)/
+        expect(read_report).to match(regex)
+      end
     end
 
     it 'outputs to console when configured' do
@@ -149,10 +158,15 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
         }
 
         it('includes the class name') { expect(content).to include('`DummyClass`') }
+        it('includes the innermost method name for lines') { expect(content).to include('`DummyClass#initialize`') }
         it('reports exact line 2 snippet') { expect(content).to include('`def initialize`') }
         it('reports exact line 3 snippet') { expect(content).to include('`@foo = 1`') }
-        it('groups semantic node headers uniquely') { expect(content.scan('- `DummyClass`').size).to eq(1) }
+        it('groups semantic node headers uniquely') { expect(content.scan('- `DummyClass#initialize`').size).to eq(1) }
         it('groups line deficits together') { expect(content.scan('- **Line Deficit:**').size).to eq(2) }
+
+        it('sorts the output chronologically') do
+          expect(content).to match(/`DummyClass`.*Branch Deficit.*`DummyClass#initialize`.*`def initialize`/m)
+        end
       end
 
       context 'with coarse granularity' do
@@ -250,7 +264,11 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
       end
 
       it('includes the bypass section') { expect(read_report).to include('Ignored Coverage Bypasses') }
-      it('includes the bypass reason') { expect(read_report).to include('Bypass Present:') }
+
+      it('includes the bypass reason') {
+        regex = /\*\*Bypass Present:\*\* Contains `:nocov:` directive /
+        expect(read_report).to match(regex)
+      }
     end
 
     context 'when tracking bypasses with disabled config' do
@@ -287,9 +305,9 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
         expect(SimpleCov::Formatter::AIFormatter::ASTResolver.resolve(ruby_file)).to eq([])
       end
 
-      it 'returns empty array gracefully for syntax errors' do
+      it 'raises error gracefully for syntax errors' do
         File.write(invalid_file, "class Broken \n end def =")
-        expect(SimpleCov::Formatter::AIFormatter::ASTResolver.resolve(invalid_file)).to eq([])
+        expect { SimpleCov::Formatter::AIFormatter::ASTResolver.resolve(invalid_file) }.to raise_error(Parser::SyntaxError)
       end
 
       context 'when resolving an AST structure accurately with modules and classes and handles :nocov: variations' do
@@ -318,6 +336,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
         it('resolves Module type') { expect(nodes[0].type).to eq('Module') }
         it('resolves Class name') { expect(nodes[1].name).to eq('Analytics::Event') }
         it('resolves Class type') { expect(nodes[1].type).to eq('Class') }
+        it('resolves Class bypasses as empty because they belong to children') { expect(nodes[1].bypasses).to be_empty }
         it('resolves Instance Method 1 name') { expect(nodes[2].name).to eq('Analytics::Event#track') }
         it('resolves Instance Method 1 type') { expect(nodes[2].type).to eq('Instance Method') }
         it('resolves Instance Method 1 bypass') { expect(nodes[2].bypasses).to include('# :nocov:') }

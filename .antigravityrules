@@ -15,7 +15,12 @@
 - **Code-to-Spec Synchronization**: No implicit behavior or "clever hack" can exist purely in the Ruby files. Every behavior, conditional branch, and output structure MUST map perfectly backward to a codified `SCMD-REQ-XXX` identifier. If I find myself writing code that goes beyond the current requirements, I must formally document it in the specifications first.
 - **Relentless Improvement**: With every iteration or new task we undertake, the requirements must become geometrically better, sharper, and more refined until there are zero ambiguities left in the system.
 
-## 3. Best-in-Class AI Workflow & Formatting
+## 3. Anti-Coverage Paradox Testing Protocol
+- **Behavioral Assertions over Line Execution**: Achieving 100% test coverage is meaningless if the assertions are tautological or weak. Tests MUST assert the exact chronological order and multi-line formatting of textual outputs using rigorous Regex (e.g., `match(/A.*B.*C/m)`). Strictly forbid the "Include Fallacy" (using isolated `.to include('string')` checks) for any output that has a strict sorting requirement.
+- **Strict Mock Fidelity**: All test doubles, stubs, and mocks MUST be strictly mapped to the absolute reality of their production counterparts. Never mock an integration boundary to return an incompatible type (e.g., returning `Float` when the real API yields `Integer`), and never mock exceptions that conflict with the source's native error hierarchy (e.g., mocking `StandardError` when `Parser::SyntaxError` is natively raised).
+- **Structural Boundary Validation**: When testing data parsers, traversal algorithms, or semantic mappers, the mocked fixtures MUST encompass complex, nested, edge-case hierarchies (e.g., deeply nested Classes and Methods) to prove the algorithm respects scope and innermost boundaries, not just superficial flat arrays.
+
+## 4. Best-in-Class AI Workflow & Formatting
 - **Delta-Based File Modifications**: I will fiercely protect the LLM context limits. I will strictly use targeted edit tools to modify code (`replace_file_content` / `multi_replace_file_content`) to inject updates directly into repositories rather than reprinting massive files in the chat interface.
 - **Zero-Tolerance Quality Gates**: Every modification I make to any file—be it Markdown or Ruby—MUST strictly comply with the project’s mandates (e.g., zero markdownlint warnings, 0 RuboCop errors, 100% test coverage).
 - **Architectural Traceability**: Whenever I mutate the `REQUIREMENTS.md` file based on "здоровий глузд", I will explicitly annotate the rationale and link the new state clearly to the project's vision, ensuring historical evolution is perfectly transparent to human auditors.

@@ -60,6 +60,10 @@ RuboCop::ConfigLoader.instance_variable_set(:@default_configuration, merged_conf
    - **No Exemptions**: The codebase strictly forbids the use of coverage-dodging exception directives (e.g., `# rubocop:disable`, `# type: ignore`, `# pragma: no cover`) to artificially inflate coverage metrics. All tests must verify real state changes.
 3. **Mocks and Expectations**:
    - `verify_partial_doubles = true` ensures that when mocking an object, it accurately implements the original object's signature preventing "mock drift".
+4. **Anti-Coverage Paradox Protocol**:
+   - **Strict Mock Fidelity**: Test doubles and exceptions must mathematically align with real runtime constraints (e.g., preventing silent deviations or mocking generic exceptions when a dependency natively throws a specialized one).
+   - **Structural Boundary Testing**: Algorithm assertions must evaluate using deep, nested context hierarchies (like complex AST trees) to validate real-world boundary conditions, rather than simple, flat arrays.
+   - **Ordered Output Assertions**: Text output testing MUST use multi-line Regex to enforce sequential structuring and chronological order. Strictly ban isolated string presence assertions (`.to include()`) on formatted output.
 
 ## 4. Documentation (YARD)
 
