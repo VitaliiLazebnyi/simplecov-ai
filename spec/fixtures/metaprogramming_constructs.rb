@@ -55,8 +55,6 @@ module MetaprogrammingConstructs
   class << self
     extend T::Sig
 
-    # Justification: Deliberately testing AST branch parsing of unless/else
-    # rubocop:disable Style/UnlessElse
     sig { params(cond: Object).returns(Object) }
     def eigen_method(cond)
       unless cond
@@ -65,11 +63,9 @@ module MetaprogrammingConstructs
         :eigen_true
       end
     end
-    # rubocop:enable Style/UnlessElse
   end
 end
 
 class MetaTarget
   include MetaprogrammingConstructs
 end
-# rubocop:enable all

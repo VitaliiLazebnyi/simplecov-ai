@@ -19,13 +19,13 @@ Style/FrozenStringLiteralComment:
 
 Naming/FileName:
   Exclude:
-    - 'lib/simplecov-ai.rb'
+    - "lib/simplecov-ai.rb"
 
 Metrics/BlockLength:
   Enabled: true
   Exclude:
-    - 'spec/**/*'
-    - 'simplecov-ai.gemspec'
+    - "spec/**/*"
+    - "simplecov-ai.gemspec"
 Metrics/ModuleLength:
   Enabled: true
 Metrics/ClassLength:
@@ -77,13 +77,13 @@ RSpec/DescribeClass:
 ThreadSafety/ClassInstanceVariable:
   Enabled: true
   Exclude:
-    - 'lib/simplecov-ai.rb'
+    - "lib/simplecov-ai.rb"
 Style/MultilineBlockChain:
   Enabled: true
 Layout/LineLength:
   Enabled: true
   AllowedPatterns:
-    - '> The total coverage deficit report exceeded'
+    - "> The total coverage deficit report exceeded"
 
 Sorbet/ForbidTUntyped:
   Enabled: true
@@ -103,33 +103,39 @@ Sorbet/KeywordArgumentOrdering:
 Sorbet/ForbidRBIOutsideOfAllowedPaths:
   Enabled: true
   Include:
-    - '**/*.rbi'
+    - "**/*.rbi"
   AllowedPaths:
-    - 'sorbet/rbi/**/*.rbi'
+    - "sorbet/rbi/**/*.rbi"
 
 Sorbet/ForbidExtendTSigHelpersInShims:
   Enabled: true
   Include:
-    - '**/*.rbi'
+    - "**/*.rbi"
 
 Sorbet/StrictSigil:
   Enabled: true
   Exclude:
-    - 'bin/tapioca'
-    - 'sorbet/tapioca/require.rb'
-    - 'spec/**/*'
+    - "bin/tapioca"
+    - "sorbet/tapioca/require.rb"
+    - "spec/**/*"
 
 Sorbet/HasSigil:
   Enabled: true
   Exclude:
-    - 'bin/tapioca'
+    - "bin/tapioca"
 
 Sorbet/FalseSigil:
   Enabled: true
   Exclude:
-    - 'bin/tapioca'
-
+    - "bin/tapioca"
 
 Style/DisableCopsWithinSourceCodeDirective:
-  Enabled: false
+  Enabled: true
 
+Style/UnlessElse:
+  Exclude:
+    - "spec/fixtures/**/*"
+
+Lint/UnreachableLoop:
+  Exclude:
+    - "spec/fixtures/**/*"

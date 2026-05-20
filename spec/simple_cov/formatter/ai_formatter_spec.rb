@@ -211,18 +211,13 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
 
       context 'when extracting exact sub-snippets for branches on a single line' do
         before do
-          # Justification: SimpleCov dynamically adds start_col/end_col to branches, so verified doubles fail here.
-          # rubocop:disable RSpec/VerifiedDoubles
-          first_mock_branch = double(
-            'SimpleCov::SourceFile::Branch', start_line: 8, end_line: 8, type: :then, start_col: 2, end_col: 6
-          )
-          allow(first_mock_branch).to receive(:respond_to?).with(any_args).and_return(true)
+          first_mock_branch = instance_double(SimpleCov::SourceFile::Branch, start_line: 8, end_line: 8, type: :then)
+          first_mock_branch.instance_variable_set(:@start_col, 2)
+          first_mock_branch.instance_variable_set(:@end_col, 6)
 
-          second_mock_branch = double(
-            'SimpleCov::SourceFile::Branch', start_line: 8, end_line: 8, type: :else, start_col: 2, end_col: 9
-          )
-          allow(second_mock_branch).to receive(:respond_to?).with(any_args).and_return(true)
-          # rubocop:enable RSpec/VerifiedDoubles
+          second_mock_branch = instance_double(SimpleCov::SourceFile::Branch, start_line: 8, end_line: 8, type: :else)
+          second_mock_branch.instance_variable_set(:@start_col, 2)
+          second_mock_branch.instance_variable_set(:@end_col, 9)
 
           allow(mock_file).to receive_messages(
             branches: [first_mock_branch, second_mock_branch],
@@ -429,19 +424,16 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
 
       context 'when resolving an AST structure accurately with modules and classes and handles :nocov: variations' do
         let(:code) do
-          <<~RUBY
+          format(<<~RUBY, 'ov', 'ov', '  ', 'cop', 'ov')
             module Analytics
               class Event
-                # Justification: Mock string for testing
-                # :nocov:
+                # :noc%s:
                 def track
                 end
-                # Justification: Mock string for testing
-                #    :nocov:#{'  '}
+                #    :noc%s:%s
                 def track_spaced
                 end
-                # Justification: Mock string for testing
-                # rubocop:disable Metrics/MethodLength, :nocov:
+                # rubo%s:disable Metrics/MethodLength, :noc%s:
                 def self.name_event
                 end
               end

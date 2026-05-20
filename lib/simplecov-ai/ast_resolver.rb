@@ -14,10 +14,15 @@ module SimpleCov
       class ASTResolver
         extend T::Sig
 
+        # Separator used to denote namespace nesting (e.g., Module::Class)
         NAMESPACE_SEPARATOR = T.let('::', String)
+        # Separator used to denote instance methods (e.g., Class#method)
         INSTANCE_SEPARATOR = T.let('#', String)
+        # Separator used to denote singleton/class methods (e.g., Class.method)
         SINGLETON_SEPARATOR = T.let('.', String)
+        # Label applied to nodes representing instance methods
         TYPE_INSTANCE_METHOD = T.let('Instance Method', String)
+        # Label applied to nodes representing singleton methods
         TYPE_SINGLETON_METHOD = T.let('Singleton Method', String)
 
         # Orchestrates the initial mapping algorithm on a target file to extract structural

@@ -9,7 +9,9 @@ module SimpleCov
         class DeficitGrouper
           extend T::Sig
 
+          # Fallback identifier format for unassociated lines
           FALLBACK_LINE_NAME = T.let('Line %d', String)
+          # Fallback identifier format for unassociated branches
           FALLBACK_BRANCH_NAME = T.let('Lines %d-%d', String)
 
           sig { returns(T::Hash[String, DeficitGroup]) }

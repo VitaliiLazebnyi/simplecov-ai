@@ -18,8 +18,6 @@ module ExhaustiveBranching
     end
   end
 
-  # Justification: Deliberately testing AST branch parsing of unless/else
-  # rubocop:disable Style/UnlessElse
   sig { params(cond: Object).returns(Object) }
   def self.test_unless_else(cond)
     unless cond
@@ -28,7 +26,6 @@ module ExhaustiveBranching
       :unless_false
     end
   end
-  # rubocop:enable Style/UnlessElse
 
   sig { params(cond: Object).returns(Object) }
   def self.test_ternary(cond)
@@ -78,8 +75,6 @@ module ExhaustiveBranching
     arg_a
   end
 
-  # Justification: Deliberately testing AST branch parsing of inline while/until loops with break
-  # rubocop:disable Lint/UnreachableLoop
   sig { params(cond: Object).returns(Object) }
   def self.test_while_loop(cond)
     break :while_break while cond
@@ -89,7 +84,6 @@ module ExhaustiveBranching
   def self.test_until_loop(cond)
     break :until_break until cond
   end
-  # rubocop:enable Lint/UnreachableLoop
 
   sig { params(val: Object).returns(Object) }
   def self.test_pattern_matching(val)

@@ -10,11 +10,17 @@ module SimpleCov
       class Configuration
         extend T::Sig
 
+        # Default output path for the generated markdown report
         DEFAULT_REPORT_PATH = T.let('coverage/ai_report.md', String)
+        # Default maximum size of the output file in kilobytes
         DEFAULT_MAX_FILE_SIZE_KB = T.let(50, Integer)
+        # Default maximum number of lines for a single snippet
         DEFAULT_MAX_SNIPPET_LINES = T.let(5, Integer)
+        # Default flag for outputting to console
         DEFAULT_OUTPUT_TO_CONSOLE = T.let(false, T::Boolean)
+        # Default granularity level of the report
         DEFAULT_GRANULARITY = T.let(:fine, Symbol)
+        # Default flag for including bypassed regions in the report
         DEFAULT_INCLUDE_BYPASSES = T.let(true, T::Boolean)
 
         # The absolute or relative system path where the final token-efficient markdown

@@ -9,8 +9,11 @@ module SimpleCov
         class BypassCompiler
           extend T::Sig
 
+          # Section heading for bypassed coverage
           HEADING = T.let("## Ignored Coverage Bypasses\n\n", String)
+          # Template for formatting file headers in the bypass section
           FILE_HEADING_TEMPLATE = T.let('### `%s`', String)
+          # Template for detailing an individual bypass directive
           BYPASS_TEMPLATE = T.let(
             "- `%s`\n  " \
             '- **Bypass Present:** Contains `%s` directive artificially ' \

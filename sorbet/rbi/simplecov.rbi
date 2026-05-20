@@ -27,6 +27,15 @@ module SimpleCov
 
       sig { returns(Integer) }
       def end_line; end
+
+      sig { returns(Symbol) }
+      def type; end
+
+      sig { returns(T.nilable(Integer)) }
+      def start_col; end
+
+      sig { returns(T.nilable(Integer)) }
+      def end_col; end
     end
 
     sig { returns(String) }
@@ -46,5 +55,14 @@ module SimpleCov
 
     sig { returns(T::Array[Branch]) }
     def branches; end
+
+    sig { returns(T.nilable(Float)) }
+    def branches_coverage_percent; end
+
+    sig { returns(T::Hash[BasicObject, BasicObject]) }
+    def coverage_data; end
+
+    sig { params(branch_data: BasicObject).returns(BasicObject) }
+    def restore_ruby_data_structure(branch_data); end
   end
 end

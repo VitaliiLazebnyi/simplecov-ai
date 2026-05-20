@@ -9,8 +9,11 @@ module SimpleCov
         module SnippetFormatter
           extend T::Sig
 
+          # Approximate maximum characters per line for truncation calculation
           ESTIMATED_CHARS_PER_LINE = T.let(80, Integer)
+          # Suffix added to truncated snippets
           TRUNCATION_ELLIPSIS = T.let('...', String)
+          # Template for identical snippet occurrences indicator
           OCCURRENCE_TEMPLATE = T.let('(Occurrence %d of %d).', String)
 
           # Extracts and normalizes exact string literals from the source file arrays.

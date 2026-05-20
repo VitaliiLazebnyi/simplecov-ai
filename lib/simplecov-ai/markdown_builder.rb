@@ -7,6 +7,8 @@ require 'stringio'
 require_relative 'markdown_builder/snippet_formatter'
 require_relative 'markdown_builder/bypass_compiler'
 require_relative 'markdown_builder/deficit_grouper'
+require_relative 'markdown_builder/branch_enricher'
+require_relative 'markdown_builder/deficit_formatter'
 require_relative 'markdown_builder/deficit_compiler'
 
 module SimpleCov
@@ -19,10 +21,14 @@ module SimpleCov
         extend T::Sig
         include SnippetFormatter
 
+        # The number of bytes in a kilobyte
         BYTES_PER_KB = T.let(1024.0, Float)
+        # Text representation for a passed coverage check
         STATUS_PASSED = T.let('PASSED', String)
+        # Text representation for a failed coverage check
         STATUS_FAILED = T.let('FAILED', String)
 
+        # Template for the report header
         HEADER_TEMPLATE = T.let(
           "# AI Coverage Digest\n" \
           "**Status:** %<status>s\n" \
@@ -32,7 +38,9 @@ module SimpleCov
           String
         )
 
+        # Alert heading for truncated reports
         TRUNCATION_ALERT_HEADING = T.let('> **[WARNING] TRUNCATION NOTIFICATION:**', String)
+        # Alert body for truncated reports
         TRUNCATION_ALERT_BODY = T.let(
           '> The total coverage deficit report exceeded the maximum token ' \
           'constraint (%<limit>d kB). ' \
