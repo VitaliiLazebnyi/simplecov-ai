@@ -1,7 +1,7 @@
 AllCops:
   TargetRubyVersion: 2.7
   NewCops: enable
-  SuggestExtensions: false
+  SuggestExtensions: true
 
 plugins:
   - standard-sorbet
