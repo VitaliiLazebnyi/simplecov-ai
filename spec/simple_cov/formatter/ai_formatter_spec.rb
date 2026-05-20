@@ -65,6 +65,8 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
 
     before do
       allow(mock_file).to receive(:respond_to?).with(:branches).and_return(false)
+      allow(mock_file).to receive(:respond_to?).with(:branches_coverage_percent).and_return(false)
+      allow(mock_file).to receive(:respond_to?).with(:coverage_data).and_return(false)
       allow(mock_file).to receive(:branches).and_return(nil)
 
       # Mock the AST resolver to avoid file system reads during basic format test
@@ -140,11 +142,49 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
       it('omits Coverage Deficits section') { expect(content).not_to include('## Coverage Deficits') }
     end
 
+    context 'when 100% line covered but branch deficits exist' do
+      let(:content) { File.read(config.report_path) }
+
+      before do
+        mock_file_branch_deficit = instance_double(
+          SimpleCov::SourceFile,
+          filename: 'lib/branch_dummy.rb',
+          project_filename: 'lib/branch_dummy.rb',
+          covered_percent: 100.0,
+          missed_lines: [],
+          missed_branches: [instance_double(SimpleCov::SourceFile::Branch, start_line: 5, end_line: 7, type: :else)]
+        )
+        mock_result_branch_deficit = instance_double(
+          SimpleCov::Result,
+          covered_percent: 100.0,
+          covered_branches: 10,
+          total_branches: 20,
+          files: [mock_file_branch_deficit]
+        )
+
+        allow(mock_file_branch_deficit).to receive(:respond_to?).with(:branches).and_return(true)
+        allow(mock_file_branch_deficit).to receive(:respond_to?).with(:branches_coverage_percent).and_return(true)
+        allow(mock_file_branch_deficit).to receive(:respond_to?).with(:coverage_data).and_return(false)
+        allow(mock_file_branch_deficit).to receive_messages(branches_coverage_percent: 50.0, branches: [instance_double(
+          SimpleCov::SourceFile::Branch, start_line: 5, end_line: 7, type: :else
+        )])
+        allow(File).to receive(:readlines).with('lib/branch_dummy.rb').and_return((1..10).map { |i| "line #{i}\n" })
+
+        formatter.format(mock_result_branch_deficit)
+      end
+
+      it('includes the Coverage Deficits section') { expect(content).to include('## Coverage Deficits') }
+      it('reports the branch deficit despite 100% line coverage') { expect(content).to include('**Branch Deficit:**') }
+    end
+
     context 'when handling branch coverage and truncation' do
-      let(:mock_branch) { instance_double(SimpleCov::SourceFile::Branch, start_line: 5, end_line: 7) }
+      let(:mock_branch) { instance_double(SimpleCov::SourceFile::Branch, start_line: 5, end_line: 7, type: :if) }
 
       before do
         allow(mock_file).to receive(:respond_to?).with(:branches).and_return(true)
+        allow(mock_file).to receive(:respond_to?).with(:branches_coverage_percent).and_return(true)
+        allow(mock_file).to receive(:respond_to?).with(:coverage_data).and_return(false)
+        allow(mock_file).to receive(:branches_coverage_percent).and_return(50.0)
         allow(mock_file).to receive_messages(branches: [mock_branch], missed_branches: [mock_branch])
       end
 
@@ -154,7 +194,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
         let(:content) { File.read(config.report_path) }
 
         it('reports missing branch coverage text') {
-          expect(content).to include('**Branch Deficit:** Missing coverage')
+          expect(content).to match(/\*\*Branch Deficit:\*\* \[L5-7\] Missing coverage/)
         }
 
         it('includes the class name') { expect(content).to include('`DummyClass`') }
@@ -166,6 +206,83 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
 
         it('sorts the output chronologically') do
           expect(content).to match(/`DummyClass`.*Branch Deficit.*`DummyClass#initialize`.*`def initialize`/m)
+        end
+      end
+
+      context 'when extracting exact sub-snippets for branches on a single line' do
+        before do
+          # Justification: SimpleCov dynamically adds start_col/end_col to branches, so verified doubles fail here.
+          # rubocop:disable RSpec/VerifiedDoubles
+          first_mock_branch = double(
+            'SimpleCov::SourceFile::Branch', start_line: 8, end_line: 8, type: :then, start_col: 2, end_col: 6
+          )
+          allow(first_mock_branch).to receive(:respond_to?).with(any_args).and_return(true)
+
+          second_mock_branch = double(
+            'SimpleCov::SourceFile::Branch', start_line: 8, end_line: 8, type: :else, start_col: 2, end_col: 9
+          )
+          allow(second_mock_branch).to receive(:respond_to?).with(any_args).and_return(true)
+          # rubocop:enable RSpec/VerifiedDoubles
+
+          allow(mock_file).to receive_messages(
+            branches: [first_mock_branch, second_mock_branch],
+            missed_branches: [first_mock_branch, second_mock_branch]
+          )
+          allow(File).to receive(:readlines).with('lib/dummy.rb').and_return([
+                                                                               "class DummyClass\n",
+                                                                               "  def initialize\n",
+                                                                               "  end\n",
+                                                                               "  def branch_test\n",
+                                                                               "  end\n",
+                                                                               "  def branch_test_2\n",
+                                                                               "  end\n",
+                                                                               "  d&.a&.b&.c\n"
+                                                                             ])
+          formatter.format(mock_result)
+        end
+
+        it 'extracts the exact sub-snippet for the first operator' do
+          expect(File.read(config.report_path))
+            .to include('**Branch Deficit:** [L8] Missing coverage for `then` branch: `d&.a`')
+        end
+
+        it 'extracts the exact sub-snippet for the second operator' do
+          expect(File.read(config.report_path))
+            .to include('**Branch Deficit:** [L8] Missing coverage for `else` branch: `d&.a&.b`')
+        end
+      end
+
+      context 'when enriching branch columns from raw coverage data' do
+        let(:mock_real_branch) do
+          branch = instance_double(SimpleCov::SourceFile::Branch, start_line: 10, end_line: 10, type: :if)
+          allow(branch).to receive(:instance_variable_set)
+          allow(branch).to receive(:respond_to?) do |arg|
+            %i[type start_line end_line].include?(arg)
+          end
+          allow(branch.class).to receive(:attr_reader)
+          branch
+        end
+
+        before do
+          allow(mock_file).to receive_messages(
+            coverage_data: {
+              'branches' => {
+                '[:if, 0, 10, 4, 10, 20]' => { '[:then, 1, 10, 4, 10, 20]' => 0 }
+              }
+            },
+            restore_ruby_data_structure: [:then, 1, 10, 4, 10, 20],
+            branches: [mock_real_branch],
+            missed_branches: [mock_real_branch]
+          )
+          allow(File).to receive(:readlines).with('lib/dummy.rb').and_return((1..15).map { |i| "line #{i} text\n" })
+
+          # Since it's a double, we must allow the dynamically added methods if we were to call them,
+          # but our formatter uses instance_variable_set and attr_reader.
+          # To avoid double method missing errors in tests, we just check that it parses successfully.
+        end
+
+        it 'executes enrich_branch_columns without crashing' do
+          expect { formatter.format(mock_result) }.not_to raise_error
         end
       end
 

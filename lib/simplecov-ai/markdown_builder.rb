@@ -3,6 +3,7 @@
 
 require_relative 'ast_resolver'
 require 'time'
+require 'stringio'
 require_relative 'markdown_builder/snippet_formatter'
 require_relative 'markdown_builder/bypass_compiler'
 require_relative 'markdown_builder/deficit_grouper'

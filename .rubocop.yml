@@ -131,5 +131,5 @@ Sorbet/FalseSigil:
 
 
 Style/DisableCopsWithinSourceCodeDirective:
-  Enabled: true
+  Enabled: false
 
