@@ -126,7 +126,7 @@ module SimpleCov
           end
 
           total = @coverage_metrics.total_branches
-          return 0.0 if total.to_i.zero?
+          return Constants::PERFECT_COVERAGE_PERCENT if total.to_i.zero?
 
           covered = @coverage_metrics.covered_branches
           covered.to_f / total * Constants::PERFECT_COVERAGE_PERCENT

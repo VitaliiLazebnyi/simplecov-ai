@@ -124,10 +124,16 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
       expect { formatter.format(mock_result) }.to output(/\[SimpleCov AI Formatter\] Digest written/).to_stdout
     end
 
-    it 'prevents dividing by zero when total_branches is nil' do
+    it 'reports 100.0% coverage when total_branches is zero' do
+      allow(mock_result).to receive(:total_branches).and_return(0)
+      formatter.format(mock_result)
+      expect(File.read(config.report_path)).to include('**Global Branch Coverage:** 100.0%')
+    end
+
+    it 'reports 100.0% coverage when total_branches is nil' do
       allow(mock_result).to receive(:total_branches).and_return(nil)
       formatter.format(mock_result)
-      expect(File.read(config.report_path)).to include('**Global Branch Coverage:** 0.0%')
+      expect(File.read(config.report_path)).to include('**Global Branch Coverage:** 100.0%')
     end
 
     context 'when 100% covered' do
