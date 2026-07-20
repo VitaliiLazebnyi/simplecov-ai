@@ -59,30 +59,38 @@ The output is written to `coverage/ai_report.md` (or your configured path), perf
 **Global Line Coverage:** 92.5%
 **Global Branch Coverage:** 88.0%
 **Generated At:** 2026-04-21T23:40:44+09:00 (Local Timezone)
-**Report File Size:** 1.2 kB
 
 ## Coverage Deficits
 
 ### `lib/my_gem/client.rb`
-- `MyGem::Client#authenticate!`
-  - **Branch Deficit:** Missing coverage for conditional evaluation handling `ExpiredTokenError`.
 - `MyGem::Client#initialize`
-  - **Line Deficit:** Variable initialization state uncovered.
+  - **Line Deficit:** [L4] `@token = nil`
+- `MyGem::Client#authenticate!`
+  - **Branch Deficit:** [L12] Missing coverage for `else` branch: `raise ExpiredTokenError`
 
 ### `lib/my_gem/parser/processor.rb`
 - `MyGem::Parser::Processor.parse_stream`
-  - **Branch Deficit:** Missing coverage for early-exit condition `break if stream.closed?` (Occurrence 1 of 2).
+  - **Branch Deficit:** [L8] Missing coverage for `then` branch: `break if stream.closed?`
 
 ## Ignored Coverage Bypasses
 
 ### `lib/my_gem/legacy_handler.rb`
 - `MyGem::LegacyHandler#obsolete_action`
-  - **Bypass Present:** Contains `:nocov:` directive artificially ignoring coverage (Occurrence 1 of 1).
+  - **Bypass Present:** Coverage explicitly ignored via `:nocov:`.
 ```
+
+Each deficit is tagged with its source line(s) (`[L<n>]`) and the exact code snippet, so an
+agent can locate the gap without depending on the surrounding line numbers. When branch coverage
+is not enabled for the run, the header reports `N/A` for **Global Branch Coverage** rather than a
+misleading `100%`.
 
 ## Error Handling
 
-Adhering to fail-fast principles, if the AST parser encounters structurally unparseable Ruby code or corrupt telemetry, it will gracefully degrade or explicitly fail. It will not silently ignore failures or emit corrupted artifacts.
+Coverage reporting is best-effort and never aborts a passing test run. When the AST parser cannot
+process a file, that file degrades gracefully to raw line numbers (marked with an `AST Parsing
+Failed` notice) instead of semantic groupings; column enrichment that a given SimpleCov version
+does not support falls back to full-line snippets. Report generation is resilient to unreadable
+or non-UTF-8 source files, emitting the report without the affected snippets rather than raising.
 
 ## License
 

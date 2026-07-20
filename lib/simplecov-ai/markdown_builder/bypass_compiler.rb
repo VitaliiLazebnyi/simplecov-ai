@@ -13,13 +13,10 @@ module SimpleCov
           HEADING = T.let("## Ignored Coverage Bypasses\n\n", String)
           # Template for formatting file headers in the bypass section
           FILE_HEADING_TEMPLATE = T.let('### `%s`', String)
-          # Template for detailing an individual bypass directive
-          BYPASS_TEMPLATE = T.let(
-            "- `%s`\n  " \
-            '- **Bypass Present:** Contains `%s` directive artificially ' \
-            'ignoring coverage (Occurrence %d of %d).',
-            String
-          )
+          # Template for a bypassed node heading
+          NODE_HEADING_TEMPLATE = T.let('- `%s`', String)
+          # Template detailing the specific directive that ignored coverage for a node
+          REASON_TEMPLATE = T.let('  - **Bypass Present:** Coverage explicitly ignored via `%s`.', String)
 
           sig { params(coverage_metrics: SimpleCov::Result, builder: MarkdownBuilder).void }
           def initialize(coverage_metrics, builder)
@@ -55,18 +52,30 @@ module SimpleCov
 
           sig { params(filename: String).returns(T::Array[ASTResolver::SemanticNode]) }
           def fetch_bypassed_nodes(filename)
+            # Skip the expensive AST resolution for files that contain no bypass directive at all.
+            return [] unless resolve_for_bypass?(filename)
+
             nodes = @builder.try_resolve_ast(filename)
             nodes ? nodes.select { |node| node.bypass_reasons.any? } : []
+          end
+
+          sig { params(filename: String).returns(T::Boolean) }
+          def resolve_for_bypass?(filename)
+            ASTResolver::BypassScanner.contains_directive?(File.read(filename))
+          rescue StandardError
+            # If the file cannot be cheaply scanned, fall through to full resolution rather than
+            # silently dropping a possible bypass; resolution is itself cheap for unreadable files.
+            true
           end
 
           sig do
             params(buffer: StringIO, file: SimpleCov::SourceFile, bypassed_nodes: T::Array[ASTResolver::SemanticNode]).void
           end
           def write_file_bypasses(buffer, file, bypassed_nodes)
-            buffer.puts format(FILE_HEADING_TEMPLATE, file.project_filename)
-            total = bypassed_nodes.size
-            bypassed_nodes.each_with_index do |node, idx|
-              buffer.puts format(BYPASS_TEMPLATE, node.name, Constants::NOCOV_DIRECTIVE, idx + 1, total)
+            buffer.puts format(FILE_HEADING_TEMPLATE, file.project_filename.delete_prefix('/'))
+            bypassed_nodes.each do |node|
+              buffer.puts format(NODE_HEADING_TEMPLATE, node.name)
+              node.bypass_reasons.each { |reason| buffer.puts format(REASON_TEMPLATE, reason) }
             end
             buffer.puts ''
           end

@@ -19,21 +19,22 @@ module SimpleCov
       # Serves as the primary mutation boundary to format AI consumption targets.
       class MarkdownBuilder
         extend T::Sig
-        include SnippetFormatter
 
-        # The number of bytes in a kilobyte
-        BYTES_PER_KB = T.let(1024.0, Float)
+        # The number of bytes in a kilobyte (metric kB, matching the "kB" unit shown to users)
+        BYTES_PER_KB = T.let(1000.0, Float)
         # Text representation for a passed coverage check
         STATUS_PASSED = T.let('PASSED', String)
         # Text representation for a failed coverage check
         STATUS_FAILED = T.let('FAILED', String)
+        # Branch-coverage label shown when branch coverage was not enabled for the run
+        BRANCH_DISABLED_LABEL = T.let('N/A (branch coverage not enabled)', String)
 
         # Template for the report header
         HEADER_TEMPLATE = T.let(
           "# AI Coverage Digest\n" \
           "**Status:** %<status>s\n" \
           "**Global Line Coverage:** %<line_pct>s%%\n" \
-          "**Global Branch Coverage:** %<branch_pct>s%%\n" \
+          "**Global Branch Coverage:** %<branch>s\n" \
           "**Generated At:** %<time>s (Local Timezone)\n",
           String
         )
@@ -69,9 +70,8 @@ module SimpleCov
           @coverage_metrics = T.let(coverage_metrics, SimpleCov::Result)
           @config = T.let(config, Configuration)
           @buffer = T.let(StringIO.new, StringIO)
-          @file_count = T.let(0, Integer)
           @truncated = T.let(false, T::Boolean)
-          @ast_cache = T.let({}, T::Hash[String, T::Array[ASTResolver::SemanticNode]])
+          @ast_cache = T.let({}, T::Hash[String, T.nilable(T::Array[ASTResolver::SemanticNode])])
         end
 
         # Executes the primary buffer composition logic yielding a monolithic compiled output.
@@ -82,54 +82,75 @@ module SimpleCov
         def build
           write_header
           DeficitCompiler.new(@coverage_metrics, @config, self).write_deficits(@buffer)
-          BypassCompiler.new(@coverage_metrics, self).write_bypasses(@buffer) if @config.include_bypasses
           write_truncation_warning if @truncated
+          BypassCompiler.new(@coverage_metrics, self).write_bypasses(@buffer) if @config.include_bypasses
           @buffer.string
         end
 
         sig { params(filename: String).returns(T.nilable(T::Array[ASTResolver::SemanticNode])) }
         def try_resolve_ast(filename)
-          @ast_cache[filename] ||= ASTResolver.resolve(filename)
-        rescue StandardError
-          nil
+          return @ast_cache[filename] if @ast_cache.key?(filename)
+
+          @ast_cache[filename] = begin
+            ASTResolver.resolve(filename)
+          rescue StandardError
+            nil
+          end
         end
 
-        sig { returns(T::Boolean) }
-        def truncate_if_needed?
-          return false unless @buffer.size / BYTES_PER_KB > @config.max_file_size_kb
+        # Marks the report truncated when the deficit section has exceeded the configured size
+        # budget, so the caller can stop emitting further (higher-coverage) files.
+        sig { void }
+        def record_truncation!
+          @truncated = true if @buffer.size / BYTES_PER_KB > @config.max_file_size_kb
+        end
 
-          @truncated = true
-          true
+        # @return [Boolean] Whether the report has been marked truncated.
+        sig { returns(T::Boolean) }
+        def truncated?
+          @truncated
         end
 
         private
 
         # Writes the summary header containing global coverage percentages and generation metadata.
+        # Status is PASSED only when line coverage is perfect and, where branch coverage is
+        # enabled, branch coverage is perfect too — so a report cannot claim PASSED while listing
+        # branch deficits.
         sig { void }
         def write_header
           covered_pct = @coverage_metrics.covered_percent
-          status = covered_pct >= Constants::PERFECT_COVERAGE_PERCENT ? STATUS_PASSED : STATUS_FAILED
+          branch_pct = branch_coverage_pct
           @buffer.puts format(
             HEADER_TEMPLATE,
-            status: status,
+            status: compute_status(covered_pct, branch_pct),
             line_pct: covered_pct.round(1),
-            branch_pct: calculate_branch_pct.round(1),
+            branch: branch_pct ? "#{branch_pct.round(1)}%" : BRANCH_DISABLED_LABEL,
             time: Time.now.iso8601
           )
         end
 
-        sig { returns(Float) }
-        def calculate_branch_pct
-          unless @coverage_metrics.respond_to?(:covered_branches) &&
-                 @coverage_metrics.respond_to?(:total_branches)
-            return 0.0
-          end
+        sig { params(line_pct: Float, branch_pct: T.nilable(Float)).returns(String) }
+        def compute_status(line_pct, branch_pct)
+          line_perfect = line_pct >= Constants::PERFECT_COVERAGE_PERCENT
+          branch_perfect = branch_pct.nil? || branch_pct >= Constants::PERFECT_COVERAGE_PERCENT
+          line_perfect && branch_perfect ? STATUS_PASSED : STATUS_FAILED
+        end
 
-          total = @coverage_metrics.total_branches
-          return Constants::PERFECT_COVERAGE_PERCENT if total.to_i.zero?
+        # Returns the global branch coverage percentage, or nil when branch coverage was not
+        # enabled for the run (so the header can report "N/A" rather than a misleading 100%).
+        sig { returns(T.nilable(Float)) }
+        def branch_coverage_pct
+          return nil unless @coverage_metrics.respond_to?(:covered_branches) &&
+                            @coverage_metrics.respond_to?(:total_branches)
 
-          covered = @coverage_metrics.covered_branches
-          covered.to_f / total * Constants::PERFECT_COVERAGE_PERCENT
+          raw_total = @coverage_metrics.total_branches
+          return nil if raw_total.nil?
+
+          total = raw_total.to_i
+          return Constants::PERFECT_COVERAGE_PERCENT if total.zero?
+
+          @coverage_metrics.covered_branches.to_f / total * Constants::PERFECT_COVERAGE_PERCENT
         end
 
         # Appends a critical alert if the output hit the token-ceiling constraint and was forcibly terminated.

@@ -3,6 +3,9 @@
 
 require 'parser/current'
 require_relative 'ast_resolver/semantic_node'
+require_relative 'ast_resolver/bypass_scanner'
+require_relative 'ast_resolver/metaclass_resolver'
+require_relative 'ast_resolver/node_classifier'
 
 module SimpleCov
   module Formatter
@@ -14,17 +17,6 @@ module SimpleCov
       class ASTResolver
         extend T::Sig
 
-        # Separator used to denote namespace nesting (e.g., Module::Class)
-        NAMESPACE_SEPARATOR = T.let('::', String)
-        # Separator used to denote instance methods (e.g., Class#method)
-        INSTANCE_SEPARATOR = T.let('#', String)
-        # Separator used to denote singleton/class methods (e.g., Class.method)
-        SINGLETON_SEPARATOR = T.let('.', String)
-        # Label applied to nodes representing instance methods
-        TYPE_INSTANCE_METHOD = T.let('Instance Method', String)
-        # Label applied to nodes representing singleton methods
-        TYPE_SINGLETON_METHOD = T.let('Singleton Method', String)
-
         # Orchestrates the initial mapping algorithm on a target file to extract structural
         # metadata, circumventing potential syntax violations explicitly.
         #
@@ -35,11 +27,11 @@ module SimpleCov
           return [] unless File.exist?(file_path)
 
           source = File.read(file_path)
-          ast, comments = Parser::CurrentRuby.parse_with_comments(source)
+          ast, = Parser::CurrentRuby.parse_with_comments(source)
 
           resolver = new
           nodes = resolver.traverse(ast)
-          resolver.assign_bypasses(nodes, comments)
+          resolver.assign_bypasses(nodes, source)
           nodes
         end
 
@@ -48,102 +40,41 @@ module SimpleCov
         #
         # @param node [Parser::AST::Node] The root AST node from which traversal executes.
         # @param context [String] An accumulated identifier linking namespaces to inner entities.
+        # @param singleton [Boolean] Whether the current lexical scope is a singleton class
+        #   (`class << self`), in which case plain `def`s are singleton methods.
         # @return [Array<SemanticNode>] Accumulation of all sub-tree defined endpoints.
         sig do
-          params(node: T.nilable(Parser::AST::Node),
-                 context: String).returns(T::Array[SemanticNode])
+          params(node: T.nilable(Parser::AST::Node), context: String, singleton: T::Boolean)
+            .returns(T::Array[SemanticNode])
         end
-        def traverse(node, context = '')
+        def traverse(node, context = '', singleton: false)
           return [] unless node.is_a?(Parser::AST::Node)
 
           nodes = T.let([], T::Array[SemanticNode])
-          current_context, semantic_node = extract_node_metadata(node, context)
+          current_context, semantic_node, child_singleton = NodeClassifier.classify(node, context, singleton)
           nodes << semantic_node if semantic_node
 
           node.children.grep(Parser::AST::Node).each do |child|
-            nodes.concat(traverse(child, current_context))
+            nodes.concat(traverse(child, current_context, singleton: child_singleton))
           end
 
           nodes
         end
 
-        sig { params(nodes: T::Array[SemanticNode], comments: T::Array[Parser::Source::Comment]).void }
-        def assign_bypasses(nodes, comments)
-          comments.each do |comment|
-            comment_text = T.cast(comment.text, String)
-            assign_bypass(nodes, comment, comment_text.strip) if comment_text.include?(Constants::NOCOV_DIRECTIVE)
-          end
-        end
-
-        private
-
-        sig { params(nodes: T::Array[SemanticNode], comment: Parser::Source::Comment, bypass_reason: String).void }
-        def assign_bypass(nodes, comment, bypass_reason)
-          comment_loc = T.cast(comment.loc, Parser::Source::Map)
-          comment_line = T.cast(comment_loc.line, Integer)
-
-          innermost_node = nodes.reverse.find { |node| comment_line.between?(node.start_line - 1, node.end_line + 1) }
-          innermost_node&.add_bypass(bypass_reason)
-        end
-
-        sig do
-          params(node: Parser::AST::Node, context: String)
-            .returns([String, T.nilable(SemanticNode)])
-        end
-        def extract_node_metadata(node, context)
-          case node.type
-          when :class, :module
-            extract_class_metadata(node, context)
-          when :def
-            extract_instance_method_metadata(node, context)
-          when :defs
-            extract_singleton_method_metadata(node, context)
-          else
-            [context, nil]
-          end
-        end
-
-        sig do
-          params(node: Parser::AST::Node, context: String)
-            .returns([String, T.nilable(SemanticNode)])
-        end
-        def extract_class_metadata(node, context)
-          const_node = T.cast(node.children[0], Parser::AST::Node)
-          const_node_name = T.cast(T.cast(const_node.loc, Parser::Source::Map::Constant).name, Parser::Source::Range)
-          name = T.cast(const_node_name.source, String)
-          new_context = context.empty? ? name : "#{context}#{NAMESPACE_SEPARATOR}#{name}"
-          [new_context, build_node(node, new_context, node.type.to_s.capitalize)]
-        end
-
-        sig do
-          params(node: Parser::AST::Node, context: String)
-            .returns([String, T.nilable(SemanticNode)])
-        end
-        def extract_instance_method_metadata(node, context)
-          name = T.cast(node.children.first, Symbol).to_s
-          new_context = context.empty? ? "#{INSTANCE_SEPARATOR}#{name}" : "#{context}#{INSTANCE_SEPARATOR}#{name}"
-          [new_context, build_node(node, new_context, TYPE_INSTANCE_METHOD)]
-        end
-
-        sig do
-          params(node: Parser::AST::Node, context: String)
-            .returns([String, T.nilable(SemanticNode)])
-        end
-        def extract_singleton_method_metadata(node, context)
-          name = T.cast(node.children[1], Symbol).to_s
-          new_context = context.empty? ? "#{SINGLETON_SEPARATOR}#{name}" : "#{context}#{SINGLETON_SEPARATOR}#{name}"
-          [new_context, build_node(node, new_context, TYPE_SINGLETON_METHOD)]
-        end
-
-        sig do
-          params(node: Parser::AST::Node, name: String,
-                 type: String).returns(SemanticNode)
-        end
-        def build_node(node, name, type)
-          loc = T.cast(node.loc, Parser::Source::Map)
-          start_line = T.cast(loc.line, Integer)
-          end_line = T.cast(loc.last_line, Integer)
-          SemanticNode.new(name: name, type: type, start_line: start_line, end_line: end_line, bypass_reasons: [])
+        # Attributes coverage-bypass directives to the semantic nodes they cover.
+        #
+        # `# :nocov:` markers are paired into regions (mirroring SimpleCov's `each_slice(2)`
+        # semantics, extending an unmatched marker to end-of-file), and `# simplecov:disable` /
+        # `# simplecov:enable` block directives contribute their own regions. Each region is
+        # attributed to the outermost semantic nodes it fully contains, or — when it sits inside
+        # a single node — to that innermost enclosing node.
+        #
+        # @param nodes [Array<SemanticNode>] The resolved structural entities.
+        # @param source [String] The full source text of the file.
+        # @return [void]
+        sig { params(nodes: T::Array[SemanticNode], source: String).void }
+        def assign_bypasses(nodes, source)
+          BypassScanner.attribute(nodes, source)
         end
       end
     end

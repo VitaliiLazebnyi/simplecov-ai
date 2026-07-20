@@ -3,6 +3,7 @@ AllCops:
   NewCops: enable
   SuggestExtensions: true
 
+# The `plugins:` key requires rubocop >= 1.72, which the gemspec's rubocop floor matches.
 plugins:
   - standard-sorbet
   - rubocop-performance
@@ -17,10 +18,13 @@ Style/FrozenStringLiteralComment:
   Enabled: true
   EnforcedStyle: always
 
+# Justification: the gem's conventional entry point is the hyphenated `simplecov-ai.rb`,
+# which does not match the module path the cop expects.
 Naming/FileName:
   Exclude:
     - "lib/simplecov-ai.rb"
 
+# Justification: RSpec example groups and the gemspec declaration are naturally long blocks.
 Metrics/BlockLength:
   Enabled: true
   Exclude:
@@ -74,6 +78,8 @@ RSpec/DescribedClass:
   Enabled: true
 RSpec/DescribeClass:
   Enabled: true
+# Justification: the memoized `@configuration` on the formatter class is intentionally a
+# process-global singleton, mutated only during single-threaded setup before coverage runs.
 ThreadSafety/ClassInstanceVariable:
   Enabled: true
   Exclude:
@@ -91,8 +97,12 @@ Sorbet/ForbidTUntyped:
 Sorbet/ForbidTUnsafe:
   Enabled: true
 
+# Justification: specs are `typed: false` and exercise the library through RSpec verifying
+# doubles, so requiring Sorbet signatures on test helpers adds noise without type safety.
 Sorbet/EnforceSignatures:
   Enabled: true
+  Exclude:
+    - "spec/**/*"
 
 Sorbet/SignatureBuildOrder:
   Enabled: false
@@ -132,6 +142,8 @@ Sorbet/FalseSigil:
 Style/DisableCopsWithinSourceCodeDirective:
   Enabled: true
 
+# Justification: fixtures deliberately use unconventional control flow to create the exact
+# branch/coverage shapes under test; linting them would destroy the scenarios.
 Style/UnlessElse:
   Exclude:
     - "spec/fixtures/**/*"

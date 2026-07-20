@@ -6,7 +6,8 @@ module SimpleCov
     class AIFormatter
       # Encapsulates all global tuning parameters that dictate the execution size,
       # structure, and output verbosity of the AST-driven Markdown report generator.
-      # Exposes strongly-typed attributes through Sorbet to preempt runtime invalidities.
+      # Each attribute is validated on assignment so misconfiguration fails immediately at
+      # the point of the invalid write rather than deep inside coverage processing at exit.
       class Configuration
         extend T::Sig
 
@@ -22,36 +23,43 @@ module SimpleCov
         DEFAULT_GRANULARITY = T.let(:fine, Symbol)
         # Default flag for including bypassed regions in the report
         DEFAULT_INCLUDE_BYPASSES = T.let(true, T::Boolean)
+        # The set of granularity levels the report generator understands.
+        VALID_GRANULARITIES = T.let(%i[fine coarse].freeze, T::Array[Symbol])
 
         # The absolute or relative system path where the final token-efficient markdown
-        # document acts as an artifact.
+        # document is written.
         # @return [String]
         sig { returns(String) }
-        attr_accessor :report_path
+        attr_reader :report_path
 
-        # The maximum allowed byte limit to prevent the generation pipeline from overflowing
-        # LLM token bounds before terminating the traversal algorithm.
+        # The maximum allowed size, in kilobytes, of the generated report before the deficit
+        # traversal is truncated to stay within LLM token bounds.
         # @return [Integer]
         sig { returns(Integer) }
-        attr_accessor :max_file_size_kb
+        attr_reader :max_file_size_kb
 
         # Limits the number of lines included in code snippets to conserve token usage
         # while maintaining enough structural context for the AI to reason about the logic.
+        # @return [Integer]
         sig { returns(Integer) }
-        attr_accessor :max_snippet_lines
+        attr_reader :max_snippet_lines
 
-        # Determines whether the generated markdown report is printed directly to standard output,
-        # facilitating pipeline integrations where artifacts are piped rather than read from disk.
+        # Whether the finalized digest is echoed to standard output in addition to being
+        # written to disk, for pipelines that consume the report from STDOUT. A boolean flag is
+        # benign when mis-set (a non-true value simply reads falsy), so it needs no value guard.
+        # @return [Boolean]
         sig { returns(T::Boolean) }
         attr_accessor :output_to_console
 
-        # Specifies the level of detail in the coverage report (e.g., :fine, :coarse)
-        # to balance between comprehensive reporting and strict token constraints.
+        # The level of detail in the coverage report (`:fine` for per-line/branch snippets,
+        # `:coarse` for a summary line per node).
+        # @return [Symbol]
         sig { returns(Symbol) }
-        attr_accessor :granularity
+        attr_reader :granularity
 
-        # Controls whether to include lines skipped via coverage bypass directives (e.g., :nocov:),
+        # Whether to include lines skipped via coverage bypass directives (e.g. `:nocov:`),
         # allowing the AI to audit skipped regions for potential testing mandate violations.
+        # @return [Boolean]
         sig { returns(T::Boolean) }
         attr_accessor :include_bypasses
 
@@ -63,6 +71,53 @@ module SimpleCov
           @output_to_console = T.let(DEFAULT_OUTPUT_TO_CONSOLE, T::Boolean)
           @granularity = T.let(DEFAULT_GRANULARITY, Symbol)
           @include_bypasses = T.let(DEFAULT_INCLUDE_BYPASSES, T::Boolean)
+        end
+
+        # The writer signatures below enforce the parameter TYPE at runtime (via sorbet-runtime),
+        # closing the gap where `sig` + `attr_accessor` only type-checked the readers; the
+        # explicit bodies additionally validate the VALUE domain and always run.
+
+        # @param value [String] A non-empty destination path.
+        # @return [void]
+        sig { params(value: String).void }
+        def report_path=(value)
+          raise ArgumentError, 'report_path must not be blank' if value.strip.empty?
+
+          @report_path = value
+        end
+
+        # @param value [Integer] A positive kilobyte ceiling.
+        # @return [void]
+        sig { params(value: Integer).void }
+        def max_file_size_kb=(value)
+          @max_file_size_kb = validate_positive(:max_file_size_kb, value)
+        end
+
+        # @param value [Integer] A positive snippet-line ceiling.
+        # @return [void]
+        sig { params(value: Integer).void }
+        def max_snippet_lines=(value)
+          @max_snippet_lines = validate_positive(:max_snippet_lines, value)
+        end
+
+        # @param value [Symbol] One of {VALID_GRANULARITIES}.
+        # @return [void]
+        sig { params(value: Symbol).void }
+        def granularity=(value)
+          unless VALID_GRANULARITIES.include?(value)
+            raise ArgumentError, "granularity must be one of #{VALID_GRANULARITIES.inspect}, got #{value.inspect}"
+          end
+
+          @granularity = value
+        end
+
+        private
+
+        sig { params(name: Symbol, value: Integer).returns(Integer) }
+        def validate_positive(name, value)
+          raise ArgumentError, "#{name} must be a positive Integer, got #{value.inspect}" unless value.positive?
+
+          value
         end
       end
     end

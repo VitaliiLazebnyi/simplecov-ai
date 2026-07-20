@@ -26,7 +26,7 @@ This gem provides the best approach because it introduces **Semantic Resolution*
 - **SCAI-REQ-005 (Coverage Type Segmentation):** The report MUST distinguish clearly between `Line Deficits` (unexecuted statements) and `Branch Deficits` (unexecuted conditionals) to clarify the scope of the required test.
 - **SCAI-REQ-012 (Token Ceiling / Truncation):** To prevent prompt bloat, if the generated report exceeds a predefined file size limit (calculated in strict Metric units, e.g., 50 kB), the formatter MUST prioritize the lowest-coverage files first and explicitly state the truncation in the report.
 - **SCAI-REQ-013 (Directive Auditing):** The library MUST parse source file comments to identify the presence of SimpleCov exclusion directives (e.g., `:nocov:`). The formatter MUST explicitly report the semantic envelope (e.g., Method or Class) encasing any such bypass in the final markdown document. This ensures that any artificial inflation of coverage metrics is fully transparent to the auditing AI.
-- **SCAI-REQ-019 (Parallel Result Merging):** Modern automated infrastructures execute tests in parallel (e.g., via `parallel_tests`), generating partial coverage sets. The formatter MUST possess explicit support for natively ingesting and deterministically processing merged `SimpleCov::Result` objects containing aggregated coverage data assembled at the culmination of a parallel test run.
+- **SCAI-REQ-019 (Parallel Result Merging):** Modern automated infrastructures execute tests in parallel (e.g., via `parallel_tests`), generating partial coverage sets. SimpleCov itself merges these partial result sets (per its `merge_timeout`) and invokes the formatter once with the aggregated `SimpleCov::Result`. The formatter MUST therefore process whatever `Result` it is handed transparently, without assuming a single-process run — which it does, as `#format` derives everything from the passed `Result` and imposes no run-count assumptions.
 
 ### 3.2. Formatter Implementation & UX
 - **SCAI-REQ-006 (Summary Header):** The markdown output MUST begin with a consolidated telemetry header documenting overall line percentage, branch percentage, generation timestamp, and PASS/FAIL state. While internal temporal logic MUST be mathematically UTC, this markdown report acts as a presentation layer and MUST dynamically convert and format the timestamp to the user's preferred local timezone.
@@ -37,13 +37,14 @@ This gem provides the best approach because it introduces **Semantic Resolution*
 - **SCAI-REQ-008 (Maximum Rigor Test Coverage & Anti-Coverage Paradox):** The gem's test suite MUST rigorously establish and maintain 100% deterministic line and branch coverage. However, achieving 100% execution coverage is meaningless if assertions are weak (the "Coverage Paradox"). Tests MUST NOT be tautological. All mocks MUST strictly adhere to the exact real-world interfaces and exceptions of their target components (e.g., matching specific native exception classes like `Parser::SyntaxError` instead of generic `StandardError`). Furthermore, structural testing MUST employ deep, nested data fixtures rather than simple flat lists to properly validate boundary logic. Textual formatting MUST be validated using multi-line Regex matchers to enforce chronological order, strictly forbidding isolated string presence assertions (like `.to include()`). The use of coverage-dodging directives (e.g., `:nocov:`) is strictly forbidden by default. They are permitted ONLY when absolute compliance is technically impossible (e.g., genuinely untestable system crashes), and any such bypass MUST be immediately preceded by a comment explicitly justifying the architectural limitation. Any randomness or time-based execution must be explicitly mocked.
 - **SCAI-REQ-009 (Strict Analytical Compliance):** The gem MUST implement maximum-rigor RuboCop static analysis checks. `rubocop:disable` directives are systematically banned unless mathematically impossible to avoid (e.g., flawed upstream library typings). Any permitted bypass MUST be immediately preceded by an inline comment explicitly justifying the architectural limitation.
 - **SCAI-REQ-010 (Strict Type Safety):** The gem MUST utilize a static typing overlay (e.g., Sorbet with `# typed: strict` typing globally) to mathematically eliminate runtime type anomalies.
-- **SCAI-REQ-011 (Graceful Degradation & Fail-Fast Boundaries):** The system MUST enforce fail-fast error handling at integration boundaries (e.g., encountering fatally corrupt SimpleCov telemetry raises an explicit `SCAI::PayloadError`). However, if the AST parser encounters structurally unparseable Ruby code (e.g., a dynamically generated file), it MUST gracefully degrade. Instead of crashing the entire test suite run, it MUST formally record the file as a deficit and optionally log the raw SimpleCov line coordinates for that file, explicitly denoting the parsing failure in the markdown output, before safely continuing to process the remaining valid files.
+- **SCAI-REQ-011 (Graceful Degradation):** The system MUST contain processing failures at the file level rather than aborting the test run. If the AST parser encounters structurally unparseable Ruby code (e.g., a dynamically generated file), it MUST gracefully degrade: it records the file as a deficit using the raw SimpleCov line coordinates, explicitly denoting the parsing failure in the Markdown output, before safely continuing to process the remaining valid files. Missing branch-column telemetry and unreadable source files degrade the same way (see §4.5).
 - **SCAI-REQ-020 (AST Caching & Performance):** To eliminate redundant file system I/O and overhead, the formatter MUST maintain an internal AST cache memory buffer mapping file paths to resolved syntax trees. This ensures a file is fully parsed mathematically exactly once, even when subjected to multiple traversals for deficit detection and bypass auditing.
 - **SCAI-REQ-021 (Self-Documenting Mandate):** Code MUST be immediately readable by LLMs and human maintainers without relying heavily on inline comments. The code's intent MUST be derived entirely from expressive, domain-specific variable, method, and parameter naming. Generic identifiers (e.g., `result`, `group`, `f`, `n`) are strictly forbidden.
 - **SCAI-REQ-022 (Zero-Bypass Formatting Strictness):** Any modifications that increase code verbosity for the sake of clarity (resulting in longer lines or larger classes) MUST be structurally accommodated. Developers MUST extract methods and reorganize logic to naturally pass all strict RuboCop limits without ever resorting to `# rubocop:disable` or inline `rescue` modifiers.
+
 ### 3.4. System Prerequisites & Dependencies
-- **SCAI-REQ-015 (Ruby Version Constraint):** The gem MUST enforce a minimum Ruby version of `>= 2.7.0`. **[Refined Requirement]** Due to local environment execution constraints prohibiting the native installation of Ruby `>= 3.0.0`, the requirement for `prism` was archived in favor of the production-tested `whitequark/parser` gem. This ensures the environment can thoroughly execute and achieve the 100% testing mandate, while standardizing on `2.7.0` to permit modern analysis tools like `standard-sorbet`.
-- **SCAI-REQ-016 (SimpleCov Version Constraint):** The gem MUST enforce a minimum `simplecov` dependency of `>= 0.18.0`. This is a hard structural requirement because versions older than `0.18.0` entirely lack the internal Branch Coverage telemetry required by `SCAI-REQ-005`.
+- **SCAI-REQ-015 (Ruby Version Constraint):** The gem MUST enforce a minimum Ruby version of `>= 2.7.0` and is tested across Ruby 2.7 through 4.0. AST parsing standardizes on the `whitequark/parser` gem rather than `prism` so a single, well-supported grammar path covers the entire version range (including 2.7, which predates `prism`).
+- **SCAI-REQ-016 (SimpleCov Version Constraint):** The gem declares a `simplecov` dependency of `>= 0.18, < 2.0`. The `0.18` floor is API-accurate — it is the first release exposing the internal Branch Coverage telemetry required by `SCAI-REQ-005` — though the *effective installable* floor on Ruby `>= 3.0` is higher, because Bundler resolves later 0.x/1.x releases there; on Ruby 2.7 the 0.x line resolves. The `< 2.0` ceiling bounds the range across which branch enrichment has been verified.
 
 ## 4. Usage & Configuration
 
@@ -111,10 +112,10 @@ The formatter strictly writes the resulting digest to the predictable path (e.g.
 In an automated CI/CD pipeline, the engineer only needs to ensure the `coverage/` directory is exported as an artifact. A downstream autonomous agent or LLM reviewer can simply `cat coverage/ai_report.md` directly in the pipeline to immediately review the exact unexecuted classes, methods, or logical branches, bypassing manual review of massive HTML structures and eliminating token bloat.
 
 ### 4.5. Error Handling & Failure States
-In strict adherence to the project's **Fail-Fast** mandate (`SCAI-REQ-011`), the formatter categorically rejects silent processing failures:
-1. **Broken Code Syntax:** If the AST parser encounters structurally invalid Ruby syntax in an under-covered file, the formatter MUST immediately intercept the failure and raise an explicit `SCAI::ASTParsingError`. 
-2. **Malformed Telemetry:** If the incoming SimpleCov payload is corrupted or lacks required telemetry (like branch data if using an unsupported SimpleCov version), it MUST raise an explicit `SCAI::PayloadError`.
-3. **Artifact Interruption:** During a fatal crash, the Markdown artifact generation is strictly halted. The interacting AI or developer must read the terminal's `STDERR` stack trace, fix the syntax or structural failure, and re-execute the test suite before a new coverage artifact is compiled.
+In adherence to `SCAI-REQ-011`, coverage reporting is best-effort and MUST NOT abort an otherwise-passing test run. Failures are contained at the file level:
+1. **Broken Code Syntax:** If the AST parser cannot process an under-covered file, that file MUST degrade gracefully to raw line numbers, annotated in the Markdown with an `AST Parsing Failed` notice, while the remaining files are processed normally.
+2. **Missing Telemetry:** If a given SimpleCov version does not expose the branch column data used for inline sub-snippets, the formatter MUST fall back to full-line snippets rather than raising.
+3. **Unreadable Sources:** Files that cannot be read, or that contain non-UTF-8 bytes, MUST be reported without their snippets rather than interrupting artifact generation.
 
 ## 5. Example Output Reference
 
@@ -124,25 +125,24 @@ In strict adherence to the project's **Fail-Fast** mandate (`SCAI-REQ-011`), the
 **Global Line Coverage:** 92.5%
 **Global Branch Coverage:** 88.0%
 **Generated At:** 2026-04-21T23:40:44+09:00 (Local Timezone)
-**Report File Size:** 1.2 kB
 
 ## Coverage Deficits
 
 ### `lib/my_gem/client.rb`
-- `MyGem::Client#authenticate!`
-  - **Branch Deficit:** Missing coverage for conditional evaluation handling `ExpiredTokenError`.
 - `MyGem::Client#initialize`
-  - **Line Deficit:** Variable initialization state uncovered.
+  - **Line Deficit:** [L4] `@token = nil`
+- `MyGem::Client#authenticate!`
+  - **Branch Deficit:** [L12] Missing coverage for `else` branch: `raise ExpiredTokenError`
 
 ### `lib/my_gem/parser/processor.rb`
 - `MyGem::Parser::Processor.parse_stream`
-  - **Branch Deficit:** Missing coverage for early-exit condition `break if stream.closed?` (Occurrence 1 of 2).
+  - **Branch Deficit:** [L8] Missing coverage for `then` branch: `break if stream.closed?`
 
 ## Ignored Coverage Bypasses
 
 ### `lib/my_gem/legacy_handler.rb`
 - `MyGem::LegacyHandler#obsolete_action`
-  - **Bypass Present:** Contains `:nocov:` directive artificially ignoring coverage (Occurrence 1 of 1).
+  - **Bypass Present:** Coverage explicitly ignored via `:nocov:`.
 
 > **[WARNING] TRUNCATION NOTIFICATION:**
 > The total coverage deficit report exceeded the maximum token constraint (50 kB). The report was truncated. The deficits detailed above represent the lowest-coverage (most critical) files. Please resolve these deficits to reveal the remaining uncovered files in subsequent test runs.

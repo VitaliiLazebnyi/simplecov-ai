@@ -5,8 +5,9 @@ module SimpleCov
   module Formatter
     class AIFormatter
       class ASTResolver
-        # An immutable struct housing bounds, identification metrics, and static bypassing
-        # definitions derived from traversing the AST nodes.
+        # A mutable value object housing bounds, identification metrics, and coverage-bypass
+        # reasons derived from traversing the AST nodes. Bounds and identity are fixed at
+        # construction; bypass reasons accumulate via {#add_bypass} during resolution.
         class SemanticNode
           extend T::Sig
 

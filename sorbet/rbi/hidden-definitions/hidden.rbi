@@ -48964,7 +48964,6 @@ class SimpleCov::SourceFile
 
   def covered_lines(); end
 
-  def covered_percent(); end
 
   def covered_strength(); end
 

@@ -38,11 +38,9 @@ module SimpleCov
           def sort_deficits
             T.let(
               @node_deficits.sort_by do |node_name, deficit_group|
-                if (semantic_node = deficit_group.semantic_node)
-                  semantic_node.start_line
-                else
-                  node_name.match(/\d+/)&.to_s&.to_i || Float::INFINITY
-                end
+                semantic_node = deficit_group.semantic_node
+                # Node-less groups are named "Line N" / "Lines N-M"; sort them by that number.
+                semantic_node ? semantic_node.start_line : node_name[/\d+/].to_i
               end.to_h,
               T::Hash[String, DeficitGroup]
             )
@@ -59,9 +57,16 @@ module SimpleCov
           def add_missed_line(line)
             line_num = line.line_number
             matched_node = @nodes.reverse.find { |node| line_num.between?(node.start_line, node.end_line) }
-            node_name = matched_node ? matched_node.name : format(FALLBACK_LINE_NAME, line_num)
-            @node_deficits[node_name] ||= DeficitGroup.new(semantic_node: matched_node)
-            T.must(@node_deficits[node_name]).lines << line
+            key = group_key(matched_node, format(FALLBACK_LINE_NAME, line_num))
+            (@node_deficits[key] ||= DeficitGroup.new(semantic_node: matched_node)).lines << line
+          end
+
+          # Builds a hash key that is unique per resolved node (name plus start line) so two
+          # same-named methods redefined in one file do not merge into a single group; node-less
+          # deficits fall back to their positional "Line N" / "Lines N-M" label.
+          sig { params(node: T.nilable(ASTResolver::SemanticNode), fallback: String).returns(String) }
+          def group_key(node, fallback)
+            node ? "#{node.name}@#{node.start_line}" : fallback
           end
 
           sig { params(file: SimpleCov::SourceFile).void }
@@ -80,9 +85,8 @@ module SimpleCov
             matched_node = @nodes.reverse.find do |node|
               start_line >= node.start_line && end_line <= node.end_line
             end
-            node_name = matched_node ? matched_node.name : format(FALLBACK_BRANCH_NAME, start_line, end_line)
-            @node_deficits[node_name] ||= DeficitGroup.new(semantic_node: matched_node)
-            T.must(@node_deficits[node_name]).branches << branch
+            key = group_key(matched_node, format(FALLBACK_BRANCH_NAME, start_line, end_line))
+            (@node_deficits[key] ||= DeficitGroup.new(semantic_node: matched_node)).branches << branch
           end
         end
       end

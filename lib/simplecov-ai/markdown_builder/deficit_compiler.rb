@@ -8,23 +8,13 @@ module SimpleCov
         # Iterates through files with coverage deficits and coordinates their AST parsing and snippet generation.
         class DeficitCompiler
           extend T::Sig
-          include SnippetFormatter
 
           # Header for the coverage deficits section
           HEADING = T.let("## Coverage Deficits\n\n", String)
           # Template for file-level deficit headings
           FILE_HEADING_TEMPLATE = T.let('### `%s`', String)
-          # Error message for AST parsing failures
-          ERROR_AST_FAILED = T.let("  - **ERROR:** AST Parsing Failed. Showing raw line numbers instead.\n", String)
-          # Template for node-level deficit headings
-          NODE_HEADING_TEMPLATE = T.let('- `%s`', String)
-          # Coarse-grained deficit summary message
-          DEFICIT_COARSE = T.let('  - **Deficit:** Contains unexecuted lines or branches.', String)
-          # Template for a specific line deficit
-          LINE_DEFICIT_TEMPLATE = T.let('  - **Line Deficit:** [L%d] `%s` %s', String)
-          # Template for a specific branch deficit
-          BRANCH_DEFICIT_TEMPLATE = T.let('  - **Branch Deficit:** [L%s] Missing coverage for `%s` branch: `%s` %s',
-                                          String)
+          # Coverage criterion selector understood by simplecov >= 1.0's covered_percent.
+          BRANCH_CRITERION = T.let(:branch, Symbol)
 
           sig { params(coverage_metrics: SimpleCov::Result, config: Configuration, builder: MarkdownBuilder).void }
           def initialize(coverage_metrics, config, builder)
@@ -40,9 +30,9 @@ module SimpleCov
 
             buffer.puts HEADING
             files.each do |file|
-              break if @builder.truncate_if_needed?
-
               process_file(buffer, file)
+              @builder.record_truncation!
+              break if @builder.truncated?
             end
           end
 
@@ -63,27 +53,30 @@ module SimpleCov
 
           sig { params(file: SimpleCov::SourceFile).returns(T::Boolean) }
           def branch_perfect?(file)
-            cov = file.respond_to?(:branches_coverage_percent) ? file.branches_coverage_percent : nil
-            branch_coverage_perfect?(cov)
+            branch_coverage_perfect?(branch_coverage_percent(file))
           end
 
-          sig { params(coverage: T.nilable(BasicObject)).returns(T::Boolean) }
+          # Returns the file's branch coverage percentage, preferring simplecov >= 1.0's
+          # non-deprecated `covered_percent(:branch)` and falling back to the older
+          # `branches_coverage_percent` on simplecov < 1.0 (which does not accept a criterion).
+          sig { params(file: SimpleCov::SourceFile).returns(T.nilable(Numeric)) }
+          def branch_coverage_percent(file)
+            file.covered_percent(BRANCH_CRITERION)
+          rescue ArgumentError
+            file.respond_to?(:branches_coverage_percent) ? file.branches_coverage_percent : nil
+          end
+
+          sig { params(coverage: T.nilable(Numeric)).returns(T::Boolean) }
           def branch_coverage_perfect?(coverage)
-            case coverage
-            when Float, Integer
-              coverage >= Constants::PERFECT_COVERAGE_PERCENT
-            else
-              case coverage
-              when nil then true
-              else false
-              end
-            end
+            return true if coverage.nil?
+
+            coverage >= Constants::PERFECT_COVERAGE_PERCENT
           end
 
           sig { params(buffer: StringIO, file: SimpleCov::SourceFile).void }
           def process_file(buffer, file)
             BranchEnricher.enrich(file)
-            buffer.puts format(FILE_HEADING_TEMPLATE, file.project_filename)
+            buffer.puts format(FILE_HEADING_TEMPLATE, file.project_filename.delete_prefix('/'))
 
             formatter = DeficitFormatter.new(buffer, @config)
             nodes = @builder.try_resolve_ast(file.filename)
@@ -97,7 +90,9 @@ module SimpleCov
 
           sig { params(filename: String).returns(T::Array[String]) }
           def safe_readlines(filename)
-            File.readlines(filename)
+            # Scrub invalid byte sequences so a file with non-UTF-8 content cannot raise
+            # Encoding::CompatibilityError when its snippets are later stripped and joined.
+            File.readlines(filename).map(&:scrub)
           rescue StandardError
             []
           end
