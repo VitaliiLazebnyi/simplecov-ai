@@ -247,7 +247,7 @@ jobs:
         run: >-
           semgrep scan --config p/ruby --config p/secrets --config p/security-audit
           --config p/github-actions --error --metrics=off
-          --exclude doc --exclude CODE_REVIEW_REPORT.md .
+          --exclude doc --exclude docs/CODE_REVIEW_REPORT.md .
 
   secrets:
     name: Gitleaks

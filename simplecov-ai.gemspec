@@ -23,6 +23,8 @@ Gem::Specification.new do |spec|
 
   spec.metadata['source_code_uri'] = spec.homepage
   spec.metadata['changelog_uri'] = "#{spec.homepage}/blob/main/CHANGELOG.md"
+  spec.metadata['bug_tracker_uri'] = "#{spec.homepage}/issues"
+  spec.metadata['documentation_uri'] = 'https://rubydoc.info/gems/simplecov-ai'
   spec.metadata['allowed_push_host'] = 'https://rubygems.org'
 
   # Code signing is opt-in: set SIMPLECOV_AI_SIGN to any non-empty value (the release workflow
@@ -33,8 +35,9 @@ Gem::Specification.new do |spec|
     # RubyGems signs with ~/.gem/gem-private_key.pem whenever that file exists, even though the
     # gemspec asked for nothing, and crashes or signs wrongly when that key belongs to a different
     # certificate. Point its default lookups at paths that cannot exist so that "unsigned" holds
-    # on every machine, whatever lives in ~/.gem.
-    signing_disabled = File.join(__dir__, 'certs', 'signing-disabled')
+    # on every machine, whatever lives in ~/.gem. The path is made absolute because `__dir__` is
+    # `.` when the file is loaded as `Gem::Specification.load('simplecov-ai.gemspec')`.
+    signing_disabled = File.expand_path('certs/signing-disabled', __dir__)
     %i[default_key_path default_cert_path].each do |lookup|
       # Removed before being redefined so `ruby -w` does not report a method redefinition.
       Gem.singleton_class.send(:remove_method, lookup) if Gem.singleton_class.method_defined?(lookup)
@@ -60,8 +63,10 @@ Gem::Specification.new do |spec|
   # Requirements explicitly refined per updated SCAI-REQ-015
   spec.required_ruby_version = '>= 2.7.0'
 
-  # Core execution footprint dependencies
-  spec.add_dependency 'parser', '>= 3.1.0'
+  # Core execution footprint dependencies. `parser` is capped below 4 for the same reason as the
+  # `simplecov < 2.0` ceiling below: the grammar table in lib/simplecov-ai/ast_resolver/parser_backend.rb
+  # and the overlay in sorbet/rbi/parser.rbi only know the 3.x line.
+  spec.add_dependency 'parser', '>= 3.1.0', '< 4'
   spec.add_dependency 'sorbet-runtime', '~> 0.5'
 
   # SimpleCov floor per SCAI-REQ-016; upper-bounded below 2.0 because branch enrichment depends

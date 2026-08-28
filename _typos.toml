@@ -10,7 +10,7 @@ extend-exclude = [
   "Gemfile.lock",
   "gemfiles/*.lock",
   # Historical audit transcript kept for reference; not maintained as documentation.
-  "CODE_REVIEW_REPORT.md",
+  "docs/CODE_REVIEW_REPORT.md",
   # Certificates are not prose.
   "certs/",
 ]

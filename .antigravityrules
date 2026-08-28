@@ -12,7 +12,7 @@
 
 ## 2. Exhaustive Micro-Specification
 - **Microscopic Blueprinting**: The ultimate goal for `REQUIREMENTS.md` is to be an **exhaustive** technical manifesto. Every single aspect of the gem—down to the smallest detail of error handling, output formatting, byte limits, and memory usage—must be meticulously described and cataloged.
-- **Code-to-Spec Synchronization**: No implicit behavior or "clever hack" can exist purely in the Ruby files. Every behavior, conditional branch, and output structure MUST map perfectly backward to a codified `SCMD-REQ-XXX` identifier. If I find myself writing code that goes beyond the current requirements, I must formally document it in the specifications first.
+- **Code-to-Spec Synchronization**: No implicit behavior or "clever hack" can exist purely in the Ruby files. Every behavior, conditional branch, and output structure MUST map perfectly backward to a codified `SCAI-REQ-NNN` identifier. If I find myself writing code that goes beyond the current requirements, I must formally document it in the specifications first.
 - **Relentless Improvement**: With every iteration or new task we undertake, the requirements must become geometrically better, sharper, and more refined until there are zero ambiguities left in the system.
 
 ## 3. Anti-Coverage Paradox Testing Protocol

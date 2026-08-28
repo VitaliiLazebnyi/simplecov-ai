@@ -13,15 +13,16 @@ bundle exec rake   # every quality gate, see below
 ```
 
 The gem supports Ruby `>= 2.7` and SimpleCov `>= 0.18, < 2.0`. CI exercises Ruby 2.7, 3.2, 3.3,
-3.4 and 4.0 on Linux, plus non-blocking runs on Windows (Ruby 3.4), JRuby 9.4 and TruffleRuby.
+3.4 and 4.0 on Linux and, as blocking jobs, Windows (Ruby 3.4), JRuby 9.4 and TruffleRuby (see
+*Verifying on other engines*).
 
 ## Local checks
 
 `bundle exec rake` runs the same gates CI enforces, in this order; each one can also be run on
 its own:
 
-- `rake spec` — `RUBYOPT=-w bundle exec rspec`; the suite fails below 100% line, branch and (on
-  MRI with SimpleCov >= 1.0) method coverage, and any Ruby warning emitted from `lib/` fails the
+- `rake spec` — `RUBYOPT=-w bundle exec rspec`; on MRI the suite fails below 100% line, branch
+  and (with SimpleCov >= 1.0) method coverage, and any Ruby warning emitted from `lib/` fails the
   run (`spec/support/warnings.rb`). Besides the unit specs it runs an end-to-end child-process
   spec through SimpleCov's real result-merging path (`spec/integration/`), a resolver run over the
   sources of every gem in the bundle (`spec/quality/resolver_corpus_spec.rb`;
@@ -38,7 +39,7 @@ its own:
 - `rake build` — `gem build simplecov-ai.gemspec --strict`, then the gem is installed into a
   clean `GEM_HOME` and required, so it must package, validate and load.
 
-Two more tasks are available on demand:
+More tasks are available on demand:
 
 - `rake quality` runs the advisory tools (reek with `.reek.yml`, flay, flog, debride). CI runs it
   in a non-blocking job; findings are worth reading but do not block a merge.
@@ -49,6 +50,8 @@ Two more tasks are available on demand:
   patterns in `.mutant.yml` must carry a justification, and whole-report specs declare
   `mutant_expression: MutantScopes.spec_levels` (`spec/support/mutant_scopes.rb`) so that mutant
   treats each `describe '#name'` block as that method's specification.
+- `rake check:jruby`, `rake check:truffleruby` and `rake 'check:ruby[<version>[,<command>]]'` run
+  the suite on another engine or Ruby in its Docker image (see *Verifying on other engines*).
 
 CI additionally runs, all as blocking gates unless noted: actionlint and zizmor on the workflow
 files, markdownlint (`npx markdownlint-cli2 "**/*.md"`, rules in `.markdownlint.yml`, ignores in
@@ -65,8 +68,9 @@ the key matches `certs/`, and the workflow checks the built gem carries a certif
 
 - `Gemfile.lock` **is committed** and resolved on Ruby 4.0. The single-version gates (lint,
   typecheck, docs, audit, build, release) always run against it, so a passing local `rake` means
-  the same dependency set passes in CI. Update it deliberately with `bundle update` (or accept a
-  Dependabot PR) and commit the result.
+  the same dependency set passes in CI. `.ruby-version` pins that Ruby (`4.0`), so a version
+  manager and Dependabot resolve the lockfile with the Ruby it was resolved on. Update it
+  deliberately with `bundle update` (or accept a Dependabot PR) and commit the result.
 - The multi-Ruby test matrix deletes the lockfile before installing, because a set resolved on
   Ruby 4.0 cannot be installed on older Rubies (simplecov 1.x needs Ruby >= 3.2, sorbet and
   tapioca need >= 3.1). Each Ruby resolves its own dependencies, exactly as a user's bundle would.
@@ -153,8 +157,8 @@ Re-run `rake rbi` after changing dependency versions and commit the regenerated 
 
 ## Guidelines
 
-- **Coverage is enforced.** New code must be exercised by specs; the suite fails below 100% line,
-  branch and method coverage (method coverage on MRI with SimpleCov >= 1.0), and `rake mutant`
+- **Coverage is enforced.** New code must be exercised by specs; on MRI the suite fails below
+  100% line, branch and method coverage (method coverage with SimpleCov >= 1.0), and `rake mutant`
   must still kill every mutation — a line that is executed but whose behaviour no spec pins down
   is not covered. Coverage is measured for real, so make sure `spec/spec_helper.rb` still starts
   SimpleCov before the library is required.
@@ -166,7 +170,9 @@ Re-run `rake rbi` after changing dependency versions and commit the regenerated 
   unless the line above it is a `# Justification:` (or `# Reason:`) comment. Specs that need a
   real `# :nocov:` marker in a fixture source should take it from the `nocov_marker` helper in
   `spec/support/simplecov_fixtures.rb`, which assembles the text from fragments so no such line
-  appears in the spec file itself.
+  appears in the spec file itself. The self-audit (`spec/quality/self_audit_spec.rb`) additionally
+  loads every `lib/` file through SimpleCov and fails on anything SimpleCov would skip, so a
+  directive of any form — even one quoted in a doc comment — is caught.
 - **Fixtures with asserted line numbers.** `spec/fixtures/resolver_constructs.rb` is parsed, not
   loaded, and `ast_resolver_spec.rb` asserts the exact node table (names and line ranges) derived
   from it, so append new constructs at the end rather than inserting them.

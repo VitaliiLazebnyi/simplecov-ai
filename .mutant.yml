@@ -21,6 +21,12 @@ matcher:
   subjects:
     - SimpleCov::Formatter::AIFormatter*
 mutation:
+  # The default `light` operator set is kept. The `full` set adds `==` → `eql?` / `equal?` and
+  # `first` ↔ `last` replacements; a trial run (mutant 0.16.3) left 27 mutants alive, each an `==`
+  # between Symbols or Integers (where the three predicates coincide) or an `eql?` between Strings
+  # (where the two coincide), and the only pattern that could drop them (`send{selector===}`)
+  # would also drop the `==` → `!=` mutants the suite does kill. Everything else `full` adds is
+  # killed.
   ignore_patterns:
     # `T.cast`, `T.let` and `T.must` only assert a type for Sorbet: removing one changes no
     # behaviour on well-typed input, so such a mutant can only be killed by a test that feeds a

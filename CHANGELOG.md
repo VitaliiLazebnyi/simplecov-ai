@@ -101,6 +101,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An empty snippet (a file that cannot be read) renders as a code span holding one space instead
   of two bare backticks, which CommonMark shows literally.
 - `DeficitGroup` no longer relies on sorbet-runtime prop defaults, which fail on JRuby.
+- JRuby and TruffleRuby test runs: SimpleCov's engine gate (`branch_coverage?` /
+  `method_coverage?`) is lifted for the examples, so branch and method rendering is exercised
+  with hand-built data there; in-process coverage results go through `SimpleCov::ResultAdapter`;
+  the end-to-end spec expects what such an engine produces (an `N/A` branch line, line deficits
+  only, no bypass for a branch-scoped directive); and every example resets the formatter's
+  process-global configuration, so the suite's own digest always lands at
+  `coverage/ai_report.md`.
+- Windows test run: fixture sources are written byte for byte (`File.binwrite`), and CRLF
+  sources are covered on every platform.
+- The gemspec's unsigned-build override uses an absolute path, so loading the gemspec by a
+  relative path (`Gem::Specification.load('simplecov-ai.gemspec')`, as `rake build` does) no
+  longer leaks a working-directory-relative path into `Gem.default_key_path`.
 
 ### Changed
 
@@ -117,6 +129,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bypass auditing skips AST parsing for files SimpleCov skipped nothing in.
 - Occurrence disambiguation for repeated snippets is indexed per node (linear) rather than
   re-scanning the node span for every deficit.
+- The `parser` runtime dependency is bounded to `>= 3.1.0, < 4`, mirroring the `simplecov < 2.0`
+  ceiling: the grammar table and the hand-written RBI overlay only know the 3.x line.
+- Gem metadata gains `bug_tracker_uri` and `documentation_uri`.
+- The Windows, JRuby and TruffleRuby CI jobs are blocking (30-minute timeout); `rake check:jruby`,
+  `rake check:truffleruby` and `rake 'check:ruby[<version>]'` run the suite in the engine's Docker
+  image; the suite's own 100% coverage mandate is enforced on MRI only.
+- `.ruby-version` pins Ruby 4.0, the Ruby `Gemfile.lock` is resolved on, so a version manager
+  and Dependabot's bundler updates resolve with the same Ruby.
 
 ### Added
 
@@ -159,8 +179,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   debride) and `rake rbi` are added.
 - CI adds actionlint, zizmor, markdownlint, typos, bundler-audit, a strict gem build with a
   clean-`GEM_HOME` install smoke test, Semgrep, Gitleaks, CodeQL, the OpenSSF Scorecard, a
-  SimpleCov 0.18 / 0.21 / 0.22 / 1.0 / 1.1 compatibility matrix and non-blocking Windows, JRuby
-  and TruffleRuby runs; all actions are SHA-pinned and updated by Dependabot.
+  SimpleCov 0.18 / 0.21 / 0.22 / 1.0 / 1.1 compatibility matrix and Windows, JRuby and
+  TruffleRuby runs; all actions are SHA-pinned and updated by Dependabot.
 - Releases verify that `lib/simplecov-ai/version.rb` matches the tag and refuse to publish
   without a `CHANGELOG.md` heading for it.
 - The test suite drives the formatter with real SimpleCov objects, with sorbet-runtime signature
