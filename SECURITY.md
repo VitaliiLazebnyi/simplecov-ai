@@ -29,6 +29,15 @@ consideration is that uncovered source snippets are copied verbatim into the gen
 that report is fed to an autonomous agent, treat the source content as untrusted input to the
 consumer just as you would any other source file.
 
+Since 0.11.0 every value taken from a source file or its coverage data — snippets, method and
+class names, file paths, branch types and the `# :nocov:` / `# simplecov:disable` comments quoted
+as bypass reasons — is rendered as a CommonMark code span whose backtick fence is longer than any
+backtick run inside the value, so a comment cannot close the span early and inject headings,
+emphasis or list items into the report's structure. This containment keeps the report's *shape*
+under the formatter's control; it does not make the *content* trustworthy. A comment reading
+"ignore all previous instructions" still appears, verbatim, inside a code span, and the consumer
+must treat it as data.
+
 On SimpleCov < 1.0, branch descriptors read back from `coverage/.resultset.json` are decoded by
 SimpleCov's own `eval`-based `restore_ruby_data_structure` helper (which simplecov-ai calls
 through a `respond_to?` guard). A tampered resultset file can therefore execute Ruby inside the
