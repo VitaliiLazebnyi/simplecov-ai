@@ -31,7 +31,7 @@ mutation:
     # process, so removing a require — or the warning muting around the one that can warn on
     # first load — is unobservable there.
     - send{selector=require}
-    - send{selector=silence_warnings}
+    - block{receiver=send{selector=silence_warnings}}
     # `Kernel.format` is the same method as the private `format`; its arguments are locals.
     - send{receiver=const{name=Kernel} selector=format}
     # `range.count` on an Integer range equals `range.size`.

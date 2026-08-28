@@ -103,17 +103,13 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
 
     # SimpleCov < 1.0 has neither Result#total_methods nor SourceFile#missed_methods.
     it 'reports no method figures at all on a SimpleCov without the method coverage API' do
-      allow(result).to receive(:respond_to?).and_call_original
-      allow(result).to receive(:respond_to?).with(:total_methods).and_return(false)
-      allow(result).to receive(:total_methods).and_raise(NoMethodError)
+      without_method(result, :total_methods)
       expect(digest_for(result)).to eq(expected_header('PASSED', '100.0%', '100.0%'))
     end
 
     it 'derives no method deficit from a file without the method coverage API' do
       file = result.files.first
-      allow(file).to receive(:respond_to?).and_call_original
-      allow(file).to receive(:respond_to?).with(:missed_methods).and_return(false)
-      allow(file).to receive(:missed_methods).and_raise(NoMethodError)
+      without_method(file, :missed_methods)
       expect(described_class::MethodDeficit.from_file(file)).to eq([])
     end
 

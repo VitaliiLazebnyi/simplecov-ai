@@ -137,8 +137,8 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver::ParserBackend do
       expect([printed, executed]).to eq(['', true])
     end
 
-    it 'restores the verbosity afterwards, even when the block raises' do
-      verbosity = $VERBOSE
+    def verbosities_after_silencing
+      $VERBOSE = true
       silence_warnings { nil }
       after_success = $VERBOSE
       begin
@@ -146,7 +146,16 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver::ParserBackend do
       rescue LoadError
         nil
       end
-      expect([after_success, $VERBOSE]).to eq([verbosity, verbosity])
+      [after_success, $VERBOSE]
+    end
+
+    it 'restores the verbosity afterwards, even when the block raises' do
+      verbosity = $VERBOSE
+      begin
+        expect(verbosities_after_silencing).to eq([true, true])
+      ensure
+        $VERBOSE = verbosity
+      end
     end
   end
 end

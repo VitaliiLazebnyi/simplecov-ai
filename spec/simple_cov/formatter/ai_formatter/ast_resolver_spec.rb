@@ -114,7 +114,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
 
     it 'reads valid UTF-8 as UTF-8 and stray bytes as binary' do
       utf8_path = File.join(tmpdir, 'utf8.rb')
-      File.binwrite(utf8_path, "# caf\u00e9\n".b)
+      File.binwrite(utf8_path, "# UTF-8 \u00e9\n".b)
       latin1_path = File.join(tmpdir, 'latin1.rb')
       File.binwrite(latin1_path, "# Latin-1 \xe9\n".b)
       encodings = [described_class.read_source(utf8_path).encoding, described_class.read_source(latin1_path).encoding]
