@@ -44,11 +44,15 @@ module SimpleCov
           private
 
           # The expensive AST resolution only runs for files SimpleCov actually skipped
-          # something in; a file whose AST cannot be resolved reports no bypasses.
+          # something in; a file whose AST cannot be resolved reports no bypasses, and a file
+          # whose coverage data SimpleCov cannot decode reports the decode guard's error entry.
           sig { params(file: SimpleCov::SourceFile).returns(T::Array[String]) }
           def render_file(file)
-            return [] unless SkipRegions.any?(file)
+            DecodeGuard.render { SkipRegions.any?(file) ? render_skip_regions(file) : [] }
+          end
 
+          sig { params(file: SimpleCov::SourceFile).returns(T::Array[String]) }
+          def render_skip_regions(file)
             nodes = @builder.try_resolve_ast(file.filename)
             return [] unless nodes
 

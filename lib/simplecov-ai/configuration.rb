@@ -86,8 +86,8 @@ module SimpleCov
           !@report_path.nil?
         end
 
-        # Every writer enforces its parameter TYPE at runtime (via sorbet-runtime) — a mis-typed
-        # value such as `output_to_console = "yes"` raises TypeError at assignment instead of
+        # Every writer enforces its parameter TYPE at runtime (via sorbet-runtime) — a wrongly
+        # typed value such as `output_to_console = "yes"` raises TypeError at assignment instead of
         # failing at report time — and the explicit bodies additionally validate the VALUE domain.
 
         # @param value [String] A non-empty destination path without NUL bytes.

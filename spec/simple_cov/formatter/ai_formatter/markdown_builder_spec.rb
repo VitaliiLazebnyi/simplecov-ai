@@ -17,7 +17,10 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
       ['Sample::Calc', :build, 12, 6, 14, 9] => 0, ['#<Class:Sample::Calc>', :ghost, 15, 2, 15, 20] => 0 }
   end
 
-  before { allow(SimpleCov).to receive(:root).and_return(tmpdir) }
+  before do
+    allow(SimpleCov).to receive(:root).and_return(tmpdir)
+    freeze_time
+  end
 
   after { FileUtils.remove_entry(tmpdir) }
 
@@ -48,13 +51,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
   end
 
   def expected_method_digest
-    <<~MARKDOWN
-      # AI Coverage Digest
-      **Status:** FAILED
-      **Global Line Coverage:** 100.0%
-      **Global Branch Coverage:** 100.0%
-      **Global Method Coverage:** 25.0%
-      **Generated At:** TIMESTAMP (Local Timezone)
+    expected_header('FAILED', '100.0%', '100.0%', method_label: '25.0%') + <<~MARKDOWN
       ## Coverage Deficits
 
       ### `calc.rb`
@@ -79,7 +76,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
     it 'prints one decimal without ever rounding a partial figure up to 100.0' do
       result = result_for(calc_path => { 'lines' => perfect_lines })
       allow(result).to receive(:covered_percent).and_return(99.96)
-      expect(digest_for(result).lines[1..2].join).to eq("**Status:** FAILED\n**Global Line Coverage:** 99.9%\n")
+      expect(digest_for(result)).to eq(expected_header('FAILED', '99.9%', '100.0%'))
     end
   end
 
@@ -88,12 +85,11 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
 
     it 'adds the method line to the header, fails the status and lists each missed method under its node' do
       digest = measuring_methods(result, calc_path => method_descriptors) { digest_for(result) }
-      expect(digest.sub(/\*\*Generated At:\*\* \S+/, '**Generated At:** TIMESTAMP')).to eq(expected_method_digest)
+      expect(digest).to eq(expected_method_digest)
     end
 
     it 'keeps the header byte-identical and the status PASSED when method coverage is not measured' do
-      header_only = /\A# AI Coverage Digest\n\*\*Status:\*\* PASSED\n.*\n.*\n\*\*Generated At:\*\* .*\n\z/
-      expect(digest_for(result)).to match(header_only)
+      expect(digest_for(result)).to eq(expected_header('PASSED', '100.0%', '100.0%'))
     end
 
     it 'lists missed methods under the raw line numbers when the AST cannot be resolved' do
@@ -101,7 +97,9 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
       methods = { ['Broken', :half, 2, 2, 4, 5] => 0 }
       broken = result_for(broken_path => { 'lines' => [1, 1, 0, nil], 'methods' => methods })
       digest = measuring_methods(broken, broken_path => methods) { digest_for(broken) }
-      expect(digest).to end_with(<<~MARKDOWN)
+      expect(digest).to eq(expected_header('FAILED', '66.6%', '100.0%', method_label: '0.0%') + <<~MARKDOWN)
+        ## Coverage Deficits
+
         ### `broken.rb`
           - **ERROR:** AST Parsing Failed. Showing raw line numbers instead.
           - **Method Deficit:** [L2-4] `Broken#half` never invoked
@@ -137,7 +135,10 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
     end
 
     it 'cuts an arm that spans other missed arms of the same node to its first line' do
-      expect(digest_for(chain_result)).to end_with(<<~MARKDOWN)
+      expect(digest_for(chain_result)).to eq(expected_header('FAILED', '50.0%', '25.0%') + <<~MARKDOWN)
+        ## Coverage Deficits
+
+        ### `chain.rb`
         - `#classify`
           - **Line Deficit:** [L4] `elsif number.odd?`
           - **Line Deficit:** [L5] `:odd`

@@ -1,0 +1,23 @@
+# Mutation testing with mutant (`bundle exec rake mutant`, or `bundle exec mutant run` directly;
+# `bundle exec mutant run --since origin/main` limits it to subjects touched on a branch).
+# Every constant and method under the gem's namespace is a subject; a mutation that no example
+# fails on survives, which fails the run. Mutations that provably cannot change behaviour are
+# excluded below with their justification instead of by dropping subjects.
+usage: opensource
+integration:
+  name: rspec
+includes:
+  - lib
+requires:
+  - simplecov-ai
+environment_variables:
+  # spec/spec_helper.rb neither starts SimpleCov nor enforces the coverage minimums when set:
+  # the specs run once per mutation in forked workers, where measuring coverage is meaningless
+  # and slow, and warnings-as-errors is left to the ordinary suite so a kill always means a
+  # failing example.
+  MUTANT: '1'
+matcher:
+  subjects:
+    - SimpleCov::Formatter::AIFormatter*
+mutation:
+  ignore_patterns: []

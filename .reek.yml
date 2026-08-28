@@ -31,8 +31,9 @@ detectors:
   # Optional SimpleCov telemetry (branch totals, columns) is legitimately nil.
   NilCheck:
     enabled: false
+  # MarkdownBuilder carries the header's status, N/A and template strings (nine constants).
   TooManyConstants:
-    max_constants: 8
+    max_constants: 10
   TooManyInstanceVariables:
     max_instance_variables: 6
   TooManyStatements:

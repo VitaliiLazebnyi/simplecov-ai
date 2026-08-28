@@ -16,7 +16,9 @@ FLAY_MASS_THRESHOLD = 40
 # flog scores above this on a single method mean it should be split up.
 FLOG_METHOD_THRESHOLD = 35
 
-RSpec::Core::RakeTask.new(:spec)
+# `-w` turns on Ruby's verbose warnings; spec/support/warnings.rb fails the suite on any warning
+# raised by the gem's own files (dependencies may warn freely), exactly as the CI test jobs run.
+RSpec::Core::RakeTask.new(:spec) { |task| task.ruby_opts = '-w' }
 RuboCop::RakeTask.new(:rubocop)
 
 desc 'Type-check lib/ with Sorbet at the strong level (`srb tc --typed strong`)'
@@ -60,6 +62,13 @@ end
 desc 'Regenerate the gem RBIs in sorbet/rbi/gems with tapioca (after changing dependencies)'
 task :rbi do
   sh 'bundle', 'exec', 'bin/tapioca', 'gem'
+end
+
+desc 'Mutation testing of lib/ with mutant (see .mutant.yml); MUTANT_SINCE=<revision> limits it to touched subjects'
+task :mutant do
+  command = %w[bundle exec mutant run]
+  command.push('--since', ENV.fetch('MUTANT_SINCE')) if ENV.key?('MUTANT_SINCE')
+  sh(*command)
 end
 
 desc 'Advisory code-quality report: reek, flay, flog and debride (mirrors the CI quality job)'

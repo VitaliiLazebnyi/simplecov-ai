@@ -32,12 +32,12 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
   describe 'ASTResolver edge cases' do
     it 'attributes a singleton method to its explicit foreign receiver' do
       nodes = resolve("class Patcher\n  def String.shout\n    upcase\n  end\nend\n")
-      expect(nodes.map(&:name)).to include('String.shout')
+      expect(nodes.map(&:name)).to eq(['main', 'Patcher', 'String.shout'])
     end
 
     it 'attributes a singleton method on a non-constant receiver to the enclosing context' do
       nodes = resolve("class Holder\n  obj = Object.new\n  def obj.assist\n  end\nend\n")
-      expect(nodes.map(&:name)).to include('Holder.assist')
+      expect(nodes.map(&:name)).to eq(['main', 'Holder', 'Holder.assist'])
     end
 
     it 'attributes methods in Struct.new / Data.define / Class.new blocks to the assigned constant' do
@@ -45,7 +45,12 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
                       "Cfg = Data.define(:h) do\n  def url\n  end\nend\n" \
                       "Registry::Entry = Class.new do\n  def render\n  end\nend\n" \
                       "class Box\n  Item = Struct.new(:v) do\n    def show\n    end\n  end\nend\n")
-      expect(nodes.map(&:name)).to include('Point#dist', 'Cfg#url', 'Registry::Entry#render', 'Box::Item#show')
+      expect(nodes.map { |node| [node.name, node.type] }).to eq(
+        [['main', 'Root Script Scope'], ['Point', 'Struct'], ['Point#dist', 'Instance Method'],
+         ['Cfg', 'Data'], ['Cfg#url', 'Instance Method'], ['Registry::Entry', 'Class'],
+         ['Registry::Entry#render', 'Instance Method'], ['Box', 'Class'], ['Box::Item', 'Struct'],
+         ['Box::Item#show', 'Instance Method']]
+      )
     end
 
     it 'does not treat non-class constant assignments as metaprogramming classes' do
@@ -105,7 +110,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
 
     it 'renders a file whose comments carry stray non-UTF-8 bytes without raising' do
       path = File.join(tmpdir, 'latin.rb')
-      File.binwrite(path, "# caf\xe9\ndef read\n  1\nend\n".b)
+      File.binwrite(path, "# Latin-1 \xe9\ndef read\n  1\nend\n".b)
       result = result_for(path => { 'lines' => [nil, 1, 0, nil] })
       skip 'SimpleCov < 1.1 raises on invalid UTF-8 bytes itself (1.1 scrubs them)' unless classifiable?(result)
       expect(report_for(result)).to end_with("  - **Line Deficit:** [L3] `1`\n\n")

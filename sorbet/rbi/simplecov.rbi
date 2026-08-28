@@ -36,7 +36,9 @@ module SimpleCov
     sig { returns(SimpleCov::FileList) }
     def files; end
 
-    sig { params(arg: T.untyped, arg1: T.untyped, arg2: T.untyped).returns(Float) }
+    # Nil on simplecov >= 1.0 when line coverage was disabled for the run (a branch- or
+    # method-only run).
+    sig { params(arg: T.untyped, arg1: T.untyped, arg2: T.untyped).returns(T.nilable(Float)) }
     def covered_percent(*arg, **arg1, &arg2); end
 
     # Aggregate branch counts are nil unless branch coverage is enabled.

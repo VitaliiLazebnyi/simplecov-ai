@@ -122,6 +122,8 @@ jobs:
           gem install --no-document ./simplecov-ai-*.gem
           ruby -e 'require "simplecov-ai"; puts "Loaded simplecov-ai #{SimpleCov::Formatter::AIFormatter::VERSION}"'
 
+  # RUBYOPT=-w on every test job: spec/support/warnings.rb fails the suite on any warning the
+  # gem's own files raise under Ruby's verbose warnings (dependencies may warn freely).
   test:
     name: RSpec (Ruby ${{ matrix.ruby }})
     runs-on: ubuntu-latest
@@ -129,6 +131,8 @@ jobs:
       fail-fast: false
       matrix:
         ruby: ["2.7", "3.2", "3.3", "3.4", "4.0"]
+    env:
+      RUBYOPT: -w
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -149,6 +153,8 @@ jobs:
     name: RSpec (Windows, Ruby 3.4)
     runs-on: windows-latest
     continue-on-error: true
+    env:
+      RUBYOPT: -w
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -177,6 +183,8 @@ jobs:
       fail-fast: false
       matrix:
         ruby: [jruby-9.4, truffleruby]
+    env:
+      RUBYOPT: -w
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -206,6 +214,7 @@ jobs:
             simplecov: "0.18"
     env:
       BUNDLE_GEMFILE: gemfiles/simplecov_${{ matrix.simplecov }}.gemfile
+      RUBYOPT: -w
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -247,6 +256,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # A GITLEAKS_LICENSE secret is only required for organisation-owned repositories.
+
+  # Mutation testing of every subject in lib/ (see .mutant.yml) on the lockfile Ruby. A full run
+  # over the gem finishes in a few minutes on a 4-core runner, so it is a blocking gate on pushes
+  # and pull requests alike rather than an incremental `--since` run.
+  mutation:
+    name: mutant (mutation testing)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+      - name: Run mutant over every subject
+        run: bundle exec rake mutant
 
   # Advisory: reek/flay/flog/debride findings are worth reading but do not block merges.
   quality:

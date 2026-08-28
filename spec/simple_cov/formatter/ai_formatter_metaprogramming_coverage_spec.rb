@@ -56,16 +56,18 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
     FileUtils.rm_f(report_path)
   end
 
-  # Justification: Integration tests require multi-step assertions on a single generated report.
-  it 'generates a report with expected branch deficit snippets for metaprogramming constructs' do
-    report_content = File.read(report_path)
-
-    expect(report_content).to include(
-      'Missing coverage for `else` branch: `:dynamic_false`',
-      'Missing coverage for `else` branch: `:singleton_case_else`',
-      'Missing coverage for `else` branch: `:evaled_false`',
-      'Missing coverage for `else` branch: `super`',
-      'Missing coverage for `then` branch: `:eigen_false`'
-    )
+  it 'lists each construct as its own node with the missed arm, in source order' do
+    expect(File.read(report_path)).to match(Regexp.new(<<~PATTERN.strip.gsub("\n", '.*'), Regexp::MULTILINE))
+      ^- `MetaprogrammingConstructs#dynamic_instance_method`$
+      ^  - \\*\\*Branch Deficit:\\*\\* \\[L\\d+\\] Missing coverage for `else` branch: `:dynamic_false`$
+      ^- `MetaprogrammingConstructs\\.dynamic_class_method`$
+      ^  - \\*\\*Branch Deficit:\\*\\* \\[L\\d+\\] Missing coverage for `else` branch: `:singleton_case_else`$
+      ^- `MetaprogrammingConstructs#evaled_method`$
+      ^  - \\*\\*Branch Deficit:\\*\\* \\[L\\d+\\] Missing coverage for `else` branch: `:evaled_false`$
+      ^- `MetaprogrammingConstructs#method_missing`$
+      ^  - \\*\\*Branch Deficit:\\*\\* \\[L\\d+\\] Missing coverage for `else` branch: `super`$
+      ^- `MetaprogrammingConstructs\\.eigen_method`$
+      ^  - \\*\\*Branch Deficit:\\*\\* \\[L\\d+\\] Missing coverage for `then` branch: `:eigen_false`$
+    PATTERN
   end
 end
