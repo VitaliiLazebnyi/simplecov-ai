@@ -109,6 +109,24 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
     end
   end
 
+  describe 'deficit files' do
+    it 'lists a file whose lines are all covered but a branch is missed' do
+      source = "def sign(number)\n  number.positive? ? :pos : :neg\nend\n"
+      arms = { branch_descriptor(source, :then, 1, 2, ':pos') => 1,
+               branch_descriptor(source, :else, 2, 2, ':neg') => 0 }
+      branches = { branch_descriptor(source, :if, 0, 2, 'number.positive? ? :pos : :neg') => arms }
+      result = result_for(write_source(tmpdir, 'sign.rb', source) => { 'lines' => [1, 1, nil], 'branches' => branches })
+      expect(digest_for(result)).to eq(expected_header('FAILED', '100.0%', '50.0%') + <<~MARKDOWN)
+        ## Coverage Deficits
+
+        ### `sign.rb`
+        - `#sign`
+          - **Branch Deficit:** [L2] Missing coverage for `else` branch: `:neg`
+
+      MARKDOWN
+    end
+  end
+
   describe 'branch snippets' do
     let(:chain_source) do
       <<~RUBY
@@ -189,6 +207,20 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
 
     it 'emits no notice when everything fits' do
       expect(digest_for(bulky_result)).not_to include('TRUNCATION')
+    end
+
+    # Files after the one the budget stopped at are not resolved for the deficit section; the
+    # bypass section still visits every file to count what it leaves out.
+    it 'stops resolving deficit files once the budget has closed the section' do
+      config.max_file_size_kb = 1
+      builder = described_class.new(bulky_result, config)
+      resolved = []
+      allow(builder).to receive(:try_resolve_ast).and_wrap_original do |original, filename|
+        resolved << File.basename(filename)
+        original.call(filename)
+      end
+      builder.build
+      expect(resolved).to eq(%w[bulky1.rb bulky2.rb skipped1.rb skipped2.rb])
     end
 
     it 'counts an overflowing bypass section toward the same budget even without deficits' do

@@ -6,12 +6,29 @@ require 'coverage'
 require 'tmpdir'
 require 'fileutils'
 
-# Integration tests require specific setup and multi-step assertions
-# that naturally violate some RSpec style guidelines.
-# Justification: Integration tests setup
-RSpec.describe SimpleCov::Formatter::AIFormatter do
+# Measures the fixture's real coverage through the suite's own Coverage session and formats it.
+# Under mutant no coverage session runs (see spec_helper.rb), so these examples are excluded
+# there (`mutant: false`); the formatter's subjects are covered by the exact-report specs.
+RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
   let(:fixture_path) { File.expand_path('../../fixtures/exhaustive_branching.rb', __dir__) }
   let(:report_path) { 'coverage/exhaustive_test_ai_report.md' }
+  # Every method with a missed arm or line, in source order. `&&`, `||` and their assignment
+  # forms produce no branch data in Ruby's coverage, and neither does the one-line `in` pattern
+  # since Ruby 3.4 compiles with Prism, so those methods have no deficit.
+  let(:expected_headings) do
+    headings = %w[
+      ExhaustiveBranching.test_if_else ExhaustiveBranching.test_unless_else ExhaustiveBranching.test_ternary
+      ExhaustiveBranching.test_case_when ExhaustiveBranching.test_safe_nav ExhaustiveBranching.test_while_loop
+      ExhaustiveBranching.test_until_loop ExhaustiveBranching.test_pattern_matching
+      ExhaustiveBranching.test_inline_if ExhaustiveBranching.test_multiple_when
+      ExhaustiveBranching.test_chained_safe_nav ExhaustiveBranching.test_inline_rescue
+      ExhaustiveBranching.test_begin_rescue
+    ]
+    next headings if Gem::Version.new(RUBY_VERSION) >= Gem::Version.new('3.4')
+
+    one_line_pattern = 'ExhaustiveBranching.test_one_line_pattern'
+    headings.insert(headings.index('ExhaustiveBranching.test_chained_safe_nav'), one_line_pattern)
+  end
 
   before do
     require_relative '../../fixtures/exhaustive_branching'
@@ -104,18 +121,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
     expect(File.read(report_path)).to match(pattern)
   end
 
-  # Every method with a missed arm or line, in source order. `&&`, `||`, their assignment forms
-  # and the one-line `in` pattern produce no branch data in Ruby's coverage, so those methods
-  # have no deficit.
   it 'attributes every deficit to a method of the fixture module, in source order' do
-    expected_headings = %w[
-      ExhaustiveBranching.test_if_else ExhaustiveBranching.test_unless_else ExhaustiveBranching.test_ternary
-      ExhaustiveBranching.test_case_when ExhaustiveBranching.test_safe_nav ExhaustiveBranching.test_while_loop
-      ExhaustiveBranching.test_until_loop ExhaustiveBranching.test_pattern_matching
-      ExhaustiveBranching.test_inline_if ExhaustiveBranching.test_multiple_when
-      ExhaustiveBranching.test_chained_safe_nav ExhaustiveBranching.test_inline_rescue
-      ExhaustiveBranching.test_begin_rescue
-    ]
     expect(File.read(report_path).scan(/^- `(ExhaustiveBranching\.\w+)`$/).flatten).to eq(expected_headings)
   end
 end

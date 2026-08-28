@@ -29,7 +29,7 @@ module SimpleCov
       params(blk: T.proc.params(file: SimpleCov::SourceFile).returns(BasicObject))
         .returns(T::Array[SimpleCov::SourceFile])
     end
-    def reject(&blk); end
+    def select(&blk); end
   end
 
   class Result
@@ -108,7 +108,7 @@ module SimpleCov
     def filename; end
 
     # simplecov >= 1.0 accepts a coverage criterion (:line / :branch / :method); older releases
-    # take no argument and raise ArgumentError when one is passed, which the library rescues.
+    # take no argument. The library only reads the line figure, without an argument.
     sig { params(criterion: T.untyped).returns(Float) }
     def covered_percent(criterion = nil); end
 
@@ -131,11 +131,6 @@ module SimpleCov
     # simplecov >= 1.0 only; empty unless `enable_coverage :method`.
     sig { returns(T::Array[Method]) }
     def missed_methods; end
-
-    # Deprecated in simplecov >= 1.0 in favour of covered_percent(:branch); retained for
-    # simplecov < 1.0 where covered_percent does not accept a coverage criterion.
-    sig { returns(T.nilable(Float)) }
-    def branches_coverage_percent; end
 
     sig { returns(T::Hash[BasicObject, BasicObject]) }
     def coverage_data; end

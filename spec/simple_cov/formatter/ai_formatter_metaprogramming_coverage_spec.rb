@@ -6,10 +6,10 @@ require 'coverage'
 require 'tmpdir'
 require 'fileutils'
 
-# Integration tests require specific setup and multi-step assertions
-# that naturally violate some RSpec style guidelines.
-# Justification: Integration tests setup
-RSpec.describe SimpleCov::Formatter::AIFormatter do
+# Measures the fixture's real coverage through the suite's own Coverage session and formats it.
+# Under mutant no coverage session runs (see spec_helper.rb), so these examples are excluded
+# there (`mutant: false`); the formatter's subjects are covered by the exact-report specs.
+RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
   let(:fixture_path) { File.expand_path('../../fixtures/metaprogramming_constructs.rb', __dir__) }
   let(:report_path) { 'coverage/metaprogramming_test_ai_report.md' }
   # Each construct as its own node followed by its missed arm, in source order.

@@ -135,9 +135,12 @@ module EndToEnd
   end
 
   # Runs the project in a child Ruby that inherits this process's environment (Bundler's
-  # RUBYOPT and BUNDLE_GEMFILE included, so it sees the same gems) plus `env`.
+  # RUBYOPT and BUNDLE_GEMFILE included, so it sees the same gems) plus `env`, from the project
+  # directory like a real test run: SimpleCov 0.18 fixes its root filter from the working
+  # directory when it is required, before `SimpleCov.root` can be set.
   def run(project_dir, env = {})
-    stdout, stderr, status = Open3.capture3(env, RbConfig.ruby, '-I', LIB_DIR, File.join(project_dir, 'run.rb'))
+    stdout, stderr, status = Open3.capture3(env, RbConfig.ruby, '-I', LIB_DIR, File.join(project_dir, 'run.rb'),
+                                            chdir: project_dir)
     coverage_dir = File.join(project_dir, 'coverage')
     report = File.join(coverage_dir, 'ai_report.md')
     probe = File.join(coverage_dir, 'descriptor_classes.txt')

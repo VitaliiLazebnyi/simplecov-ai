@@ -9,7 +9,7 @@ require 'tmpdir'
 # spec/support/coverage_fuzzer.rb): whatever SimpleCov raises while decoding a file's data must
 # be contained to that file (SCAI-REQ-011), so the formatter never raises and always writes a
 # report. Failures name the seed; FORMATTER_FUZZ_SEED replays or shifts the sequence.
-RSpec.describe SimpleCov::Formatter::AIFormatter do
+RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScopes.containment do
   let(:tmpdir) { Dir.mktmpdir('scai-fuzz') }
   let(:report_path) { File.join(tmpdir, 'report.md') }
   let(:base_seed) { Integer(ENV.fetch('FORMATTER_FUZZ_SEED', CoverageFuzzer::DEFAULT_SEED)) }

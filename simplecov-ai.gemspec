@@ -35,8 +35,11 @@ Gem::Specification.new do |spec|
     # certificate. Point its default lookups at paths that cannot exist so that "unsigned" holds
     # on every machine, whatever lives in ~/.gem.
     signing_disabled = File.join(__dir__, 'certs', 'signing-disabled')
-    Gem.define_singleton_method(:default_key_path) { signing_disabled }
-    Gem.define_singleton_method(:default_cert_path) { signing_disabled }
+    %i[default_key_path default_cert_path].each do |lookup|
+      # Removed before being redefined so `ruby -w` does not report a method redefinition.
+      Gem.singleton_class.send(:remove_method, lookup) if Gem.singleton_class.method_defined?(lookup)
+      Gem.define_singleton_method(lookup) { signing_disabled }
+    end
   else
     cert_path = File.expand_path('certs/simplecov-ai-public_cert.pem', __dir__)
     private_key_path = File.expand_path('~/.gem/gem-private_key.pem')

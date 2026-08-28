@@ -10,11 +10,12 @@ require 'bundler'
 # comes first and spans the whole file, every node has a non-empty name and a line range inside
 # the file, and nodes come in source order. Files above MAX_FILE_BYTES (generated parser
 # tables) are skipped for time, and the corpus is sampled at a fixed stride once it exceeds
-# MAX_FILES, so the selection is deterministic for a given bundle. RESOLVER_CORPUS_MAX_FILES=0
-# resolves every eligible file.
+# MAX_FILES (sized to keep the example around ten seconds on the slowest CI Ruby, where the
+# `parser` gem does the parsing), so the selection is deterministic for a given bundle.
+# RESOLVER_CORPUS_MAX_FILES=0 resolves every eligible file.
 module ResolverCorpus
   MAX_FILE_BYTES = 200_000
-  MAX_FILES = Integer(ENV.fetch('RESOLVER_CORPUS_MAX_FILES', 1500))
+  MAX_FILES = Integer(ENV.fetch('RESOLVER_CORPUS_MAX_FILES', 600))
   RESOLVER = SimpleCov::Formatter::AIFormatter::ASTResolver
 
   module_function
@@ -63,11 +64,16 @@ module ResolverCorpus
   end
 
   def node_violations(node, previous, root)
+    problems = identity_violations(node)
+    problems << "#{node.name}: lines #{node.line_range}" unless inside?(node, root)
+    problems << "#{node.name} follows #{previous.name}: #{order_of(node, previous)}" if out_of_order?(node, previous)
+    problems
+  end
+
+  def identity_violations(node)
     problems = []
     problems << "#{node.name}: a second root scope" if node.root?
     problems << "empty name for #{node.type} at #{node.start_line}" if node.name.empty?
-    problems << "#{node.name}: lines #{node.line_range}" unless inside?(node, root)
-    problems << "#{node.name} follows #{previous.name}: #{order_of(node, previous)}" if out_of_order?(node, previous)
     problems
   end
 
