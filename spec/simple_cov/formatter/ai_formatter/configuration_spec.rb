@@ -7,8 +7,8 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::Configuration do
   subject(:config) { described_class.new }
 
   describe 'defaults' do
-    it 'uses the documented default report path' do
-      expect(config.report_path).to eq('coverage/ai_report.md')
+    it 'reads the documented default report path and reports it as not configured' do
+      expect([config.report_path, config.report_path_configured?]).to eq(['coverage/ai_report.md', false])
     end
 
     it 'defaults to fine granularity, bypasses on, console off' do
@@ -18,13 +18,21 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::Configuration do
   end
 
   describe '#report_path=' do
-    it 'accepts a non-empty path' do
+    it 'accepts a non-empty path and marks it configured' do
       config.report_path = 'tmp/report.md'
-      expect(config.report_path).to eq('tmp/report.md')
+      expect([config.report_path, config.report_path_configured?]).to eq(['tmp/report.md', true])
     end
 
     it 'rejects a blank path' do
       expect { config.report_path = '   ' }.to raise_error(ArgumentError, /report_path/)
+    end
+
+    it 'rejects a path containing a NUL byte' do
+      expect { config.report_path = "report\0.md" }.to raise_error(ArgumentError, /NUL/)
+    end
+
+    it 'rejects a non-String path at assignment' do
+      expect { config.report_path = :report }.to raise_error(TypeError)
     end
   end
 
@@ -70,6 +78,14 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::Configuration do
       config.output_to_console = true
       config.include_bypasses = false
       expect([config.output_to_console, config.include_bypasses]).to eq([true, false])
+    end
+
+    it 'rejects a non-boolean output_to_console at assignment instead of at report time' do
+      expect { config.output_to_console = 'yes' }.to raise_error(TypeError, /output_to_console.*T::Boolean/)
+    end
+
+    it 'rejects a non-boolean include_bypasses at assignment' do
+      expect { config.include_bypasses = nil }.to raise_error(TypeError, /include_bypasses/)
     end
   end
 end

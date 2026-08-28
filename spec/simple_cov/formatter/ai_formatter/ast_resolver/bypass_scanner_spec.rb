@@ -2,73 +2,52 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require 'tmpdir'
-require 'fileutils'
 
 RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver::BypassScanner do
-  describe '.contains_directive?' do
-    it 'detects a standalone nocov marker' do
-      expect(described_class.contains_directive?("x = 1\n# :nocov:\n")).to be(true)
-    end
-
-    it 'detects a simplecov:disable directive' do
-      expect(described_class.contains_directive?("# simplecov:disable\ndef a; end\n")).to be(true)
-    end
-
-    it 'ignores a prose mention of a directive token' do
-      expect(described_class.contains_directive?("do_thing # mentions :nocov: mid-line\n")).to be(false)
-    end
-
-    it 'returns false for directive-free source' do
-      expect(described_class.contains_directive?("def a\n  1\nend\n")).to be(false)
-    end
+  def node(name, start_line, end_line, type: 'Instance Method')
+    SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.new(
+      name: name, type: type, start_line: start_line, end_line: end_line
+    )
   end
 
-  describe '.attribute' do
-    it 'leaves a region alone when no node encloses it, as with a node list lacking a root scope' do
-      lonely = SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.new(
-        name: 'Late#method', type: 'Instance Method', start_line: 6, end_line: 8, bypass_reasons: []
-      )
-      described_class.attribute([lonely], "# simplecov:disable\nTOP = 1\n# simplecov:enable\n\n\ndef method\nend\n")
-      expect(lonely.bypass_reasons).to be_empty
-    end
+  let(:root) { SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.root(20) }
+  let(:klass) { node('Runner', 3, 18, type: 'Class') }
+  let(:first_method) { node('Runner#first', 4, 8) }
+  let(:second_method) { node('Runner#second', 10, 14) }
+  let(:nodes) { [root, klass, first_method, second_method] }
+
+  def names_with_reasons(reasons_by_node)
+    reasons_by_node.map { |semantic_node, reasons| [semantic_node.name, reasons] }
   end
 
-  describe 'attribution via ASTResolver.resolve' do
-    let(:tmpdir) { Dir.mktmpdir }
+  it 'attributes a region to the outermost nodes it fully contains, not to their ancestors' do
+    reasons = described_class.attribute(nodes, [[4..14, '# :nocov:']])
+    expect(names_with_reasons(reasons)).to eq([['Runner#first', ['# :nocov:']], ['Runner#second', ['# :nocov:']]])
+  end
 
-    after { FileUtils.remove_entry(tmpdir) }
+  it 'attributes a region inside a single node to that innermost node' do
+    expect(names_with_reasons(described_class.attribute(nodes, [[5..6, '# simplecov:disable']])))
+      .to eq([['Runner#first', ['# simplecov:disable']]])
+  end
 
-    def resolve(code)
-      path = File.join(tmpdir, 'sample.rb')
-      File.write(path, code)
-      SimpleCov::Formatter::AIFormatter::ASTResolver.resolve(path)
-    end
+  it 'attributes a region wrapping only top-level code to the root scope' do
+    expect(names_with_reasons(described_class.attribute(nodes, [[1..2, '# :nocov:']]))).to eq([['main', ['# :nocov:']]])
+  end
 
-    it 'extends an unclosed simplecov:disable region to end of file' do
-      nodes = resolve(<<~RUBY)
-        class Runner
-          # simplecov:disable
-          def never_reenabled
-          end
-        end
-      RUBY
-      node = nodes.find { |candidate| candidate.name == 'Runner#never_reenabled' }
-      expect(node.bypass_reasons).to eq(['# simplecov:disable'])
-    end
+  it 'lists a reason once per node even when several regions in that node carry it' do
+    regions = [[5..5, '# simplecov:disable branch'], [7..7, '# simplecov:disable branch'], [6..6, '# :nocov:']]
+    expect(names_with_reasons(described_class.attribute(nodes, regions)))
+      .to eq([['Runner#first', ['# simplecov:disable branch', '# :nocov:']]])
+  end
 
-    it 'attributes an unmatched nocov marker to the rest of the file' do
-      # The `# :noc%s:` placeholder keeps the literal directive out of this heredoc so the
-      # repository directive auditor does not flag the fixture.
-      nodes = resolve(format(<<~RUBY, 'ov'))
-        class Runner
-          # :noc%s:
-          def trailing
-          end
-        end
-      RUBY
-      node = nodes.find { |candidate| candidate.name == 'Runner#trailing' }
-      expect(node.bypass_reasons).not_to be_empty
-    end
+  it 'leaves a region alone when no node encloses it, as with a node list lacking a root scope' do
+    expect(described_class.attribute([first_method], [[1..2, '# :nocov:']])).to eq({})
+  end
+
+  it 'never mutates the nodes it attributes to' do
+    before = nodes.map { |semantic_node| [semantic_node.name, semantic_node.start_line, semantic_node.end_line] }
+    described_class.attribute(nodes, [[4..14, '# :nocov:']])
+    after = nodes.map { |semantic_node| [semantic_node.name, semantic_node.start_line, semantic_node.end_line] }
+    expect(after).to eq(before)
   end
 end

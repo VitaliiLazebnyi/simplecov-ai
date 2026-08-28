@@ -5,9 +5,8 @@ module SimpleCov
   module Formatter
     class AIFormatter
       class ASTResolver
-        # A mutable value object housing bounds, identification metrics, and coverage-bypass
-        # reasons derived from traversing the AST nodes. Bounds and identity are fixed at
-        # construction; bypass reasons accumulate via {#add_bypass} during resolution.
+        # An immutable value object housing the bounds and identity of one structural entity
+        # (root scope, module, class or method) derived from traversing the AST.
         class SemanticNode
           extend T::Sig
 
@@ -22,28 +21,16 @@ module SimpleCov
           sig { returns(Integer) }
           attr_reader :start_line, :end_line
 
-          sig { returns(T::Array[String]) }
-          attr_reader :bypass_reasons
-
-          sig do
-            params(
-              name: String,
-              type: String,
-              start_line: Integer,
-              end_line: Integer,
-              bypass_reasons: T::Array[String]
-            ).void
-          end
-          def initialize(name:, type:, start_line:, end_line:, bypass_reasons: [])
+          sig { params(name: String, type: String, start_line: Integer, end_line: Integer).void }
+          def initialize(name:, type:, start_line:, end_line:)
             @name = name
             @type = type
             @start_line = start_line
             @end_line = end_line
-            @bypass_reasons = bypass_reasons
           end
 
           # Builds the synthetic root node covering a whole file, so code outside any class or
-          # method (and bypass regions wrapping only such code) has a scope to attribute to.
+          # method (and skip regions wrapping only such code) has a scope to attribute to.
           #
           # @param line_count [Integer] The number of lines in the file; an empty file still
           #   spans line 1.
@@ -72,13 +59,16 @@ module SimpleCov
             type == ROOT_TYPE
           end
 
-          # Records a coverage-bypass directive that applies to this node.
-          #
-          # @param bypass_reason [String] The directive text, e.g. `# :nocov:`.
-          # @return [void]
-          sig { params(bypass_reason: String).void }
-          def add_bypass(bypass_reason)
-            @bypass_reasons << bypass_reason
+          # @return [Boolean] Whether this node is a method definition (instance or singleton).
+          sig { returns(T::Boolean) }
+          def method?
+            [NodeClassifier::TYPE_INSTANCE_METHOD, NodeClassifier::TYPE_SINGLETON_METHOD].include?(type)
+          end
+
+          # @return [Range<Integer>] The inclusive line range this node spans.
+          sig { returns(T::Range[Integer]) }
+          def line_range
+            start_line..end_line
           end
         end
       end

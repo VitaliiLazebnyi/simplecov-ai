@@ -4,7 +4,13 @@
 require_relative 'ast_resolver'
 require 'time'
 require 'stringio'
+require_relative 'markdown_builder/inline_code'
+require_relative 'markdown_builder/source_lines'
+require_relative 'markdown_builder/report_budget'
+require_relative 'markdown_builder/section_writer'
+require_relative 'markdown_builder/deficit_group'
 require_relative 'markdown_builder/snippet_formatter'
+require_relative 'markdown_builder/skip_regions'
 require_relative 'markdown_builder/bypass_compiler'
 require_relative 'markdown_builder/deficit_grouper'
 require_relative 'markdown_builder/branch_enricher'
@@ -14,52 +20,34 @@ require_relative 'markdown_builder/deficit_compiler'
 module SimpleCov
   module Formatter
     class AIFormatter
-      # Responsible for compiling static text representations from evaluated coverage metrics,
-      # optimizing layout size, orchestrating string IO buffers, and halting upon token exhaustion.
-      # Serves as the primary mutation boundary to format AI consumption targets.
+      # Responsible for compiling static text representations from evaluated coverage metrics:
+      # the telemetry header, the deficit and bypass sections written through a single size
+      # budget, and the closing truncation notice when that budget ran out.
       class MarkdownBuilder
         extend T::Sig
 
-        # The number of bytes in a kilobyte (metric kB, matching the "kB" unit shown to users)
-        BYTES_PER_KB = T.let(1000.0, Float)
         # Text representation for a passed coverage check
         STATUS_PASSED = T.let('PASSED', String)
         # Text representation for a failed coverage check
         STATUS_FAILED = T.let('FAILED', String)
         # Branch-coverage label shown when branch coverage was not enabled for the run
         BRANCH_DISABLED_LABEL = T.let('N/A (branch coverage not enabled)', String)
+        # Percentages are printed with one decimal, floored (see #percent_label)
+        PERCENT_TEMPLATE = T.let('%.1f', String)
 
-        # Template for the report header
+        # Template for the report header; the method line is empty unless SimpleCov measured
+        # method coverage, keeping the header byte-identical for every other run.
         HEADER_TEMPLATE = T.let(
           "# AI Coverage Digest\n" \
           "**Status:** %<status>s\n" \
           "**Global Line Coverage:** %<line_pct>s%%\n" \
           "**Global Branch Coverage:** %<branch>s\n" \
+          '%<method_line>s' \
           "**Generated At:** %<time>s (Local Timezone)\n",
           String
         )
-
-        # Alert heading for truncated reports
-        TRUNCATION_ALERT_HEADING = T.let('> **[WARNING] TRUNCATION NOTIFICATION:**', String)
-        # Alert body for truncated reports
-        TRUNCATION_ALERT_BODY = T.let(
-          '> The total coverage deficit report exceeded the maximum token ' \
-          'constraint (%<limit>d kB). ' \
-          'The report was truncated. The deficits detailed above represent ' \
-          'the lowest-coverage (most critical) files. ' \
-          'Please resolve these deficits to reveal the remaining uncovered files in subsequent test runs.',
-          String
-        )
-
-        # Groups unexecuted lines and branches under their common semantic node.
-        class DeficitGroup < T::Struct
-          # @return [ASTResolver::SemanticNode, nil] The corresponding structural boundary
-          prop :semantic_node, T.nilable(ASTResolver::SemanticNode), default: nil
-          # @return [Array<SimpleCov::SourceFile::Line>] The missed source lines
-          prop :lines, T::Array[SimpleCov::SourceFile::Line], default: []
-          # @return [Array<SimpleCov::SourceFile::Branch>] The missed conditional branches
-          prop :branches, T::Array[SimpleCov::SourceFile::Branch], default: []
-        end
+        # Header line for SimpleCov >= 1.0 method coverage (`enable_coverage :method`)
+        METHOD_COVERAGE_LINE = T.let("**Global Method Coverage:** %<method_pct>s%%\n", String)
 
         # Initializes the Markdown sequence compilation.
         #
@@ -70,23 +58,30 @@ module SimpleCov
           @coverage_metrics = T.let(coverage_metrics, SimpleCov::Result)
           @config = T.let(config, Configuration)
           @buffer = T.let(StringIO.new, StringIO)
-          @truncated = T.let(false, T::Boolean)
           @ast_cache = T.let({}, T::Hash[String, T.nilable(T::Array[ASTResolver::SemanticNode])])
         end
 
         # Executes the primary buffer composition logic yielding a monolithic compiled output.
-        # Deficits are intrinsically sorted to surface the most crucial test gaps immediately.
+        # Deficits are intrinsically sorted to surface the most crucial test gaps immediately,
+        # and both sections stop at the configured size ceiling.
         #
         # @return [String] Synthesized string digest of resolved target files and metrics
         sig { returns(String) }
         def build
-          write_header
-          DeficitCompiler.new(@coverage_metrics, @config, self).write_deficits(@buffer)
-          write_truncation_warning if @truncated
-          BypassCompiler.new(@coverage_metrics, self).write_bypasses(@buffer) if @config.include_bypasses
+          budget = ReportBudget.new(@buffer, @config.max_file_size_kb, @coverage_metrics.files.size)
+          budget.write(header)
+          omitted_deficit_files = DeficitCompiler.new(@coverage_metrics, @config, self).write_deficits(budget)
+          omitted_bypass_files = write_bypasses(budget)
+          if omitted_deficit_files.positive? || omitted_bypass_files.positive?
+            budget.write_notice(omitted_deficit_files, omitted_bypass_files)
+          end
           @buffer.string
         end
 
+        # Resolves (once per file, per SCAI-REQ-020) the semantic nodes of a source file.
+        #
+        # @param filename [String] The absolute path of the file.
+        # @return [Array<ASTResolver::SemanticNode>, nil] The nodes, or nil when resolution failed.
         sig { params(filename: String).returns(T.nilable(T::Array[ASTResolver::SemanticNode])) }
         def try_resolve_ast(filename)
           return @ast_cache[filename] if @ast_cache.key?(filename)
@@ -98,66 +93,66 @@ module SimpleCov
           end
         end
 
-        # Marks the report truncated when the deficit section has exceeded the configured size
-        # budget, so the caller can stop emitting further (higher-coverage) files.
-        sig { void }
-        def record_truncation!
-          @truncated = true if @buffer.size / BYTES_PER_KB > @config.max_file_size_kb
-        end
-
-        # @return [Boolean] Whether the report has been marked truncated.
-        sig { returns(T::Boolean) }
-        def truncated?
-          @truncated
-        end
-
         private
 
-        # Writes the summary header containing global coverage percentages and generation metadata.
-        # Status is PASSED only when line coverage is perfect and, where branch coverage is
-        # enabled, branch coverage is perfect too — so a report cannot claim PASSED while listing
-        # branch deficits.
-        sig { void }
-        def write_header
-          covered_pct = @coverage_metrics.covered_percent
+        sig { params(budget: ReportBudget).returns(Integer) }
+        def write_bypasses(budget)
+          return 0 unless @config.include_bypasses
+
+          BypassCompiler.new(@coverage_metrics, self).write_bypasses(budget)
+        end
+
+        # The summary header: global percentages and generation metadata. Status is PASSED only
+        # when every criterion SimpleCov measured (lines, branches, methods) is perfect, so a
+        # report cannot claim PASSED while listing deficits of any kind.
+        sig { returns(String) }
+        def header
+          line_pct = @coverage_metrics.covered_percent
           branch_pct = branch_coverage_pct
-          @buffer.puts format(
-            HEADER_TEMPLATE,
-            status: compute_status(covered_pct, branch_pct),
-            line_pct: covered_pct.round(1),
-            branch: branch_pct ? "#{branch_pct.round(1)}%" : BRANCH_DISABLED_LABEL,
-            time: Time.now.iso8601
-          )
+          method_pct = method_coverage_pct
+          format(HEADER_TEMPLATE,
+                 status: compute_status([line_pct, branch_pct, method_pct]),
+                 line_pct: percent_label(line_pct),
+                 branch: branch_pct ? "#{percent_label(branch_pct)}%" : BRANCH_DISABLED_LABEL,
+                 method_line: method_pct ? format(METHOD_COVERAGE_LINE, method_pct: percent_label(method_pct)) : '',
+                 time: Time.now.iso8601)
         end
 
-        sig { params(line_pct: Float, branch_pct: T.nilable(Float)).returns(String) }
-        def compute_status(line_pct, branch_pct)
-          line_perfect = line_pct >= Constants::PERFECT_COVERAGE_PERCENT
-          branch_perfect = branch_pct.nil? || branch_pct >= Constants::PERFECT_COVERAGE_PERCENT
-          line_perfect && branch_perfect ? STATUS_PASSED : STATUS_FAILED
+        # An unmeasured criterion (nil) does not fail the run.
+        sig { params(percentages: T::Array[T.nilable(Float)]).returns(String) }
+        def compute_status(percentages)
+          perfect = percentages.all? { |percent| percent.nil? || percent >= Constants::PERFECT_COVERAGE_PERCENT }
+          perfect ? STATUS_PASSED : STATUS_FAILED
         end
 
-        # Returns the global branch coverage percentage, or nil when branch coverage was not
-        # enabled for the run (so the header can report "N/A" rather than a misleading 100%).
+        # One decimal, floored: a run at 99.96% must never read as 100.0% beside a FAILED status.
+        sig { params(percent: Float).returns(String) }
+        def percent_label(percent)
+          format(PERCENT_TEMPLATE, percent.floor(1))
+        end
+
+        # Global branch coverage, or nil when branch coverage was not enabled for the run (so
+        # the header can report "N/A" rather than a misleading 100%).
         sig { returns(T.nilable(Float)) }
         def branch_coverage_pct
-          return nil unless @coverage_metrics.respond_to?(:covered_branches) &&
-                            @coverage_metrics.respond_to?(:total_branches)
-
-          raw_total = @coverage_metrics.total_branches
-          return nil if raw_total.nil?
-
-          total = raw_total.to_i
-          return Constants::PERFECT_COVERAGE_PERCENT if total.zero?
-
-          @coverage_metrics.covered_branches.to_f / total * Constants::PERFECT_COVERAGE_PERCENT
+          coverage_ratio(@coverage_metrics.covered_branches, @coverage_metrics.total_branches)
         end
 
-        # Appends a critical alert if the output hit the token-ceiling constraint and was forcibly terminated.
-        sig { void }
-        def write_truncation_warning
-          @buffer.puts TRUNCATION_ALERT_HEADING
-          @buffer.puts format(TRUNCATION_ALERT_BODY, limit: @config.max_file_size_kb)
+        # Global method coverage, or nil unless SimpleCov (>= 1.0, `enable_coverage :method`)
+        # measured methods in this run.
+        sig { returns(T.nilable(Float)) }
+        def method_coverage_pct
+          return nil unless MethodDeficit.measured?(@coverage_metrics)
+
+          coverage_ratio(@coverage_metrics.covered_methods, @coverage_metrics.total_methods)
+        end
+
+        sig { params(covered: T.nilable(Integer), total: T.nilable(Integer)).returns(T.nilable(Float)) }
+        def coverage_ratio(covered, total)
+          return nil if total.nil?
+          return Constants::PERFECT_COVERAGE_PERCENT if total.zero?
+
+          covered.to_f / total * Constants::PERFECT_COVERAGE_PERCENT
         end
       end
     end

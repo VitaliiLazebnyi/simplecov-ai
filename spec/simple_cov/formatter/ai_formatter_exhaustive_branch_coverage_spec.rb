@@ -56,7 +56,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
     SimpleCov.filters.replace(original_filters)
 
     formatter = described_class.new
-    formatter.format(result)
+    capture_stdout { formatter.format(result) }
   end
 
   after do

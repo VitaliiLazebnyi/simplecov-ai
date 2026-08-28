@@ -5,51 +5,28 @@ require 'spec_helper'
 require 'tmpdir'
 require 'fileutils'
 
-# Directive strings appear inline within single source lines (e.g. inside "..." literals), so
-# the repository directive auditor — which only matches directives at the start of a line — is
-# not triggered and no placeholder evasion is required.
 RSpec.describe SimpleCov::Formatter::AIFormatter do
-  let(:tmpdir) { Dir.mktmpdir }
+  let(:tmpdir) { Dir.mktmpdir('scai') }
+  let(:report_path) { File.join(tmpdir, 'report.md') }
 
-  let(:empty_result) do
-    instance_double(SimpleCov::Result, covered_percent: 100.0, covered_branches: 1, total_branches: 1, files: [])
+  before do
+    described_class.reset_configuration!
+    described_class.configure { |config| config.report_path = report_path }
+    allow(SimpleCov).to receive(:root).and_return(tmpdir)
   end
-
-  let(:bare_result) { instance_double(SimpleCov::Result, covered_percent: 100.0, files: []) }
-
-  let(:legacy_result) do
-    branch = instance_double(SimpleCov::SourceFile::Branch, start_line: 3, end_line: 3, type: :else)
-    file = source_double('lib/legacy.rb', missed_lines: [], missed_branches: [branch], branches: [branch])
-    stub_covered_percent(file, line: 100.0)
-    allow(file).to receive(:respond_to?).with(:branches).and_return(true)
-    allow(file).to receive(:respond_to?).with(:branches_coverage_percent).and_return(true)
-    allow(file).to receive(:branches_coverage_percent).and_return(50.0)
-    allow(File).to receive(:readlines).with('lib/legacy.rb').and_return((1..5).map { |num| "line #{num}\n" })
-    result_with(file, covered_branches: 1, total_branches: 2)
-  end
-
-  let(:indeterminate_branch_result) do
-    file = source_double('lib/legacy2.rb', missed_lines: [], missed_branches: [])
-    stub_covered_percent(file, line: 100.0)
-    allow(file).to receive(:respond_to?).with(:branches_coverage_percent).and_return(false)
-    result_with(file)
-  end
-
-  let(:unreadable_result) do
-    missed = instance_double(SimpleCov::SourceFile::Line, line_number: 2)
-    file = source_double('lib/unreadable.rb', missed_lines: [missed], missed_branches: [])
-    stub_covered_percent(file, line: 40.0)
-    allow(file).to receive(:respond_to?).with(:branches).and_return(false)
-    allow(file).to receive(:respond_to?).with(:branches_coverage_percent).and_return(false)
-    allow(described_class::ASTResolver).to receive(:resolve).and_return([])
-    result_with(file, covered_percent: 40.0)
-  end
-
-  before { described_class.reset_configuration! }
 
   after do
     described_class.reset_configuration!
-    FileUtils.remove_entry(tmpdir) if File.directory?(tmpdir)
+    FileUtils.remove_entry(tmpdir)
+  end
+
+  def resolve(code)
+    described_class::ASTResolver.resolve(write_source(tmpdir, 'sample.rb', code))
+  end
+
+  def report_for(result)
+    capture_stdout { described_class.new.format(result) }
+    File.read(report_path)
   end
 
   describe 'ASTResolver edge cases' do
@@ -82,23 +59,6 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
                       "WRONG = Struct.old do\n  3\nend\n")
       expect(nodes.map(&:name)).to eq(['main'])
     end
-
-    it 'bypasses a method wrapping a nocov region without touching its sibling' do
-      nodes = resolve("def wrapper\n  a = 1\n  # :nocov:\n  b = 2\n  # :nocov:\nend\n\ndef sibling\n  0\nend\n")
-      bypassed = nodes.find { |node| node.name == '#wrapper' }.bypass_reasons.any?
-      sibling_clean = nodes.find { |node| node.name == '#sibling' }.bypass_reasons.empty?
-      expect([bypassed, sibling_clean]).to eq([true, true])
-    end
-
-    it 'attributes a bypass region that wraps only top-level code to the root scope' do
-      nodes = resolve("# :nocov:\nTOP = 1\n# :nocov:\ndef later\nend\n")
-      expect(nodes.map { |node| [node.name, node.bypass_reasons] }).to eq([['main', ['# :nocov:']], ['#later', []]])
-    end
-
-    it 'attributes a region inside a method to that method rather than to the root scope' do
-      nodes = resolve("def wrapper\n  # :nocov:\n  1\n  # :nocov:\nend\n")
-      expect(nodes.map { |node| [node.name, node.bypass_reasons] }).to eq([['main', []], ['#wrapper', ['# :nocov:']]])
-    end
   end
 
   describe 'configuration reset' do
@@ -109,70 +69,56 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
     end
   end
 
-  describe 'report path resolution' do
-    it 'writes to an absolute report path unchanged' do
-      absolute = File.join(tmpdir, 'nested', 'abs_report.md')
-      described_class.configure { |config| config.report_path = absolute }
-      described_class.new.format(empty_result)
-      expect(File.exist?(absolute)).to be(true)
-    end
-  end
-
-  describe 'header branch coverage reporting' do
-    it 'reports N/A when the result does not expose branch metrics at all' do
-      allow(bare_result).to receive(:respond_to?).and_return(false)
-      expect(report_for(bare_result)).to include('**Global Branch Coverage:** N/A (branch coverage not enabled)')
-    end
-  end
-
   describe 'branch coverage percent fallback for simplecov < 1.0' do
-    it 'falls back to branches_coverage_percent when covered_percent rejects a criterion' do
-      expect(report_for(legacy_result)).to include('**Branch Deficit:**')
+    let(:source) { "def pick(flag)\n  flag ? :a : :b\nend\n" }
+    let(:path) { write_source(tmpdir, 'pick.rb', source) }
+    let(:legacy_result) do
+      branches = { branch_descriptor(source, :if, 0, 2, 'flag ? :a : :b') => {
+        branch_descriptor(source, :then, 1, 2, ':a') => 1, branch_descriptor(source, :else, 2, 2, ':b') => 0
+      } }
+      result_for(path => { 'lines' => [1, 1, nil], 'branches' => branches })
     end
 
-    it 'treats branch coverage as complete when neither criterion API is available' do
-      expect(report_for(indeterminate_branch_result)).to include('**Status:** PASSED')
+    before do
+      # simplecov < 1.0's SourceFile#covered_percent takes no criterion and raises ArgumentError
+      # when given one, and its branches_coverage_percent computes the figure itself; on newer
+      # releases (where the latter delegates to covered_percent) that shape is reproduced on the
+      # real object.
+      legacy_file = legacy_result.files.first
+      allow(legacy_file).to receive(:covered_percent) { |*criterion| criterion.empty? ? 100.0 : raise(ArgumentError) }
+      allow(legacy_file).to receive(:branches_coverage_percent).and_return(50.0)
     end
 
-    it 'degrades to no snippets when a deficit file cannot be read' do
-      allow(File).to receive(:readlines).with('lib/unreadable.rb').and_raise(Errno::ENOENT)
-      expect(report_for(unreadable_result)).to include('lib/unreadable.rb')
-    end
-  end
-
-  def resolve(code)
-    path = File.join(tmpdir, 'sample.rb')
-    File.write(path, code)
-    described_class::ASTResolver.resolve(path)
-  end
-
-  def report_for(result)
-    described_class.configure { |config| config.report_path = File.join(tmpdir, 'r.md') }
-    described_class.new.format(result)
-    File.read(described_class.configuration.report_path)
-  end
-
-  def source_double(filename, **stubs)
-    file = instance_double(SimpleCov::SourceFile, filename: filename, project_filename: filename, **stubs)
-    allow(file).to receive(:respond_to?).with(:coverage_data).and_return(false)
-    file
-  end
-
-  # Stubs covered_percent to return the line percentage for the no-argument call and to raise
-  # ArgumentError for a criterion argument. This mirrors simplecov < 1.0 (whose covered_percent
-  # takes no criterion) and, because verify_partial_doubles enforces the installed method's
-  # arity on the call itself, is the only cross-version-safe shape; branch percentages are
-  # therefore supplied to mocks via branches_coverage_percent (the criterion-less fallback).
-  def stub_covered_percent(file, line:)
-    allow(file).to receive(:covered_percent) do |*args|
-      raise ArgumentError unless args.empty?
-
-      line
+    it 'falls back to branches_coverage_percent so the branch deficit is still reported' do
+      expect(report_for(legacy_result))
+        .to end_with("  - **Branch Deficit:** [L2] Missing coverage for `else` branch: `:b`\n\n")
     end
   end
 
-  def result_with(file, **overrides)
-    defaults = { covered_percent: 100.0, covered_branches: 0, total_branches: 0, files: [file] }
-    instance_double(SimpleCov::Result, **defaults, **overrides)
+  describe 'source encodings' do
+    it 'renders snippets from a source with a non-UTF-8 magic comment through SimpleCov\'s loader' do
+      path = File.join(tmpdir, 'kana.rb')
+      File.binwrite(path, "# encoding: Shift_JIS\ndef read\n  '\x82\xa0'\nend\n".b)
+      expect(report_for(result_for(path => { 'lines' => [nil, 1, 0, nil] })))
+        .to match(/^  - \*\*Line Deficit:\*\* \[L3\] `'あ'`$/)
+    end
+
+    it 'renders a file whose comments carry stray non-UTF-8 bytes without raising' do
+      path = File.join(tmpdir, 'latin.rb')
+      File.binwrite(path, "# caf\xe9\ndef read\n  1\nend\n".b)
+      result = result_for(path => { 'lines' => [nil, 1, 0, nil] })
+      skip 'SimpleCov < 1.1 raises on invalid UTF-8 bytes itself (1.1 scrubs them)' unless classifiable?(result)
+      expect(report_for(result)).to end_with("  - **Line Deficit:** [L3] `1`\n\n")
+    end
+  end
+
+  # SimpleCov releases before 1.1 raise ArgumentError from their own line classification when a
+  # source line carries invalid UTF-8 bytes (1.1 scrubs the source first), so no formatter can
+  # process such a project there; the example verifies the formatter's side where SimpleCov can.
+  def classifiable?(result)
+    result.covered_percent
+    true
+  rescue ArgumentError
+    false
   end
 end
