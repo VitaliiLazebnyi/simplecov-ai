@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Run the test suite (or any command) on another Ruby inside its official Docker image, resolving
+# dependencies from scratch exactly like the CI test matrix does. The checkout is streamed into
+# the container as a tarball, so nothing running in the container can touch the working tree.
+#
+#   bin/check-ruby 2.7                                   # bundle exec rspec on Ruby 2.7
+#   bin/check-ruby 3.4 'bundle exec rspec spec/quality'  # explicit command
+#   bin/check-ruby jruby:9.4                             # any image reference works
+#   BUNDLE_GEMFILE=gemfiles/simplecov_0.22.gemfile bin/check-ruby 3.4
+set -euo pipefail
+
+ruby=${1:?usage: bin/check-ruby <ruby-version|image> [command]}
+command=${2:-bundle exec rspec}
+case "$ruby" in
+  *:* | */*) image=$ruby ;;
+  *) image="ruby:$ruby" ;;
+esac
+
+cd "$(dirname "$0")/.."
+COPYFILE_DISABLE=1 tar --exclude=./.git --exclude=./coverage --exclude=./vendor --exclude=./doc \
+    --exclude=./.yardoc --exclude=./tmp --exclude=./node_modules --exclude=./.bundle -cf - . \
+  | docker run --rm -i -e CI=true -e "BUNDLE_GEMFILE=${BUNDLE_GEMFILE:-}" "$image" bash -c "
+      set -euo pipefail
+      mkdir -p /app && tar -xf - -C /app && cd /app
+      rm -f Gemfile.lock gemfiles/*.lock
+      bundle install --quiet
+      $command"

@@ -1,0 +1,11 @@
+# typed: strict
+# frozen_string_literal: true
+
+# SimpleCov compatibility bundle used by the `simplecov-compat` CI job:
+#   BUNDLE_GEMFILE=gemfiles/simplecov_1.0.gemfile bundle install
+#   BUNDLE_GEMFILE=gemfiles/simplecov_1.0.gemfile bundle exec rspec
+source 'https://rubygems.org'
+
+gemspec path: '..'
+
+gem 'simplecov', '~> 1.0.0'

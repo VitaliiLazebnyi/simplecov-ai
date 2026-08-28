@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Install the development bundle. Run once after cloning (and again after dependency changes);
+# `bundle exec rake` then runs every quality gate locally.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+bundle install

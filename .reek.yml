@@ -1,0 +1,46 @@
+# reek configuration for the advisory `rake quality` gate (also run by the CI `quality` job).
+#
+# Detectors that mostly restate deliberate design choices in this code base are disabled; the
+# count-based detectors are set just above the current code so that growth shows up as a warning.
+detectors:
+  # Configuration is a settings object; its boolean attributes are plain writers on purpose.
+  Attribute:
+    enabled: false
+  # `singleton:` mirrors Parser's `sclass` semantics and is threaded through traversal by design.
+  BooleanParameter:
+    enabled: false
+  ControlParameter:
+    enabled: false
+  DataClump:
+    enabled: false
+  DuplicateMethodCall:
+    max_calls: 3
+  # Formatting helpers naturally operate on SimpleCov's value objects rather than on self.
+  FeatureEnvy:
+    enabled: false
+  LongParameterList:
+    max_params: 4
+  # `respond_to?` guards are how the gem bridges the SimpleCov 0.18-1.x API differences.
+  ManualDispatch:
+    enabled: false
+  # `record_truncation!` has no non-bang counterpart by design (it is the only mutation entry).
+  MissingSafeMethod:
+    enabled: false
+  NestedIterators:
+    max_allowed_nesting: 2
+  # Optional SimpleCov telemetry (branch totals, columns) is legitimately nil.
+  NilCheck:
+    enabled: false
+  TooManyConstants:
+    max_constants: 8
+  TooManyInstanceVariables:
+    max_instance_variables: 6
+  TooManyStatements:
+    enabled: false
+  UtilityFunction:
+    enabled: false
+exclude_paths:
+  - gemfiles
+  - sorbet
+  - spec
+  - vendor
