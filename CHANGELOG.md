@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.11.0] - unreleased
+## [0.11.0] - 2026-08-29
 
 ### Fixed
 
@@ -243,8 +243,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports and an audit section listing `:nocov:` bypasses.
 - Signed gem releases (public certificate in `certs/`).
 
-[Unreleased]: https://github.com/VitaliiLazebnyi/simplecov-ai/compare/v0.10.6...HEAD
-[0.11.0]: https://github.com/VitaliiLazebnyi/simplecov-ai/compare/v0.10.6...HEAD
+[Unreleased]: https://github.com/VitaliiLazebnyi/simplecov-ai/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/VitaliiLazebnyi/simplecov-ai/compare/v0.10.6...v0.11.0
 [0.10.6]: https://github.com/VitaliiLazebnyi/simplecov-ai/compare/v0.10.5...v0.10.6
 [0.10.5]: https://github.com/VitaliiLazebnyi/simplecov-ai/compare/v0.10.4...v0.10.5
 [0.10.4]: https://github.com/VitaliiLazebnyi/simplecov-ai/compare/v0.10.3...v0.10.4
