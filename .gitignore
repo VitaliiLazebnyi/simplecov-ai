@@ -7,3 +7,4 @@ gemfiles/*.lock
 doc/
 tmp/
 node_modules/
+.claude/worktrees/

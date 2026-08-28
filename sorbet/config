@@ -10,3 +10,5 @@ doc/
 spec/
 --ignore
 .git/
+--ignore
+.claude/

@@ -21,7 +21,7 @@ case "$ruby" in
 esac
 
 cd "$(dirname "$0")/.."
-COPYFILE_DISABLE=1 tar --no-xattrs --exclude=./.git --exclude=./coverage --exclude=./vendor --exclude=./doc \
+COPYFILE_DISABLE=1 tar --no-xattrs --exclude=./.git --exclude=./.claude --exclude=./coverage --exclude=./vendor --exclude=./doc \
     --exclude=./.yardoc --exclude=./tmp --exclude=./node_modules --exclude=./.bundle -cf - . \
   | docker run --rm -i -e CI=true -e "BUNDLE_GEMFILE=${BUNDLE_GEMFILE:-}" "$image" bash -c "
       set -euo pipefail
