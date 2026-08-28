@@ -1,6 +1,8 @@
 # typed: strict
 # frozen_string_literal: true
 
+require 'openssl'
+
 version_content = File.read(File.expand_path('lib/simplecov-ai/version.rb', __dir__))
 version_match = version_content.match(/VERSION\s*=\s*T\.let\(['"]([^'"]+)['"],\s*String\)/)
 version = version_match&.captures&.first or
@@ -23,12 +25,31 @@ Gem::Specification.new do |spec|
   spec.metadata['changelog_uri'] = "#{spec.homepage}/blob/main/CHANGELOG.md"
   spec.metadata['allowed_push_host'] = 'https://rubygems.org'
 
-  # Code signing configuration. Only advertise the certificate chain when a matching private
-  # key is actually present, so unsigned local builds do not embed a dangling certificate path.
-  cert_path = File.expand_path('certs/simplecov-ai-public_cert.pem', __dir__)
-  private_key_path = File.expand_path('~/.gem/gem-private_key.pem')
-  # Ensure the key file actually has substantial content (not just a newline from an empty secret)
-  if File.exist?(cert_path) && File.exist?(private_key_path) && File.size(private_key_path) > 100
+  # Code signing is opt-in: set SIMPLECOV_AI_SIGN to any non-empty value (the release workflow
+  # does so only when the GEM_PRIVATE_KEY secret is present). When enabled, the private key must
+  # exist and must match the public certificate, otherwise the build aborts with a clear error
+  # instead of producing a gem carrying a broken signature. When unset, the gem builds unsigned.
+  if ENV['SIMPLECOV_AI_SIGN'].to_s.empty?
+    # RubyGems signs with ~/.gem/gem-private_key.pem whenever that file exists, even though the
+    # gemspec asked for nothing, and crashes or signs wrongly when that key belongs to a different
+    # certificate. Point its default lookups at paths that cannot exist so that "unsigned" holds
+    # on every machine, whatever lives in ~/.gem.
+    signing_disabled = File.join(__dir__, 'certs', 'signing-disabled')
+    Gem.define_singleton_method(:default_key_path) { signing_disabled }
+    Gem.define_singleton_method(:default_cert_path) { signing_disabled }
+  else
+    cert_path = File.expand_path('certs/simplecov-ai-public_cert.pem', __dir__)
+    private_key_path = File.expand_path('~/.gem/gem-private_key.pem')
+    unless File.file?(private_key_path)
+      raise "SIMPLECOV_AI_SIGN is set but no signing key exists at #{private_key_path}"
+    end
+
+    certificate = OpenSSL::X509::Certificate.new(File.read(cert_path))
+    private_key = OpenSSL::PKey.read(File.read(private_key_path))
+    unless certificate.check_private_key(private_key)
+      raise "The signing key at #{private_key_path} does not match #{cert_path}; refusing to build a wrongly signed gem"
+    end
+
     spec.cert_chain = [cert_path]
     spec.signing_key = private_key_path
   end
