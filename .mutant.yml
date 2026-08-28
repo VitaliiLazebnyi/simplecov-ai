@@ -32,7 +32,8 @@ mutation:
     # first load — is unobservable there.
     - send{selector=require}
     - block{receiver=send{selector=silence_warnings}}
-    # `Kernel.format` is the same method as the private `format`; its arguments are locals.
+    # `Kernel.format` is the same method as the private `format`; its arguments are locals or a
+    # plain reader on one (`error.message`, which `%s` renders exactly as `error` itself would).
     - send{receiver=const{name=Kernel} selector=format}
     # `range.count` on an Integer range equals `range.size`.
     - send{receiver=lvar{value=range} selector=count}

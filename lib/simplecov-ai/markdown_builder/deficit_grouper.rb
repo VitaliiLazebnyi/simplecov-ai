@@ -19,9 +19,6 @@ module SimpleCov
           # Positional label for a multi-line deficit no resolved node spans.
           FALLBACK_RANGE_NAME = T.let('Lines %d-%d', String)
 
-          sig { returns(T::Hash[String, DeficitGroup]) }
-          attr_reader :node_deficits
-
           sig { params(nodes: T::Array[ASTResolver::SemanticNode]).void }
           def initialize(nodes)
             @nodes = nodes
@@ -112,7 +109,8 @@ module SimpleCov
           def group_for(node, start_line, end_line)
             group_key, sort_key = node ? node_identity(node) : positional_identity(start_line, end_line)
             @sort_keys[group_key] ||= sort_key
-            @node_deficits[group_key] ||= DeficitGroup.new(semantic_node: node)
+            @node_deficits[group_key] ||=
+              DeficitGroup.new(semantic_node: node, lines: [], branches: [], method_deficits: [])
           end
 
           sig { params(node: ASTResolver::SemanticNode).returns([String, [Integer, Integer]]) }

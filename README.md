@@ -16,8 +16,10 @@ expression.
   (`def self.x`, `class << self`), constants bound to `Struct.new`, `Class.new`, `Module.new` or
   `Data.define` blocks (`Point#distance`), `define_method` / `define_singleton_method` blocks with
   a literal name, and `class << obj` singleton classes opened on a variable or constant
-  (`obj.name`, `@ivar.name`, `Foo::Bar.name`). Code outside any class or method belongs to
-  `main`, the root scope of the file.
+  (`obj.name`, `@ivar.name`, `Foo::Bar.name`). A method defined at the top level is `Object#name`
+  (Ruby adds it to `Object`, which is how SimpleCov's method coverage names it too) and a top-level
+  `def self.x` is `main.x`; any other code outside a class or method belongs to `main`, the root
+  scope of the file.
 - **Exact snippets.** Each deficit carries its line(s) as `[L<n>]` or `[L<n>-<m>]` and the exact
   source text: a missed branch quotes only its own arm (the `:neg` of `x.positive? ? :pos : :neg`),
   the `else` arm that spans an `elsif` chain is cut to its first line plus `...`, and identical
@@ -201,6 +203,9 @@ skip verdicts rather than from a second scan of the comments:
 - `# :nocov:` pairs (including a custom `nocov_token`), inline `# simplecov:disable` comments and
   `# simplecov:disable line` / `# simplecov:disable branch` regions are all reported;
 - a directive inside a heredoc, which SimpleCov ignores, is not reported;
+- a skipped region made only of comments and blank lines is not reported either, since it excludes
+  nothing from any figure — SimpleCov 1.x honours a directive wherever it appears in a comment, so
+  a comment that merely quotes `# simplecov:disable` skips its own line;
 - on SimpleCov < 1.0, which does not implement `# simplecov:disable`, those lines stay ordinary
   deficits and only `# :nocov:` regions appear. The same sample on SimpleCov 0.22.0 lists
   `raise 'unreachable' # simplecov:disable` as a line deficit and a single bypass.
@@ -237,10 +242,18 @@ Reporting is best-effort and never aborts a passing test run. A file the parser 
 listed with its raw line numbers under an `AST Parsing Failed` notice while the other files are
 resolved normally. Sources are read as bytes and decoded per their `# encoding:` magic comment or
 byte-order mark, string literals whose escapes are invalid in UTF-8 (`"\xf0-\xff"`) are accepted
-as MRI accepts them, and a file that cannot be read at all is reported without snippets. Branch
-column data that a SimpleCov version does not provide degrades to full-line snippets. Snippets,
-names, paths and directive comments are rendered as code spans that stay intact whatever
-characters they contain (see `SECURITY.md`).
+as MRI accepts them, and a file that cannot be read at all is reported without snippets (each
+shown as a code span holding one space). Branch column data that a SimpleCov version does not
+provide degrades to full-line snippets. Snippets, names, paths and directive comments are rendered
+as code spans that stay intact whatever characters they contain (see `SECURITY.md`). If the
+report itself cannot be written — a `report_path` whose parent is a regular file, a read-only or
+full disk — the formatter prints `AI coverage digest could not be written to <path> (<error>)` on
+STDERR, still echoes the digest when `output_to_console` is set, and does not raise from
+SimpleCov's `at_exit` hook.
+
+One limitation: nodes are resolved by line, so two definitions on one line
+(`def a; 1; end; def b; 2; end`) both resolve to the line's last node; a method deficit keeps the
+name SimpleCov derived unless that node carries the method's own name.
 
 ## License
 

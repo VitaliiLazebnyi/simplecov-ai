@@ -12,11 +12,13 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
   let(:perfect_lines) { line_hits(17, covered: [1, 2, 3, 4, 7, 8, 11, 12, 13]) }
   # SimpleCov's merged data names a singleton method's owner plainly (`build`); a live result
   # names it `#<Class:Owner>` (`phantom` and `ghost`, methods the resolver cannot see, on the
-  # class's first line and at line 15). `sign_alias` sits inside `sign` without being it.
+  # class's first line and at line 15). `sign_alias` sits inside `sign` without being it, and so
+  # does a singleton `sign` defined dynamically inside the instance method `sign` (line 4).
   let(:method_descriptors) do
     { ['Sample::Calc', :sign, 3, 4, 5, 7] => 3, ['Sample::Calc', :never_called, 7, 4, 9, 7] => 0,
       ['Sample::Calc', :build, 12, 6, 14, 9] => 0, ['#<Class:Sample::Calc>', :phantom, 2, 2, 2, 20] => 0,
-      ['#<Class:Sample::Calc>', :ghost, 15, 2, 15, 20] => 0, ['Sample::Calc', :sign_alias, 4, 4, 4, 30] => 0 }
+      ['#<Class:Sample::Calc>', :ghost, 15, 2, 15, 20] => 0, ['Sample::Calc', :sign_alias, 4, 4, 4, 30] => 0,
+      ['#<Class:Sample::Calc>', :sign, 4, 4, 4, 30] => 0 }
   end
 
   before do
@@ -53,7 +55,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
   end
 
   def expected_method_digest
-    expected_header('FAILED', '100.0%', '100.0%', method_label: '16.6%') + expected_method_deficits
+    expected_header('FAILED', '100.0%', '100.0%', method_label: '14.2%') + expected_method_deficits
   end
 
   def expected_method_deficits
@@ -66,6 +68,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
         - **Method Deficit:** [L15] `Sample::Calc.ghost` never invoked
       - `Sample::Calc#sign`
         - **Method Deficit:** [L4] `Sample::Calc#sign_alias` never invoked
+        - **Method Deficit:** [L4] `Sample::Calc.sign` never invoked
       - `Sample::Calc#never_called`
         - **Method Deficit:** [L7-9] `Sample::Calc#never_called` never invoked
       - `Sample::Calc.build`
@@ -120,6 +123,24 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
       expect(described_class::MethodDeficit.from_file(live).map(&:name)).to eq(["#{described_class}#never_called"])
     end
 
+    # Nodes carry no columns, so two definitions on one line resolve to the line's last node;
+    # a method deficit is only renamed after a node carrying its own bare name.
+    it 'keeps the name SimpleCov derived for a method sharing its first line with another definition' do
+      pair_path = write_source(tmpdir, 'pair.rb', "def a; 1; end; def b; 2; end\n")
+      methods = { ['Object', :a, 1, 0, 1, 13] => 0, ['Object', :b, 1, 15, 1, 28] => 0 }
+      pair = result_for(pair_path => { 'lines' => [1], 'methods' => methods })
+      digest = measuring_methods(pair, pair_path => methods) { digest_for(pair) }
+      expect(digest).to eq(expected_header('FAILED', '100.0%', '100.0%', method_label: '0.0%') + <<~MARKDOWN)
+        ## Coverage Deficits
+
+        ### `pair.rb`
+        - `Object#b`
+          - **Method Deficit:** [L1] `Object#a` never invoked
+          - **Method Deficit:** [L1] `Object#b` never invoked
+
+      MARKDOWN
+    end
+
     it 'lists missed methods under the raw line numbers when the AST cannot be resolved' do
       broken_path = write_source(tmpdir, 'broken.rb', "class Broken\n  def half\n    1 +\n  end\n")
       methods = { ['Broken', :half, 2, 2, 4, 5] => 0 }
@@ -160,7 +181,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
     it 'quotes a branch without column data from its whole line, truncating both to the snippet budget' do
       config.max_snippet_lines = 1
       expect(digest_for(long_arm_result)).to end_with(<<~MARKDOWN)
-        - `#pick`
+        - `Object#pick`
           - **Branch Deficit:** [L2] Missing coverage for `then` branch: `:#{'a' * 79}...`
           - **Branch Deficit:** [L2] Missing coverage for `else` branch: `flag ? :#{'a' * 72}...`
 
@@ -177,7 +198,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
         ## Coverage Deficits
 
         ### `sign.rb`
-        - `#sign`
+        - `Object#sign`
           - **Branch Deficit:** [L2] Missing coverage for `else` branch: `:neg`
 
       MARKDOWN
@@ -237,7 +258,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
 
     it 'cuts an arm that spans another missed arm ending on its last line' do
       expect(digest_for(tail_result)).to end_with(<<~MARKDOWN)
-        - `#classify`
+        - `Object#classify`
           - **Line Deficit:** [L5] `parity = number.odd?`
           - **Line Deficit:** [L6] `:odd if parity`
           - **Branch Deficit:** [L5-6] Missing coverage for `else` branch: `parity = number.odd?...`
@@ -252,7 +273,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
         ## Coverage Deficits
 
         ### `chain.rb`
-        - `#classify`
+        - `Object#classify`
           - **Line Deficit:** [L4] `elsif number.odd?`
           - **Line Deficit:** [L5] `:odd`
           - **Line Deficit:** [L7] `:even`

@@ -17,6 +17,7 @@ module ResolverCorpus
   MAX_FILE_BYTES = 200_000
   MAX_FILES = Integer(ENV.fetch('RESOLVER_CORPUS_MAX_FILES', 600))
   RESOLVER = SimpleCov::Formatter::AIFormatter::ASTResolver
+  ROOT_TYPE = RESOLVER::SemanticNode::ROOT_TYPE
 
   module_function
 
@@ -58,7 +59,7 @@ module ResolverCorpus
   def root_violations(path, root)
     line_count = [RESOLVER.read_source(path).lines.size, 1].max
     problems = []
-    problems << "first node is #{root.name} (#{root.type}), not the root scope" unless root.root?
+    problems << "first node is #{root.name} (#{root.type}), not the root scope" unless root.type == ROOT_TYPE
     problems << "root spans #{root.line_range} for #{line_count} lines" unless root.line_range == (1..line_count)
     problems
   end
@@ -72,7 +73,7 @@ module ResolverCorpus
 
   def identity_violations(node)
     problems = []
-    problems << "#{node.name}: a second root scope" if node.root?
+    problems << "#{node.name}: a second root scope" if node.type == ROOT_TYPE
     problems << "empty name for #{node.type} at #{node.start_line}" if node.name.empty?
     problems
   end

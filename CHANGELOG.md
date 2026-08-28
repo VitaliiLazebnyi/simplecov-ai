@@ -80,6 +80,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`Klass.name`), matching what Ruby defines.
 - Whether a file has deficits is decided from SimpleCov's own missed lines, branches and methods
   rather than from rounded percentages.
+- The bypass audit no longer reports a skipped region made only of comments and blank lines — a
+  `# :nocov:` pair around a note, or a doc comment that quotes `# simplecov:disable`, which
+  SimpleCov 1.x honours as an inline directive — since such a region excludes nothing from any
+  figure. The gem's own source produced two such entries; a self-audit spec now loads every lib
+  file through SimpleCov and fails on anything skipped.
+- An unwritable `report_path` (a parent that is a regular file, a read-only or full disk) no
+  longer aborts the test run from SimpleCov's `at_exit` hook: the formatter prints
+  `AI coverage digest could not be written to <path> (<error>)` on STDERR, still echoes the
+  digest when `output_to_console` is set, and never raises.
+- Only the `SyntaxError` of SimpleCov < 1.0's `eval`-based decoder is contained as undecodable
+  coverage data; a `NotImplementedError` or `LoadError` raised while a file's data is read is a
+  defect and propagates instead of being rendered as a decode error.
+- Methods defined at the top level are named after their owner — `Object#name` for a plain `def`
+  (the name SimpleCov's method coverage reports too) and `main.name` for a singleton definition —
+  instead of a bare `#name` / `.name`.
+- A method deficit is renamed after the resolver's node only when that node carries the method's
+  own name, so two definitions on one line (`def a; 1; end; def b; 2; end`) no longer report `a`
+  as `b`.
+- An empty snippet (a file that cannot be read) renders as a code span holding one space instead
+  of two bare backticks, which CommonMark shows literally.
+- `DeficitGroup` no longer relies on sorbet-runtime prop defaults, which fail on JRuby.
 
 ### Changed
 

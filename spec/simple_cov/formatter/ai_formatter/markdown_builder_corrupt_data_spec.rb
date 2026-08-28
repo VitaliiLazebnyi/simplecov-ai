@@ -71,7 +71,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
   end
 
   def plain_deficits
-    "### `aaa_plain.rb`\n- `#plain`\n  - **Line Deficit:** [L1] `def plain`\n  - **Line Deficit:** [L2] `1`\n\n"
+    "### `aaa_plain.rb`\n- `Object#plain`\n  - **Line Deficit:** [L1] `def plain`\n  - **Line Deficit:** [L2] `1`\n\n"
   end
 
   it 'reports the decode error for that file first, keeps the other files and marks every global figure N/A' do
@@ -107,7 +107,8 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
     it 'still lists the method deficits of the files that decode, matching the N/A method line' do
       skip 'method coverage needs SimpleCov >= 1.0' unless method_coverage_supported?
       digest = measuring_methods(healthy_result, {}) { digest_for(healthy_result) }
-      method_deficit = "### `aaa_plain.rb`\n- `#plain`\n  - **Method Deficit:** [L1-3] `#plain` never invoked\n\n"
+      method_deficit = "### `aaa_plain.rb`\n- `Object#plain`\n  " \
+                       "- **Method Deficit:** [L1-3] `Object#plain` never invoked\n\n"
       expect(digest).to eq(report(undecodable_header, [error_block(ArgumentError), method_deficit],
                                   [error_block(ArgumentError)]))
     end

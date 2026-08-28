@@ -12,10 +12,16 @@ module SimpleCov
         module InlineCode
           extend T::Sig
 
-          # @param text [String] The literal text to show verbatim.
+          # The span standing in for empty text: two bare backticks are not a code span in
+          # CommonMark and would render literally, while a span holding one space is.
+          EMPTY_SPAN = T.let('` `', String)
+
+          # @param text [String] The literal text to show verbatim; empty text renders as {EMPTY_SPAN}.
           # @return [String] The text wrapped in a code span that is safe for any content.
           sig { params(text: String).returns(String) }
           def self.span(text)
+            return EMPTY_SPAN if text.empty?
+
             fence = '`' * ((text.scan(/`+/).map(&:length).max || 0) + 1)
             content = text.start_with?('`') || text.end_with?('`') ? " #{text} " : text
             "#{fence}#{content}#{fence}"

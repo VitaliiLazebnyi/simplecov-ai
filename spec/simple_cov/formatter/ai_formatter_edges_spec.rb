@@ -94,6 +94,18 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
     end
   end
 
+  describe 'line endings' do
+    # SimpleCov reads sources in binary mode, so a CRLF file — every file written in text mode on
+    # Windows — reaches the formatter with "\r\n" on each line; snippets are stripped of it.
+    it 'renders the snippets of a CRLF source without carriage returns' do
+      freeze_time
+      path = write_source(tmpdir, 'crlf.rb', "def read\r\n  1\r\nend\r\n")
+      deficits = "## Coverage Deficits\n\n### `crlf.rb`\n- `Object#read`\n  - **Line Deficit:** [L2] `1`\n\n"
+      expect(report_for(result_for(path => { 'lines' => [1, 0, nil] })))
+        .to eq(expected_header('FAILED', '50.0%', '100.0%') + deficits)
+    end
+  end
+
   # SimpleCov releases before 1.1 raise ArgumentError from their own line classification when a
   # source line carries invalid UTF-8 bytes (1.1 scrubs the source first), so no formatter can
   # process such a project there; the example verifies the formatter's side where SimpleCov can.

@@ -536,3 +536,21 @@ The header formatted percentages with `Float#round(1)`, which rounds a value jus
 ### Remediation
 
 Percentages are floored to one decimal (`percent.floor(1)`), so 99.96% reads `99.9%`.
+
+## BUG-SCAI-022: Comment-Only Skip Regions Reported as Bypasses
+
+**Violated Requirement:** [SCAI-REQ-013] Directive Auditing
+**Status:** Remediated in v0.11.0
+**Date Logged:** 2026-08-29
+
+### Description
+
+The digest of the gem's own suite listed two `Bypass Present` entries, for `MarkdownBuilder` and `MarkdownBuilder::SkipRegions`, quoting `` `# :nocov:` pairs, `# simplecov:disable` `` as the directive. Nothing had been excluded from any figure: the "directives" were YARD comments in `skip_regions.rb` describing the markers. Any project whose comments mention `# simplecov:disable` gets the same false positive on SimpleCov 1.x.
+
+### Root Cause Analysis
+
+SimpleCov 1.x matches `#\s*simplecov\s*:\s*disable` anywhere inside a comment token and, finding text before it on the line, treats it as an inline directive that skips that line. `SkipRegions` turned every skipped line into a region regardless of what the line held, and quoted the first directive-like fragment on the line as the reason — the `` `# :nocov:` `` fragment, not even the text SimpleCov had honoured. The repository's directive auditor only matches lines that start with a marker, so the gem's own comments passed it.
+
+### Remediation
+
+A skipped region consisting only of comments and blank lines — lines SimpleCov's own `LinesClassifier` never counts, whether the file was loaded or only tracked — excludes nothing and is dropped by `SkipRegions.of`; a region holding at least one relevant line remains a bypass, and skipped branches are relevant by construction. The offending comments spell the directives without their leading `#`, and `spec/quality/self_audit_spec.rb` loads every lib file as a `SimpleCov::SourceFile` with a probe branch and method on every line, failing on any skipped line, branch or method.

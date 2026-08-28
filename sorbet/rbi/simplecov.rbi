@@ -38,6 +38,13 @@ module SimpleCov
     def each(*arg, **arg1, &arg2); end
   end
 
+  # The relevance classifier SimpleCov applies to the files it tracks: `whitespace_line?` is
+  # its verdict that a line is a comment or blank and therefore never counted.
+  class LinesClassifier
+    sig { params(line: String).returns(T::Boolean) }
+    def self.whitespace_line?(line); end
+  end
+
   class Result
     sig { returns(SimpleCov::FileList) }
     def files; end
@@ -66,6 +73,10 @@ module SimpleCov
     class Line
       sig { returns(Integer) }
       def line_number; end
+
+      # The line's source text, trailing newline included.
+      sig { returns(String) }
+      def src; end
 
       sig { returns(T::Boolean) }
       def skipped?; end

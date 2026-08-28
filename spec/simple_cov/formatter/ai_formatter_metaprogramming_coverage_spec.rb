@@ -2,13 +2,13 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require 'coverage'
 require 'tmpdir'
 require 'fileutils'
 
 # Measures the fixture's real coverage through the suite's own Coverage session and formats it.
 # Under mutant no coverage session runs (see spec_helper.rb), so these examples are excluded
-# there (`mutant: false`); the formatter's subjects are covered by the exact-report specs.
+# there (`mutant: false`); the formatter's subjects are covered by the exact-report specs. On an
+# engine that records no branch coverage the example is skipped after the report is produced.
 RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
   let(:fixture_path) { File.expand_path('../../fixtures/metaprogramming_constructs.rb', __dir__) }
   let(:report_path) { 'coverage/metaprogramming_test_ai_report.md' }
@@ -45,23 +45,18 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
     # 5. Singleton class / Eigenclass
     MetaprogrammingConstructs.eigen_method(true)
 
-    described_class.configure do |c|
-      c.report_path = report_path
-      c.output_to_console = false
+    described_class.configure do |config|
+      config.report_path = report_path
+      config.output_to_console = false
     end
-
-    coverage_result = Coverage.peek_result
-    fixture_cov = coverage_result.select { |k, _v| k == fixture_path }
-    original_filters = SimpleCov.filters.dup
-    SimpleCov.filters.clear
-    result = SimpleCov::Result.new(fixture_cov)
-    SimpleCov.filters.replace(original_filters)
-
-    formatter = described_class.new
-    capture_stdout { formatter.format(result) }
+    capture_stdout { described_class.new.format(session_result(fixture_path)) }
+    # Formatting proves that what this engine's Coverage recorded builds a Result and renders; the
+    # example asserts branch deficits, which only an engine recording branches can produce.
+    skip 'this engine records no branch coverage' unless branch_coverage_measurable?
   end
 
   after do
+    described_class.reset_configuration!
     FileUtils.rm_f(report_path)
   end
 

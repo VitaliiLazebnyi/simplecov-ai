@@ -20,6 +20,10 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::DecodeGuard d
     it 'lets signals and other non-error exceptions through' do
       expect { described_class.attempt(:fallback) { raise Interrupt } }.to raise_error(Interrupt)
     end
+
+    it 'lets a NotImplementedError through: a ScriptError, but a defect rather than undecodable data' do
+      expect { described_class.attempt(:fallback) { raise NotImplementedError } }.to raise_error(NotImplementedError)
+    end
   end
 
   describe '.render' do
@@ -39,6 +43,10 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::DecodeGuard d
 
     it 'lets signals and other non-error exceptions through' do
       expect { described_class.render { raise NoMemoryError } }.to raise_error(NoMemoryError)
+    end
+
+    it 'lets a NotImplementedError through instead of rendering it as undecodable data' do
+      expect { described_class.render { raise NotImplementedError } }.to raise_error(NotImplementedError)
     end
   end
 end

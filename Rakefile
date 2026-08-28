@@ -15,6 +15,12 @@ SORBET_SUPPORTED = RUBY_ENGINE == 'ruby' && !Gem.win_platform?
 FLAY_MASS_THRESHOLD = 40
 # flog scores above this on a single method mean it should be split up.
 FLOG_METHOD_THRESHOLD = 35
+# Docker images the `check:*` tasks run the suite in through bin/check-ruby. The official jruby
+# image ships no C compiler, which prism (pulled in through rubocop-ast) needs to build, so the
+# JRuby task installs one before `bundle install`.
+JRUBY_IMAGE = 'jruby:9.4'
+JRUBY_SETUP = 'apt-get update -qq && apt-get install -y -qq build-essential'
+TRUFFLERUBY_IMAGE = 'ghcr.io/graalvm/truffleruby-community:latest'
 
 # `-w` turns on Ruby's verbose warnings; spec/support/warnings.rb fails the suite on any warning
 # raised by the gem's own files (dependencies may warn freely), exactly as the CI test jobs run.
@@ -88,6 +94,29 @@ task :quality do
 
   # Informational only: the formatter's public API is invoked by SimpleCov, not from lib/.
   sh 'bundle', 'exec', 'debride', 'lib'
+end
+
+# `rake check:jruby`, `rake check:truffleruby` and `rake 'check:ruby[2.7]'` run the suite on another
+# Ruby inside its official Docker image (bin/check-ruby, see CONTRIBUTING.md). An optional last
+# argument replaces the command, e.g. `rake 'check:ruby[3.4,bundle exec rspec spec/quality]'`;
+# BUNDLE_GEMFILE is inherited, so a SimpleCov gemfile can be selected the same way as for rspec.
+namespace :check do
+  desc 'Run the suite on JRuby 9.4 in Docker (bin/check-ruby jruby:9.4, C compiler installed first)'
+  task :jruby, [:command] do |_task, args|
+    sh({ 'CHECK_RUBY_SETUP' => JRUBY_SETUP }, 'bin/check-ruby', JRUBY_IMAGE, *[args[:command]].compact)
+  end
+
+  desc 'Run the suite on TruffleRuby in Docker (bin/check-ruby ghcr.io/graalvm/truffleruby-community:latest)'
+  task :truffleruby, [:command] do |_task, args|
+    sh('bin/check-ruby', TRUFFLERUBY_IMAGE, *[args[:command]].compact)
+  end
+
+  desc 'Run the suite on another Ruby in Docker, as in rake check:ruby[2.7] (bin/check-ruby <version|image>)'
+  task :ruby, %i[version command] do |_task, args|
+    abort 'usage: rake check:ruby[<ruby-version|image>[,<command>]]' unless args[:version]
+
+    sh('bin/check-ruby', args[:version], *[args[:command]].compact)
+  end
 end
 
 task default: %i[spec rubocop typecheck docs audit build]

@@ -3,6 +3,7 @@
 
 require 'spec_helper'
 require 'fileutils'
+require 'pathname'
 require 'tmpdir'
 
 # Whole-report expectations: the strongest oracle for every subject of the gem under mutant
@@ -86,6 +87,17 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
     File.read(report_path)
   end
 
+  # Runs the block with both standard streams captured; returns what each received.
+  def capture_streams
+    original_streams = [$stdout, $stderr]
+    $stdout = StringIO.new
+    $stderr = StringIO.new
+    yield
+    [$stdout.string, $stderr.string]
+  ensure
+    $stdout, $stderr = original_streams
+  end
+
   describe '.configure' do
     it 'yields the process-global configuration' do
       described_class.configure { |configuration| configuration.max_file_size_kb = 10 }
@@ -145,7 +157,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
         ## Coverage Deficits
 
         ### `wide.rb`
-        - `#wide`
+        - `Object#wide`
           - **Line Deficit:** [L2] `#{'a' * 80}...`
 
       MARKDOWN
@@ -208,7 +220,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
             - **Line Deficit:** [L8] `@never = 1` (Occurrence 1 of 2).
             - **Line Deficit:** [L9] `@never = 1` (Occurrence 2 of 2).
           - `Lines 99-100`
-            - **Branch Deficit:** [L99-100] Missing coverage for `then` branch: ``
+            - **Branch Deficit:** [L99-100] Missing coverage for `then` branch: ` `
 
         MARKDOWN
       end
@@ -227,10 +239,10 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
 
           ### `calc.rb`
           - `Sample::Calc#sign`
-            - **Branch Deficit:** [L4] Missing coverage for `else` branch: ``
+            - **Branch Deficit:** [L4] Missing coverage for `else` branch: ` `
           - `Sample::Calc#never_called`
-            - **Line Deficit:** [L8] ``
-            - **Line Deficit:** [L9] ``
+            - **Line Deficit:** [L8] ` `
+            - **Line Deficit:** [L9] ` `
 
         MARKDOWN
       end
@@ -293,27 +305,129 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
         expect(described_class::ASTResolver).to have_received(:resolve).with(legacy_path).once
       end
     end
+
+    context 'with a skip region wrapping only comments next to one wrapping code' do
+      let(:notes_path) { write_source(tmpdir, 'notes.rb', notes_source) }
+      let(:notes_result) do
+        result_for(notes_path => { 'lines' => line_hits(15, covered: [1, 7, 12], missed: [8, 13]) })
+      end
+
+      def notes_source
+        <<~RUBY
+          class Notes
+            #{nocov_marker}
+            # Historical note kept for context.
+            #{nocov_marker}
+
+            #{nocov_marker}
+            def obsolete
+              raise NotImplementedError
+            end
+            #{nocov_marker}
+
+            def live
+              :live
+            end
+          end
+        RUBY
+      end
+
+      it 'lists only the region that excludes code from the metrics as a bypass' do
+        expect(format_and_read(notes_result)).to eq(expected_header('FAILED', '66.6%', '100.0%') + <<~MARKDOWN)
+          ## Coverage Deficits
+
+          ### `notes.rb`
+          - `Notes#live`
+            - **Line Deficit:** [L13] `:live`
+
+          ## Ignored Coverage Bypasses
+
+          ### `notes.rb`
+          - `Notes#obsolete`
+            - **Bypass Present:** Coverage explicitly ignored via `#{nocov_marker}`.
+
+        MARKDOWN
+      end
+    end
+
+    # SimpleCov runs formatters from its at_exit hook, where an exception would fail an
+    # otherwise passing test run.
+    context 'when the report cannot be written' do
+      let(:blocking_file) { File.join(tmpdir, 'blocker') }
+      let(:report_path) { File.join(blocking_file, 'report.md') }
+
+      before { File.write(blocking_file, '') }
+
+      # The error the report's directory creation fails with, as this platform words it.
+      def creation_failure
+        Dir.mkdir(blocking_file)
+      rescue SystemCallError => error
+        error.message
+      end
+
+      def expected_warning
+        "AI coverage digest could not be written to #{report_path} (#{creation_failure})\n"
+      end
+
+      it 'warns on STDERR, prints nothing on STDOUT and does not raise' do
+        expect(capture_streams { formatter.format(calc_result) }).to eq(['', expected_warning])
+      end
+
+      it 'still echoes the digest to STDOUT when output_to_console is on' do
+        config.output_to_console = true
+        expect(capture_streams { formatter.format(calc_result) }).to eq([expected_calc_digest, expected_warning])
+      end
+    end
+
+    # An IOError (a stream closed underneath the write) is not a SystemCallError, and no
+    # filesystem arrangement provokes one, so the write itself is made to fail.
+    context 'when the write itself fails with an IOError' do
+      before do
+        allow(File).to receive(:write).and_call_original
+        allow(File).to receive(:write).with(report_path, anything).and_raise(IOError, 'closed stream')
+      end
+
+      it 'warns on STDERR instead of raising' do
+        expect(capture_streams { formatter.format(calc_result) })
+          .to eq(['', "AI coverage digest could not be written to #{report_path} (closed stream)\n"])
+      end
+    end
   end
 
   describe 'report destination' do
+    # Formats `result` with every relative directory creation or file write refused, so a
+    # destination wrongly resolved against the working directory (a regression, or a mutant of
+    # the path resolution) fails here instead of littering the checkout with `reports/` or
+    # `ai_report.md`.
+    def format_refusing_relative_paths(result)
+      { FileUtils => :mkdir_p, File => :write }.each do |receiver, method_name|
+        allow(receiver).to receive(method_name).and_wrap_original do |original, path, *arguments|
+          raise ArgumentError, "relative path #{path.inspect}" unless Pathname.new(path).absolute?
+
+          original.call(path, *arguments)
+        end
+      end
+      capture_stdout { formatter.format(result) }
+    end
+
     it 'writes to ai_report.md inside SimpleCov.coverage_path when no report_path is configured' do
       described_class.reset_configuration!
       coverage_dir = File.join(tmpdir, 'custom_cov')
       allow(SimpleCov).to receive(:coverage_path).and_return(coverage_dir)
-      capture_stdout { formatter.format(calc_result) }
+      format_refusing_relative_paths(calc_result)
       expect(File.read(File.join(coverage_dir, 'ai_report.md'))).to eq(expected_calc_digest)
     end
 
     it 'resolves a relative report_path against SimpleCov.root' do
       config.report_path = 'reports/digest.md'
-      capture_stdout { formatter.format(calc_result) }
+      format_refusing_relative_paths(calc_result)
       expect(File.read(File.join(tmpdir, 'reports', 'digest.md'))).to eq(expected_calc_digest)
     end
 
     it 'uses an absolute report_path unchanged' do
       absolute = File.join(tmpdir, 'nested', 'abs_report.md')
       config.report_path = absolute
-      capture_stdout { formatter.format(calc_result) }
+      format_refusing_relative_paths(calc_result)
       expect(File.read(absolute)).to eq(expected_calc_digest)
     end
   end

@@ -6,7 +6,8 @@ require 'fileutils'
 require 'tmpdir'
 
 # Regions come from SimpleCov's own skip verdicts, so `# simplecov:disable` scenarios expect a
-# region on SimpleCov >= 1.0 (which implements the directive) and none on older releases.
+# region on SimpleCov >= 1.0 (which implements the directive) and none on older releases. A
+# skipped region made only of comments and blank lines excludes nothing and is never a region.
 RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::SkipRegions do
   let(:tmpdir) { Dir.mktmpdir('scai') }
 
@@ -39,6 +40,29 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::SkipRegions d
   it 'keeps separate regions for separate nocov pairs' do
     source = "#{nocov_marker}\nA = 1\n#{nocov_marker}\nB = 2\n#{nocov_marker}\nC = 3\n#{nocov_marker}\n"
     expect(regions_of(source)).to eq([[1..3, nocov_marker], [5..7, nocov_marker]])
+  end
+
+  it 'drops a nocov pair that wraps only comments and blank lines, which excludes nothing' do
+    source = "class A\n  #{nocov_marker}\n  # a note\n\n  #{nocov_marker}\n  def a\n  end\nend\n"
+    expect(regions_of(source)).to eq([])
+  end
+
+  it 'keeps a nocov pair that wraps a comment and a statement' do
+    source = "class A\n  #{nocov_marker}\n  # a note\n  def a\n  end\n  #{nocov_marker}\nend\n"
+    expect(regions_of(source)).to eq([[2..6, nocov_marker]])
+  end
+
+  it 'keeps only the regions holding a relevant line when a comment-only region sits beside them' do
+    source = "#{nocov_marker}\n# one\n#{nocov_marker}\nB = 2\n#{nocov_marker}\nA = 1\n#{nocov_marker}\n"
+    expect(regions_of(source)).to eq([[5..7, nocov_marker]])
+  end
+
+  # SimpleCov >= 1.0 honours a directive wherever it appears in a comment, so a comment quoting
+  # one is an inline directive that skips its own line — a comment, hence no bypass.
+  it 'reports no region for a comment that merely mentions a directive, although SimpleCov skips it' do
+    file = file_for("def a\n  # see `# simplecov:disable` in the README\n  1\nend\n")
+    skipped = file.skipped_lines.map(&:line_number)
+    expect([skipped, described_class.of(file, file.src)]).to eq([when_directives_supported([2]), []])
   end
 
   it 'reports a simplecov:disable block with its full comment as the reason' do

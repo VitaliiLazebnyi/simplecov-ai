@@ -21,6 +21,9 @@ module SimpleCov
           TYPE_INSTANCE_METHOD = T.let('Instance Method', String)
           # Label applied to nodes representing singleton methods
           TYPE_SINGLETON_METHOD = T.let('Singleton Method', String)
+          # Owner of a method defined at the top level of a file with a plain `def`: Ruby adds it
+          # to Object (as a private method), and SimpleCov's method coverage names it that way too
+          TOP_LEVEL_INSTANCE_OWNER = T.let('Object', String)
 
           # @return [[String, SemanticNode, nil, Boolean]] The child context, the node's own
           #   SemanticNode (or nil), and whether children are in singleton scope.
@@ -126,20 +129,28 @@ module SimpleCov
             context.empty? ? name : "#{context}#{NAMESPACE_SEPARATOR}#{name}"
           end
 
-          # Builds a method node named `Context#name` (instance) or `Context.name` (singleton);
-          # at the top level the context is empty and the name is just the separator and name.
+          # Builds a method node named `Context#name` (instance) or `Context.name` (singleton). At
+          # the top level the context is empty and the owner is the one Ruby uses there: `Object`
+          # for a plain `def` (`Object#name`, the name SimpleCov's method coverage reports as well)
+          # and `main`, the top-level object, for a singleton definition (`main.name`).
           sig do
             params(node: Parser::AST::Node, context: String, name: String, singleton: T::Boolean)
               .returns(SemanticNode)
           end
           def self.method_node(node, context, name, singleton)
+            owner = context.empty? ? top_level_owner(singleton) : context
             separator = singleton ? SINGLETON_SEPARATOR : INSTANCE_SEPARATOR
             type = singleton ? TYPE_SINGLETON_METHOD : TYPE_INSTANCE_METHOD
-            SemanticNode.spanning(node, name: "#{context}#{separator}#{name}", type: type)
+            SemanticNode.spanning(node, name: "#{owner}#{separator}#{name}", type: type, method_name: name)
+          end
+
+          sig { params(singleton: T::Boolean).returns(String) }
+          def self.top_level_owner(singleton)
+            singleton ? SemanticNode::ROOT_NAME : TOP_LEVEL_INSTANCE_OWNER
           end
 
           private_class_method :block_metadata, :singleton_class_metadata, :class_metadata, :method_metadata,
-                               :singleton_method_metadata, :nest, :method_node
+                               :singleton_method_metadata, :nest, :method_node, :top_level_owner
         end
       end
     end

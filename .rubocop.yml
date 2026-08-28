@@ -5,6 +5,7 @@ AllCops:
   # Setting Exclude replaces RuboCop's defaults, so they are restated here. The generated gem
   # RBIs (`bin/tapioca gem`) are machine-written and never hand-edited, hence not linted.
   Exclude:
+    - ".claude/**/*"
     - ".git/**/*"
     - "coverage/**/*"
     - "doc/**/*"

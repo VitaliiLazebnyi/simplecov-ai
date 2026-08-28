@@ -21,12 +21,21 @@ module SimpleCov
           sig { returns(Integer) }
           attr_reader :start_line, :end_line
 
-          sig { params(name: String, type: String, start_line: Integer, end_line: Integer).void }
-          def initialize(name:, type:, start_line:, end_line:)
+          # @return [String, nil] The bare method name of a method node (`sign` of
+          #   `Sample::Calc#sign`); nil for every other kind of node.
+          sig { returns(T.nilable(String)) }
+          attr_reader :method_name
+
+          sig do
+            params(name: String, type: String, start_line: Integer, end_line: Integer,
+                   method_name: T.nilable(String)).void
+          end
+          def initialize(name:, type:, start_line:, end_line:, method_name: nil)
             @name = name
             @type = type
             @start_line = start_line
             @end_line = end_line
+            @method_name = method_name
           end
 
           # Builds the synthetic root node covering a whole file, so code outside any class or
@@ -45,24 +54,16 @@ module SimpleCov
           # @param ast_node [Parser::AST::Node] The AST node supplying the location.
           # @param name [String] The fully qualified semantic name.
           # @param type [String] The type label.
+          # @param method_name [String, nil] The bare method name, for a method node.
           # @return [SemanticNode] A node bounded by the AST node's first and last lines.
-          sig { params(ast_node: Parser::AST::Node, name: String, type: String).returns(SemanticNode) }
-          def self.spanning(ast_node, name:, type:)
+          sig do
+            params(ast_node: Parser::AST::Node, name: String, type: String, method_name: T.nilable(String))
+              .returns(SemanticNode)
+          end
+          def self.spanning(ast_node, name:, type:, method_name: nil)
             location = T.cast(ast_node.loc, Parser::Source::Map)
             new(name: name, type: type, start_line: T.cast(location.line, Integer),
-                end_line: T.cast(location.last_line, Integer))
-          end
-
-          # @return [Boolean] Whether this is the synthetic root node of a file.
-          sig { returns(T::Boolean) }
-          def root?
-            type == ROOT_TYPE
-          end
-
-          # @return [Boolean] Whether this node is a method definition (instance or singleton).
-          sig { returns(T::Boolean) }
-          def method?
-            [NodeClassifier::TYPE_INSTANCE_METHOD, NodeClassifier::TYPE_SINGLETON_METHOD].include?(type)
+                end_line: T.cast(location.last_line, Integer), method_name: method_name)
           end
 
           # @return [Range<Integer>] The inclusive line range this node spans.

@@ -16,6 +16,8 @@ module SimpleCov
 
           # @return [String] The method's semantic name (`Klass#name` or `Klass.name`).
           const :name, String
+          # @return [String] The bare method name, without its owner.
+          const :method_name, String
           # @return [Integer] The first line of the definition.
           const :start_line, Integer
           # @return [Integer] The last line of the definition.
@@ -42,7 +44,8 @@ module SimpleCov
           def self.from_file(file)
             missed_methods = (file.respond_to?(:missed_methods) && file.missed_methods) || []
             missed_methods.map do |missed_method|
-              new(name: qualified_name(missed_method.class_name.to_s, missed_method.method_name.to_s),
+              method_name = missed_method.method_name.to_s
+              new(name: qualified_name(missed_method.class_name.to_s, method_name), method_name: method_name,
                   start_line: missed_method.start_line, end_line: missed_method.end_line)
             end
           end
@@ -60,16 +63,20 @@ module SimpleCov
           end
         end
 
-        # Groups unexecuted lines, branches and methods under their common semantic node.
+        # Groups unexecuted lines, branches and methods under their common semantic node. The
+        # props declare no `default:` — sorbet-runtime's default machinery
+        # (`T::Props::Private::ApplyPrimitiveDefault`) fails on JRuby — so every construction
+        # site passes the collections it starts from; the nilable node may be left out, and is
+        # nil then.
         class DeficitGroup < T::Struct
           # @return [ASTResolver::SemanticNode, nil] The corresponding structural boundary
-          prop :semantic_node, T.nilable(ASTResolver::SemanticNode), default: nil
+          prop :semantic_node, T.nilable(ASTResolver::SemanticNode)
           # @return [Array<SimpleCov::SourceFile::Line>] The missed source lines
-          prop :lines, T::Array[SimpleCov::SourceFile::Line], default: []
+          prop :lines, T::Array[SimpleCov::SourceFile::Line]
           # @return [Array<SimpleCov::SourceFile::Branch>] The missed conditional branches
-          prop :branches, T::Array[SimpleCov::SourceFile::Branch], default: []
+          prop :branches, T::Array[SimpleCov::SourceFile::Branch]
           # @return [Array<MethodDeficit>] The methods never invoked
-          prop :method_deficits, T::Array[MethodDeficit], default: []
+          prop :method_deficits, T::Array[MethodDeficit]
         end
       end
     end

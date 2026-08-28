@@ -23,7 +23,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::InlineCode do
     expect(described_class.span(reason)).to eq("``#{reason}``")
   end
 
-  it 'renders an empty span for empty text' do
-    expect(described_class.span('')).to eq('``')
+  it 'renders a span holding one space for empty text, since two bare backticks are not a code span' do
+    expect(described_class.span('')).to eq('` `')
   end
 end

@@ -16,17 +16,59 @@ require 'simplecov'
 # paths are exercised by giving real objects the readers 1.0 added (see {#measuring_methods}),
 # which keeps the suite at 100% coverage on every supported SimpleCov and proves the
 # degradation logic against the real 0.x objects.
+#
+# Two questions are kept apart: whether the installed SimpleCov has an API (`*_supported?`) and
+# whether the running Ruby's Coverage can record a criterion in a live run (`*_measurable?`).
+# JRuby and TruffleRuby record neither branches nor methods, yet the hand-built data below drives
+# the real SimpleCov objects there all the same (spec_helper.rb lifts SimpleCov's engine gate for
+# the examples); only a child process measuring real code (spec/integration) depends on the engine.
 module SimpleCovFixtures
   # The nocov marker, assembled from fragments so the repository directive auditor (which scans
   # spec sources for literal marker lines) does not flag this helper.
   NOCOV_MARKER = ['# :noc', 'ov:'].join.freeze
 
-  # Duck-typed stand-in for `SimpleCov::SourceFile::Method` on SimpleCov < 1.0.
-  EmulatedMethod = Struct.new(:class_name, :method_name, :start_line, :end_line, :coverage) do
-    def missed?
-      coverage.zero?
+  # What this Ruby's Coverage records in a live run — a different question from what the
+  # installed SimpleCov has an API for (see {#method_coverage_supported?}).
+  module Engine
+    # Whether Coverage records `criterion` (`:branches` or `:methods`): asked of
+    # `Coverage.supported?` where it exists (Ruby >= 3.2, TruffleRuby) and assumed for MRI alone
+    # before that (JRuby 9.4 has neither the query nor the criteria).
+    #
+    # @param criterion [Symbol] A `Coverage.start` keyword.
+    # @return [Boolean]
+    def self.measures?(criterion)
+      return Coverage.supported?(criterion) if Coverage.respond_to?(:supported?)
+
+      RUBY_ENGINE == 'ruby'
     end
   end
+
+  # Method coverage on a SimpleCov without the API (< 1.0): real objects are given the readers
+  # SimpleCov 1.0 added, derived from method descriptors exactly as SimpleCov 1.x derives them.
+  module MethodEmulation
+    # Duck-typed stand-in for `SimpleCov::SourceFile::Method`.
+    EmulatedMethod = Struct.new(:class_name, :method_name, :start_line, :end_line, :coverage) do
+      def missed?
+        coverage.zero?
+      end
+    end
+
+    # Gives a real SimpleCov < 1.0 SourceFile the `missed_methods` reader of SimpleCov >= 1.0.
+    def emulate_method_coverage!(file, methods)
+      emulated = methods.map do |descriptor, hits|
+        class_name, method_name, start_line, _start_col, end_line, _end_col = descriptor
+        EmulatedMethod.new(class_name, method_name, start_line, end_line, hits)
+      end
+      file.define_singleton_method(:missed_methods) { emulated.select(&:missed?) }
+    end
+
+    # Gives a real SimpleCov < 1.0 Result the aggregate method counters of SimpleCov >= 1.0.
+    def emulate_method_totals!(result, covered:, total:)
+      result.define_singleton_method(:total_methods) { total }
+      result.define_singleton_method(:covered_methods) { covered }
+    end
+  end
+  include MethodEmulation
 
   # @return [String] The `# :nocov:` marker line, for sources written by the examples.
   def nocov_marker
@@ -38,15 +80,30 @@ module SimpleCovFixtures
     defined?(SimpleCov::Directive) ? true : false
   end
 
-  # @return [Boolean] Whether the installed SimpleCov (>= 1.0) can measure method coverage.
+  # @return [Boolean] Whether the installed SimpleCov (>= 1.0) has the method coverage API.
   def method_coverage_supported?
     SimpleCov::SourceFile.method_defined?(:missed_methods)
   end
 
+  # @return [Boolean] Whether a run on this Ruby records branch coverage.
+  def branch_coverage_measurable?
+    Engine.measures?(:branches)
+  end
+
+  # @return [Boolean] Whether a run on this Ruby with the installed SimpleCov records method
+  #   coverage.
+  def method_coverage_measurable?
+    method_coverage_supported? && Engine.measures?(:methods)
+  end
+
+  # Writes the source byte for byte. SimpleCov reads sources back in binary mode, so a text-mode
+  # write would make a fixture's lines differ from what SimpleCov loads on Windows, where text
+  # mode turns every "\n" into "\r\n".
+  #
   # @return [String] The absolute path of the written source file.
   def write_source(directory, basename, code)
     path = File.join(directory, basename)
-    File.write(path, code)
+    File.binwrite(path, code)
     silence_nocov_deprecation(path)
     path
   end
@@ -104,6 +161,16 @@ module SimpleCovFixtures
     rebuilt.is_a?(Array) ? rebuilt.first : rebuilt
   end
 
+  # A result over `path` from what this process's Coverage session has recorded so far
+  # (`Coverage.peek_result`), normalised through SimpleCov's own adapter as `SimpleCov.result`
+  # does: an engine whose Coverage runs without criteria (JRuby, TruffleRuby) reports the legacy
+  # `{ path => [hits...] }` shape, which `SimpleCov::Result.new` cannot take as it is and
+  # `ResultAdapter` turns into `{ 'lines' => [hits...] }`.
+  def session_result(path)
+    recorded = Coverage.peek_result.select { |recorded_path, _coverage| recorded_path == path }
+    result_for(SimpleCov::ResultAdapter.call(recorded))
+  end
+
   def without_simplecov_filters
     original_filters = SimpleCov.filters.dup
     SimpleCov.filters.clear
@@ -157,21 +224,5 @@ module SimpleCovFixtures
     yield
   ensure
     SimpleCov.coverage_criteria.delete(:method)
-  end
-
-  # Gives a real SimpleCov < 1.0 SourceFile the `missed_methods` reader of SimpleCov >= 1.0,
-  # derived from method descriptors exactly as SimpleCov 1.x derives it.
-  def emulate_method_coverage!(file, methods)
-    emulated = methods.map do |descriptor, hits|
-      class_name, method_name, start_line, _start_col, end_line, _end_col = descriptor
-      EmulatedMethod.new(class_name, method_name, start_line, end_line, hits)
-    end
-    file.define_singleton_method(:missed_methods) { emulated.select(&:missed?) }
-  end
-
-  # Gives a real SimpleCov < 1.0 Result the aggregate method counters of SimpleCov >= 1.0.
-  def emulate_method_totals!(result, covered:, total:)
-    result.define_singleton_method(:total_methods) { total }
-    result.define_singleton_method(:covered_methods) { covered }
   end
 end

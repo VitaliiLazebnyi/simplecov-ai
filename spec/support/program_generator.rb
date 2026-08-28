@@ -22,9 +22,15 @@ class ProgramGenerator
       context.empty? ? name : "#{context}::#{name}"
     end
 
+    # A method defined at the top level belongs to Object (a plain `def`) or to `main` (a
+    # singleton definition), the owners Ruby gives it.
     def method_name(name, singleton_method)
-      separator = singleton_method ? '.' : '#'
-      context.empty? ? "#{separator}#{name}" : "#{context}#{separator}#{name}"
+      owner = context.empty? ? top_level_owner(singleton_method) : context
+      "#{owner}#{singleton_method ? '.' : '#'}#{name}"
+    end
+
+    def top_level_owner(singleton_method)
+      singleton_method ? 'main' : 'Object'
     end
 
     def method_body

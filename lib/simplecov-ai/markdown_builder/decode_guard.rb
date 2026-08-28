@@ -12,7 +12,9 @@ module SimpleCov
         # `SyntaxError` — a `ScriptError`, which a `StandardError` rescue lets through and which
         # would otherwise abort the whole at_exit report; SimpleCov >= 1.0's `RubyDataParser`
         # raises `ArgumentError` instead, and malformed hit counts or line arrays fail with
-        # whatever `NoMethodError` or `TypeError` they provoke.
+        # whatever `NoMethodError` or `TypeError` they provoke. `SyntaxError` is the only
+        # `ScriptError` contained: a `NotImplementedError` or `LoadError` is a defect, not
+        # undecodable data, and propagates.
         module DecodeGuard
           extend T::Sig
 
@@ -34,7 +36,7 @@ module SimpleCov
           end
           def self.attempt(fallback, &blk)
             yield
-          rescue StandardError, ScriptError
+          rescue StandardError, SyntaxError
             fallback
           end
 
@@ -46,7 +48,7 @@ module SimpleCov
           sig { params(blk: T.proc.returns(T::Array[String])).returns(T::Array[String]) }
           def self.render(&blk)
             yield
-          rescue StandardError, ScriptError => error
+          rescue StandardError, SyntaxError => error
             [format(ERROR_TEMPLATE, error.class)]
           end
         end

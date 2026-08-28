@@ -95,16 +95,16 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
         expect(node_table(nodes)).to eq(expected_table)
       end
 
-      it 'marks only the first node as the root scope' do
-        expect(nodes.map(&:root?)).to eq([true] + Array.new(nodes.size - 1, false))
+      it 'types only the first node as the root scope' do
+        root_flags = nodes.map { |node| node.type == described_class::SemanticNode::ROOT_TYPE }
+        expect(root_flags).to eq([true] + Array.new(nodes.size - 1, false))
       end
 
-      it 'marks exactly the instance and singleton methods as methods' do
-        methods = nodes.select(&:method?).map(&:name)
-        expect(methods).to eq(['Versioned#version', 'Mixin#helper', 'Point#distance', 'Dynamic#literal_symbol',
-                               'Dynamic#braced', 'Dynamic#numbered', 'Dynamic.build', 'Dynamic.singleton_scoped',
-                               'Delegator#relay', 'handler.assist', 'Delegator.make', 'Registrar#opaque',
-                               'Registrar#initialize', 'Registrar#install', '@store.lookup', 'Registrar.registered'])
+      it 'gives exactly the instance and singleton methods their bare method name' do
+        expect(nodes.map(&:method_name)).to eq([nil, nil, 'version', nil, 'helper', nil, 'distance', nil, nil,
+                                                'literal_symbol', 'braced', 'numbered', 'build', 'singleton_scoped',
+                                                nil, 'relay', nil, 'assist', 'make', 'opaque', 'initialize',
+                                                'install', 'lookup', 'registered'])
       end
 
       it 'exposes each node\'s lines as an inclusive range' do
@@ -135,7 +135,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
 
     it 'counts a final line that lacks a trailing newline' do
       expect(node_table(resolve("def solo\nend"))).to eq([['main', 'Root Script Scope', 1, 2],
-                                                          ['#solo', 'Instance Method', 1, 2]])
+                                                          ['Object#solo', 'Instance Method', 1, 2]])
     end
 
     it 'names a define_method block by its string literal name' do
@@ -193,7 +193,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
 
     it 'does not mistake a method named like a builder for one' do
       nodes = resolve("Shape = factory.Struct.new(:x) do\n  def area\n  end\nend\n")
-      expect(node_table(nodes)).to eq([['main', 'Root Script Scope', 1, 4], ['#area', 'Instance Method', 2, 3]])
+      expect(node_table(nodes)).to eq([['main', 'Root Script Scope', 1, 4], ['Object#area', 'Instance Method', 2, 3]])
     end
 
     it 'prints no diagnostic to STDERR for invalid Ruby' do
@@ -257,9 +257,16 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
       expect(nodes.map(&:name)).to eq(['main', 'Outer::Inner', 'Outer::Inner#probe'])
     end
 
-    it 'names root-level methods under the root scope with bare separators' do
+    # Ruby defines a top-level `def` as a private instance method of Object (the owner SimpleCov's
+    # method coverage reports) and a top-level `def self.` as a singleton method of `main`.
+    it 'names top-level methods after their owners: Object for a def, main for a singleton definition' do
       nodes = resolve("def root_method\nend\n\ndef self.root_class_method\nend\n")
-      expect(nodes.map(&:name)).to eq(['main', '#root_method', '.root_class_method'])
+      expect(nodes.map(&:name)).to eq(['main', 'Object#root_method', 'main.root_class_method'])
+    end
+
+    it 'names the methods of a top-level `class << self` as singleton methods of main' do
+      nodes = resolve("class << self\n  def hook\n  end\nend\ndefine_singleton_method(:dynamic) { 1 }\n")
+      expect(nodes.map(&:name)).to eq(['main', 'main.hook', 'main.dynamic'])
     end
   end
 end

@@ -161,6 +161,11 @@ RSpec.describe EndToEnd do
   let(:project_dir) { Dir.mktmpdir('scai-e2e') }
   # SimpleCov >= 1.0 honours `# simplecov:disable`; older releases see plain code there.
   let(:directives) { simplecov_directives_supported? }
+  # JRuby and TruffleRuby record no branch coverage: the child's `enable_coverage :branch` is
+  # accepted there but yields no branch data, so its digest carries an N/A branch line, no branch
+  # deficit, none of the files whose only deficits were branches and no bypass for a branch-scoped
+  # directive — the README's promise that only line deficits are reported on those engines.
+  let(:branches) { branch_coverage_measurable? }
   let(:announcement) { "AI coverage digest written to #{described_class.report_path(project_dir)}\n" }
 
   before { described_class.write_project(project_dir) }
@@ -182,8 +187,9 @@ RSpec.describe EndToEnd do
 
   def header(line_pct, method_pct: nil)
     method_line = method_pct ? "**Global Method Coverage:** #{method_pct}\n" : ''
+    branch_label = branches ? '50.0%' : 'N/A (branch coverage not enabled)'
     "# AI Coverage Digest\n**Status:** FAILED\n**Global Line Coverage:** #{line_pct}\n" \
-      "**Global Branch Coverage:** 50.0%\n#{method_line}**Generated At:** TIMESTAMP (Local Timezone)\n"
+      "**Global Branch Coverage:** #{branch_label}\n#{method_line}**Generated At:** TIMESTAMP (Local Timezone)\n"
   end
 
   # A file block: its heading, the given entry lines and the blank line that closes it.
@@ -195,10 +201,16 @@ RSpec.describe EndToEnd do
     "  - **Method Deficit:** [L#{lines}] `#{name}` never invoked"
   end
 
+  # `sign` was invoked; its only deficit is a branch, which only an engine recording branches has.
+  def sign_deficit
+    return [] unless branches
+
+    ['- `Shapes::Calc#sign`', '  - **Branch Deficit:** [L6] Missing coverage for `else` branch: `:neg`']
+  end
+
   def calc_deficits(method_deficits: false)
     file_block('lib/shapes/calc.rb',
-               '- `Shapes::Calc#sign`',
-               '  - **Branch Deficit:** [L6] Missing coverage for `else` branch: `:neg`',
+               *sign_deficit,
                '- `Shapes::Calc#never_called`',
                *(method_deficits ? [method_deficit('9-12', 'Shapes::Calc#never_called')] : []),
                '  - **Line Deficit:** [L10] `@never = 1` (Occurrence 1 of 2).',
@@ -209,15 +221,17 @@ RSpec.describe EndToEnd do
   end
 
   # Without directive support the inline-disabled line and the branch-disabled arm are
-  # ordinary deficits.
+  # ordinary deficits (the arm only where branches are recorded).
   def legacy_deficits
+    pick = ['- `Shapes::Legacy#pick`', '  - **Branch Deficit:** [L17] Missing coverage for `else` branch: `:no`']
     file_block('lib/shapes/legacy.rb',
                '- `Shapes::Legacy#fail_loudly`',
                "  - **Line Deficit:** [L12] `raise 'x' # simplecov:disable`",
-               '- `Shapes::Legacy#pick`',
-               '  - **Branch Deficit:** [L17] Missing coverage for `else` branch: `:no`')
+               *(branches ? pick : []))
   end
 
+  # Both deficits of point.rb are branches: an engine recording none lists the file among the
+  # bypasses only.
   def point_deficits
     file_block('lib/shapes/point.rb',
                '- `main`',
@@ -230,20 +244,23 @@ RSpec.describe EndToEnd do
     ["- `#{node}`", "  - **Bypass Present:** Coverage explicitly ignored via `#{reason}`."]
   end
 
-  # The file blocks of the bypass section, in path order.
+  # The file blocks of the bypass section, in path order. The nocov pairs and the inline directive
+  # are line-based; a `simplecov:disable branch` scope is reported from the branches SimpleCov
+  # skipped inside it, so it needs branch data as well as directive support.
   def bypass_blocks
     legacy_entries = bypass('Shapes::Legacy#obsolete', described_class::NOCOV)
-    if directives
-      legacy_entries += bypass('Shapes::Legacy#fail_loudly', '# simplecov:disable')
-      legacy_entries += bypass('Shapes::Legacy#pick', '# simplecov:disable branch')
-    end
+    legacy_entries += bypass('Shapes::Legacy#fail_loudly', '# simplecov:disable') if directives
+    legacy_entries += bypass('Shapes::Legacy#pick', '# simplecov:disable branch') if directives && branches
     [file_block('lib/shapes/legacy.rb', *legacy_entries),
      file_block('lib/shapes/point.rb', *bypass('main', described_class::NOCOV))]
   end
 
   # The file blocks of the deficit section of the default run, lowest line coverage first.
   def default_deficit_blocks
-    [calc_deficits, *(directives ? [] : [legacy_deficits]), point_deficits]
+    blocks = [calc_deficits]
+    blocks << legacy_deficits unless directives
+    blocks << point_deficits if branches
+    blocks
   end
 
   def report_with(header, deficit_blocks)
@@ -267,11 +284,17 @@ RSpec.describe EndToEnd do
     blocks.count { |block| !report.include?(block) }
   end
 
+  # What the probe recorded: Strings prove the branch descriptors came back through the
+  # resultset merge; an engine recording no branches hands the probe no descriptor at all.
+  def expected_descriptor_classes
+    branches ? 'String' : ''
+  end
+
   it 'writes the exact digest through SimpleCov\'s merged result, announces it and emits no warning of its own' do
     child = described_class.run(project_dir)
     expect([normalise(child.report), iso8601_timestamp?(child.report), child.stdout, child.status.exitstatus,
             child.descriptor_classes, gem_warnings(child.stderr)])
-      .to eq([expected_default_report, true, announcement, 0, 'String', []])
+      .to eq([expected_default_report, true, announcement, 0, expected_descriptor_classes, []])
   end
 
   it 'keeps a 1 kB report within 1000 bytes and closes it with the truncation notice' do
@@ -286,7 +309,7 @@ RSpec.describe EndToEnd do
   end
 
   it 'reports the method line and every never-invoked method with method coverage on (SimpleCov >= 1.0)' do
-    skip 'method coverage needs SimpleCov >= 1.0' unless method_coverage_supported?
+    skip 'method coverage needs SimpleCov >= 1.0 on an engine that records it' unless method_coverage_measurable?
     child = described_class.run(project_dir, 'SCAI_E2E_METHODS' => '1')
     expect([normalise(child.report), child.stdout, child.status.exitstatus, gem_warnings(child.stderr)])
       .to eq([expected_method_report, announcement, 0, []])

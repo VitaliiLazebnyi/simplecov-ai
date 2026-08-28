@@ -94,8 +94,32 @@ BUNDLE_GEMFILE=gemfiles/simplecov_0.18.gemfile bin/check-ruby 2.7
 `CHECK_RUBY_SETUP` runs inside the container before `bundle install`. The official `jruby` images
 ship no C compiler, which prism (pulled in through rubocop-ast) needs, so use
 `CHECK_RUBY_SETUP='apt-get update -qq && apt-get install -y -qq build-essential' bin/check-ruby jruby:9.4`
-there (GitHub's runners already have one). JRuby and TruffleRuby implement no branch coverage, so
-the branch-snippet specs fail on them by design; the corresponding CI jobs are non-blocking.
+there (GitHub's runners already have one).
+
+### Verifying on other engines
+
+The JRuby, TruffleRuby and Windows jobs of CI are blocking, and each engine is one Rake task away
+(the tasks wrap `bin/check-ruby` with the right image and setup; an optional last argument
+replaces the command, and `BUNDLE_GEMFILE` is passed through):
+
+```sh
+rake check:jruby                                         # jruby:9.4, C compiler installed first
+rake check:truffleruby                                   # ghcr.io/graalvm/truffleruby-community:latest
+rake 'check:ruby[2.7]'                                   # any ruby:<version> image, or an image reference
+rake 'check:ruby[3.4,bundle exec rspec spec/quality]'    # explicit command
+```
+
+JRuby and TruffleRuby record no branch or method coverage, and the suite passes there all the
+same: it exercises the formatter's branch and method rendering with the hand-built SimpleCov data
+of the unit specs (`spec/spec_helper.rb` lifts SimpleCov's engine gate for the examples, since
+SimpleCov otherwise drops the branch and method statistics of a result on those engines), and
+the end-to-end spec proves what a real run on such an engine produces: an `N/A` branch line and
+line deficits only, as the README says. The suite's own 100% coverage mandate is MRI's gate:
+both engines attribute some executed lines differently from MRI (JRuby the lines of a multi-line
+`sig do … end` block, TruffleRuby every `case` line), so there coverage is measured and reported
+in `coverage/ai_report.md` but not enforced. Windows is the one platform `bin/check-ruby` cannot
+reach; what sets it apart — text-mode writes turning `\n` into `\r\n` — is exercised everywhere
+by the suite's CRLF examples, and fixtures are written byte for byte.
 
 ## Trying it on a sample project
 

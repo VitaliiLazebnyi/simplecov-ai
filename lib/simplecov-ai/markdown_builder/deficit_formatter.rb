@@ -90,15 +90,19 @@ module SimpleCov
             format(METHOD_DEFICIT_TMPL, label, InlineCode.span(display_name))
           end
 
-          # A method the resolver identified (its node opens on the method's first line) is named
-          # like its heading — `Owner.name` for a singleton method, which SimpleCov's merged data
-          # reports under the plain owner name; a method the resolver cannot see (a dynamic
-          # definition, an unparsable file) keeps the name SimpleCov derived.
+          # A method the resolver identified — a method node opening on the method's first line
+          # and carrying its bare name — is named like its heading: `Owner.name` for a singleton
+          # method, which SimpleCov's merged data reports under the plain owner name. A method the
+          # resolver cannot see (a dynamic definition, an unparsable file, a same-named method
+          # defined inside another) keeps the name SimpleCov derived, and so does one sharing its
+          # first line with another definition (`def a; end; def b; end`): nodes carry no columns,
+          # so the line's last node is not necessarily this method.
           sig do
             params(method_deficit: MethodDeficit, node: T.nilable(ASTResolver::SemanticNode)).returns(T.nilable(String))
           end
           def resolved_method_name(method_deficit, node)
-            return nil unless node&.method? && node.start_line == method_deficit.start_line
+            return nil unless node && node.start_line == method_deficit.start_line &&
+                              node.method_name == method_deficit.method_name
 
             node.name
           end

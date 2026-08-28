@@ -147,12 +147,14 @@ jobs:
       - name: Run tests
         run: bundle exec rspec
 
-  # Non-blocking: sorbet-static has no Windows build, so the Windows bundle skips the Sorbet
-  # toolchain (see Gemfile) and only the test suite runs. This job cannot be verified locally.
+  # Blocking. sorbet-static has no Windows build, so the Windows bundle skips the Sorbet toolchain
+  # (see Gemfile) and only the test suite runs. Windows cannot be reproduced with bin/check-ruby;
+  # what sets it apart — text-mode writes turning "\n" into "\r\n" — is exercised on every
+  # platform by the suite's CRLF examples, and fixtures are written byte for byte.
   test-windows:
     name: RSpec (Windows, Ruby 3.4)
     runs-on: windows-latest
-    continue-on-error: true
+    timeout-minutes: 30
     env:
       RUBYOPT: -w
     steps:
@@ -171,14 +173,19 @@ jobs:
         run: bundle exec rspec
         shell: bash
 
-  # Non-blocking: neither JRuby nor TruffleRuby implements branch coverage, so the suite's
-  # `minimum_coverage branch: 100` mandate cannot be satisfied there even though the formatter
-  # itself runs and reports branch coverage as N/A. sorbet-static has no builds for either
-  # engine, so the Sorbet toolchain is skipped by the Gemfile and only the test suite runs.
+  # Blocking. JRuby and TruffleRuby record no branch or method coverage: the suite exercises the
+  # formatter's branch and method rendering with hand-built SimpleCov data (spec/spec_helper.rb
+  # lifts SimpleCov's engine gate for the examples) and proves end to end what a real run on such
+  # an engine produces (an N/A branch line, line deficits only). The suite's own 100% coverage
+  # mandate is MRI's gate: both engines attribute some executed lines differently from MRI (see
+  # spec/spec_helper.rb), so here coverage is measured but not enforced. sorbet-static has no
+  # builds for either engine, so the Sorbet toolchain is skipped by the Gemfile and only the test
+  # suite runs. Reproduce locally with `rake check:jruby` and `rake check:truffleruby`
+  # (bin/check-ruby in the engine's Docker image).
   test-engines:
     name: RSpec (${{ matrix.ruby }})
     runs-on: ubuntu-latest
-    continue-on-error: true
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
