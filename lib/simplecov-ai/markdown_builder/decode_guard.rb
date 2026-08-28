@@ -47,7 +47,7 @@ module SimpleCov
           def self.render(&blk)
             yield
           rescue StandardError, ScriptError => error
-            [format(ERROR_TEMPLATE, error.class.name)]
+            [format(ERROR_TEMPLATE, error.class)]
           end
         end
       end

@@ -31,7 +31,7 @@ module SimpleCov
           def write_bypasses(budget)
             writer = SectionWriter.new(budget, HEADING)
             bypassed_file_count = 0
-            T.let(@coverage_metrics.files.to_a, T::Array[SimpleCov::SourceFile]).each do |file|
+            @coverage_metrics.files.each do |file|
               node_fragments = render_file(file)
               next if node_fragments.empty?
 

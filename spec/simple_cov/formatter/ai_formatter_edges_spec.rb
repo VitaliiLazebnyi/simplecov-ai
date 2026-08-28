@@ -7,7 +7,7 @@ require 'fileutils'
 
 # Edge cases of the whole pipeline; part of every subject's selection under mutant (see
 # spec/support/mutant_scopes.rb).
-RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScopes.all do
+RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScopes.spec_levels do
   let(:tmpdir) { Dir.mktmpdir('scai') }
   let(:report_path) { File.join(tmpdir, 'report.md') }
 
@@ -63,7 +63,8 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
                       "SAFE = obj&.each do\n  1\nend\n" \
                       "BARE = build do\n  2\nend\n" \
                       "MAPPED = [1].map do |i|\n  i\nend\n" \
-                      "WRONG = Struct.old do\n  3\nend\n")
+                      "WRONG = Struct.old do\n  3\nend\n" \
+                      "OTHER = Registry.new do\n  4\nend\n")
       expect(nodes.map(&:name)).to eq(['main'])
     end
   end

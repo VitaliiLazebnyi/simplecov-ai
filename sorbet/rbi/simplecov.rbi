@@ -30,6 +30,12 @@ module SimpleCov
         .returns(T::Array[SimpleCov::SourceFile])
     end
     def select(&blk); end
+
+    sig do
+      params(arg: T.untyped, arg1: T.untyped, arg2: T.proc.params(file: SimpleCov::SourceFile).void)
+        .returns(SimpleCov::FileList)
+    end
+    def each(*arg, **arg1, &arg2); end
   end
 
   class Result

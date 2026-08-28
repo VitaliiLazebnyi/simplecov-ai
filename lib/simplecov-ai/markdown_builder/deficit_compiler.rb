@@ -26,9 +26,8 @@ module SimpleCov
             # When the aggregate cannot be decoded the answer is unknowable; the header then shows
             # an N/A method line, matched here by listing the method deficits of every file that
             # still decodes.
-            @method_coverage_measured = T.let(
-              DecodeGuard.attempt(true) { MethodDeficit.measured?(coverage_metrics) }, T::Boolean
-            )
+            measured = DecodeGuard.attempt(true) { MethodDeficit.measured?(coverage_metrics) }
+            @method_coverage_measured = T.let(measured, T::Boolean)
           end
 
           # Writes the deficit section through the budget, lowest-coverage files first, and

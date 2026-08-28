@@ -8,13 +8,14 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::InlineCode do
     expect(described_class.span('Sample::Calc#sign')).to eq('`Sample::Calc#sign`')
   end
 
-  it 'uses a longer fence than any backtick run inside the text' do
-    expect(described_class.span('a `b` ``c`` d')).to eq('```a `b` ``c`` d```')
+  it 'uses a longer fence than the longest backtick run inside the text, wherever it sits' do
+    expect([described_class.span('a `b` ``c`` d'), described_class.span('a ``b`` `c` d')])
+      .to eq(['```a `b` ``c`` d```', '```a ``b`` `c` d```'])
   end
 
   it 'pads text that starts or ends with a backtick so the fence stays unambiguous' do
-    expect([described_class.span('`echo hi`'), described_class.span('Sample::Inject#`')])
-      .to eq(['`` `echo hi` ``', '`` Sample::Inject#` ``'])
+    spans = ['`echo hi`', 'Sample::Inject#`', '`ls` -l'].map { |text| described_class.span(text) }
+    expect(spans).to eq(['`` `echo hi` ``', '`` Sample::Inject#` ``', '`` `ls` -l ``'])
   end
 
   it 'keeps Markdown syntax in a directive comment literal' do

@@ -48,4 +48,12 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::SectionWriter
       expect(described_class.file_heading(source_file(path, { 'lines' => [1] }))).to eq('### ``weird`name.rb``')
     end
   end
+
+  it 'drops the leading slash SimpleCov < 1.0 keeps on the project-relative path' do
+    Dir.mktmpdir('scai') do |tmpdir|
+      file = source_file(write_source(tmpdir, 'legacy.rb', "1\n"), { 'lines' => [1] })
+      allow(file).to receive(:project_filename).and_return('/lib/legacy.rb')
+      expect(described_class.file_heading(file)).to eq('### `lib/legacy.rb`')
+    end
+  end
 end

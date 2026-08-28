@@ -25,6 +25,11 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver::BypassScanner do
     expect(names_with_reasons(reasons)).to eq([['Runner#first', ['# :nocov:']], ['Runner#second', ['# :nocov:']]])
   end
 
+  it 'attributes a region containing a class and its methods to the class alone' do
+    reasons = described_class.attribute(nodes, [[3..18, '# :nocov:']])
+    expect(names_with_reasons(reasons)).to eq([['Runner', ['# :nocov:']]])
+  end
+
   it 'attributes a region inside a single node to that innermost node' do
     expect(names_with_reasons(described_class.attribute(nodes, [[5..6, '# simplecov:disable']])))
       .to eq([['Runner#first', ['# simplecov:disable']]])

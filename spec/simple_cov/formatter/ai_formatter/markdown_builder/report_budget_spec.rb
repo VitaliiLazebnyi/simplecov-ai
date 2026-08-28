@@ -17,9 +17,15 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::ReportBudget 
     1000 - notice(file_count, file_count).bytesize - described_class::SEPARATOR_MARGIN
   end
 
-  it 'admits fragments up to the ceiling minus the notice reserve and refuses the next byte' do
+  it 'admits fragments up to the ceiling minus the notice reserve and refuses the next byte unwritten' do
     admissions = [budget.admit('x' * admissible_bytes(0)), budget.admit('y')]
-    expect([admissions, buffer.string.bytesize + notice(0, 0).bytesize <= 1000]).to eq([[true, false], true])
+    expect([admissions, buffer.string.bytesize]).to eq([[true, false], admissible_bytes(0)])
+  end
+
+  it 'scales the ceiling with the configured limit' do
+    two_kb = described_class.new(StringIO.new, 2, 0)
+    fragment = 'x' * (admissible_bytes(0) + 1000)
+    expect([two_kb.admit(fragment), two_kb.admit('y')]).to eq([true, false])
   end
 
   it 'writes the header and separators regardless of the budget' do

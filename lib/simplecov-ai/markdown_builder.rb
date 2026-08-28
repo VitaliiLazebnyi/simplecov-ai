@@ -93,16 +93,17 @@ module SimpleCov
         # @return [Array<ASTResolver::SemanticNode>, nil] The nodes, or nil when resolution failed.
         sig { params(filename: String).returns(T.nilable(T::Array[ASTResolver::SemanticNode])) }
         def try_resolve_ast(filename)
-          return @ast_cache[filename] if @ast_cache.key?(filename)
-
-          @ast_cache[filename] = begin
-            ASTResolver.resolve(filename)
-          rescue StandardError
-            nil
-          end
+          @ast_cache.fetch(filename) { @ast_cache[filename] = resolve_nodes(filename) }
         end
 
         private
+
+        sig { params(filename: String).returns(T.nilable(T::Array[ASTResolver::SemanticNode])) }
+        def resolve_nodes(filename)
+          ASTResolver.resolve(filename)
+        rescue StandardError
+          nil
+        end
 
         sig { params(budget: ReportBudget).returns(Integer) }
         def write_bypasses(budget)
@@ -126,7 +127,7 @@ module SimpleCov
                  status: compute_status([line_pct, branch_pct, method_pct]),
                  line: figure_label(line_pct) || LINE_DISABLED_LABEL,
                  branch: figure_label(branch_pct) || BRANCH_DISABLED_LABEL,
-                 method_line: method_label ? format(METHOD_COVERAGE_LINE, method: method_label) : '',
+                 method_line: method_label && format(METHOD_COVERAGE_LINE, method: method_label),
                  time: Time.now.iso8601)
         end
 

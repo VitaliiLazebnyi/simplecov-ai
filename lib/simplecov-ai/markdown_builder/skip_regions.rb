@@ -28,7 +28,7 @@ module SimpleCov
           # @return [Boolean] Whether any line or branch was skipped.
           sig { params(file: SimpleCov::SourceFile).returns(T::Boolean) }
           def self.any?(file)
-            file.skipped_lines.any? || branches_of(file).any?(&:skipped?)
+            file.skipped_lines.any? || file.branches.any?(&:skipped?)
           end
 
           # @param file [SimpleCov::SourceFile] The file to inspect.
@@ -49,21 +49,16 @@ module SimpleCov
                                          .map { |range| [range, reason_for(range, source_lines, pattern)] }
           end
 
-          # `SourceFile#branches` arrived with branch coverage in SimpleCov 0.18 and is empty
-          # when branch coverage is off; the guard keeps foreign result objects safe.
-          sig { params(file: SimpleCov::SourceFile).returns(T::Array[SimpleCov::SourceFile::Branch]) }
-          def self.branches_of(file)
-            (file.respond_to?(:branches) && file.branches) || []
-          end
-
+          # `SourceFile#branches` (SimpleCov >= 0.18) is empty when branch coverage is off.
           sig { params(file: SimpleCov::SourceFile).returns(T::Array[T::Range[Integer]]) }
           def self.skipped_branch_ranges(file)
-            branches_of(file).select(&:skipped?).map { |branch| branch.start_line..branch.end_line }.uniq
+            file.branches.select(&:skipped?).map { |branch| branch.start_line..branch.end_line }.uniq
           end
 
+          # SimpleCov lists skipped lines in line order, so a region closes at the first gap.
           sig { params(line_numbers: T::Array[Integer]).returns(T::Array[T::Range[Integer]]) }
           def self.contiguous_ranges(line_numbers)
-            line_numbers.sort.each_with_object(T.let([], T::Array[T::Range[Integer]])) do |line_number, ranges|
+            line_numbers.each_with_object(T.let([], T::Array[T::Range[Integer]])) do |line_number, ranges|
               open_range = ranges.last
               if open_range && open_range.end + 1 == line_number
                 ranges[-1] = (open_range.begin..line_number)
@@ -83,7 +78,7 @@ module SimpleCov
           def self.reason_for(range, source_lines, pattern)
             range.begin.downto(1) do |line_number|
               comment = source_lines.fetch(line_number - 1, '')[pattern]
-              return comment.strip if comment
+              return comment.rstrip if comment
             end
             FALLBACK_REASON
           end
@@ -97,12 +92,12 @@ module SimpleCov
 
           sig { returns(String) }
           def self.nocov_token
-            reader = T.must(NOCOV_TOKEN_READERS.find { |candidate| SimpleCov.respond_to?(candidate) })
-            T.cast(SimpleCov.public_send(reader), String)
+            reader = NOCOV_TOKEN_READERS.find { |candidate| SimpleCov.respond_to?(candidate) }
+            T.cast(SimpleCov.public_send(T.must(reader)), String)
           end
 
-          private_class_method :branches_of, :skipped_branch_ranges, :contiguous_ranges, :reason_for,
-                               :directive_pattern, :nocov_token
+          private_class_method :skipped_branch_ranges, :contiguous_ranges, :reason_for, :directive_pattern,
+                               :nocov_token
         end
       end
     end

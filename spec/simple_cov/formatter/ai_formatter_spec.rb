@@ -7,7 +7,7 @@ require 'tmpdir'
 
 # Whole-report expectations: the strongest oracle for every subject of the gem under mutant
 # (see spec/support/mutant_scopes.rb).
-RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScopes.all do
+RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScopes.spec_levels do
   let(:tmpdir) { Dir.mktmpdir('scai') }
   let(:report_path) { File.join(tmpdir, 'report.md') }
   let(:config) { described_class.configuration }

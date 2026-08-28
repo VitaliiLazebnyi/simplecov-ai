@@ -124,7 +124,7 @@ module SimpleCov
         sig { params(value: Symbol).void }
         def granularity=(value)
           unless VALID_GRANULARITIES.include?(value)
-            raise ArgumentError, "granularity must be one of #{VALID_GRANULARITIES.inspect}, got #{value.inspect}"
+            raise ArgumentError, "granularity must be one of #{VALID_GRANULARITIES}, got #{value.inspect}"
           end
 
           @granularity = value
@@ -139,7 +139,7 @@ module SimpleCov
 
         sig { params(name: Symbol, value: Integer).returns(Integer) }
         def validate_positive(name, value)
-          raise ArgumentError, "#{name} must be a positive Integer, got #{value.inspect}" unless value.positive?
+          raise ArgumentError, "#{name} must be a positive Integer, got #{value}" unless value.positive?
 
           value
         end
