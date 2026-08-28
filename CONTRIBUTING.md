@@ -73,6 +73,12 @@ bin/check-ruby jruby:9.4                                    # any image referenc
 BUNDLE_GEMFILE=gemfiles/simplecov_0.18.gemfile bin/check-ruby 2.7
 ```
 
+`CHECK_RUBY_SETUP` runs inside the container before `bundle install`. The official `jruby` images
+ship no C compiler, which prism (pulled in through rubocop-ast) needs, so use
+`CHECK_RUBY_SETUP='apt-get update -qq && apt-get install -y -qq build-essential' bin/check-ruby jruby:9.4`
+there (GitHub's runners already have one). JRuby and TruffleRuby implement no branch coverage, so
+the branch-snippet specs fail on them by design; the corresponding CI jobs are non-blocking.
+
 ## Type checking
 
 Every Ruby file is `# typed: strict` and the gate runs `srb tc --typed strong`. Dependency RBIs

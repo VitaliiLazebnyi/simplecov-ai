@@ -7,6 +7,10 @@
 #   bin/check-ruby 3.4 'bundle exec rspec spec/quality'  # explicit command
 #   bin/check-ruby jruby:9.4                             # any image reference works
 #   BUNDLE_GEMFILE=gemfiles/simplecov_0.22.gemfile bin/check-ruby 3.4
+#
+# CHECK_RUBY_SETUP runs inside the container before `bundle install`; the official jruby images
+# ship no C compiler, which prism (pulled in through rubocop-ast) needs to build:
+#   CHECK_RUBY_SETUP='apt-get update -qq && apt-get install -y -qq build-essential' bin/check-ruby jruby:9.4
 set -euo pipefail
 
 ruby=${1:?usage: bin/check-ruby <ruby-version|image> [command]}
@@ -17,11 +21,12 @@ case "$ruby" in
 esac
 
 cd "$(dirname "$0")/.."
-COPYFILE_DISABLE=1 tar --exclude=./.git --exclude=./coverage --exclude=./vendor --exclude=./doc \
+COPYFILE_DISABLE=1 tar --no-xattrs --exclude=./.git --exclude=./coverage --exclude=./vendor --exclude=./doc \
     --exclude=./.yardoc --exclude=./tmp --exclude=./node_modules --exclude=./.bundle -cf - . \
   | docker run --rm -i -e CI=true -e "BUNDLE_GEMFILE=${BUNDLE_GEMFILE:-}" "$image" bash -c "
       set -euo pipefail
       mkdir -p /app && tar -xf - -C /app && cd /app
       rm -f Gemfile.lock gemfiles/*.lock
+      ${CHECK_RUBY_SETUP:-true}
       bundle install --quiet
       $command"
