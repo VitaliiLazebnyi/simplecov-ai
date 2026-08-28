@@ -73,13 +73,14 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
 
     it 'does not treat non-class constant assignments as metaprogramming classes' do
       # A plain value, a safe-navigation block call, a receiverless call, a non-const receiver,
-      # and a constant receiver with the wrong constructor must all be rejected.
+      # and a constant receiver with the wrong constructor must all be rejected, leaving only
+      # the root scope.
       nodes = resolve("PLAIN = 42\n" \
                       "SAFE = obj&.each do\n  1\nend\n" \
                       "BARE = build do\n  2\nend\n" \
                       "MAPPED = [1].map do |i|\n  i\nend\n" \
                       "WRONG = Struct.old do\n  3\nend\n")
-      expect(nodes).to be_empty
+      expect(nodes.map(&:name)).to eq(['main'])
     end
 
     it 'bypasses a method wrapping a nocov region without touching its sibling' do
@@ -89,10 +90,14 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
       expect([bypassed, sibling_clean]).to eq([true, true])
     end
 
-    it 'ignores a bypass region that wraps only top-level code with no enclosing node' do
+    it 'attributes a bypass region that wraps only top-level code to the root scope' do
       nodes = resolve("# :nocov:\nTOP = 1\n# :nocov:\ndef later\nend\n")
-      later = nodes.find { |candidate| candidate.name == '#later' }
-      expect([nodes.size, later.bypass_reasons]).to eq([1, []])
+      expect(nodes.map { |node| [node.name, node.bypass_reasons] }).to eq([['main', ['# :nocov:']], ['#later', []]])
+    end
+
+    it 'attributes a region inside a method to that method rather than to the root scope' do
+      nodes = resolve("def wrapper\n  # :nocov:\n  1\n  # :nocov:\nend\n")
+      expect(nodes.map { |node| [node.name, node.bypass_reasons] }).to eq([['main', []], ['#wrapper', ['# :nocov:']]])
     end
   end
 

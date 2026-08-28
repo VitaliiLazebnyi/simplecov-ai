@@ -105,10 +105,12 @@ module SimpleCov
             node.start_line >= range.begin && node.end_line <= range.end
           end
 
+          # Nodes are in pre-order, so among the (nested) nodes enclosing a region the last one is
+          # the innermost — including when an inner node spans exactly the same lines as its
+          # parent (a method filling its class, or a class filling the root scope).
           sig { params(nodes: T::Array[SemanticNode], range: T::Range[Integer]).returns(T.nilable(SemanticNode)) }
           def self.innermost_enclosing(nodes, range)
-            nodes.select { |node| node.start_line <= range.begin && node.end_line >= range.end }
-                 .min_by { |node| node.end_line - node.start_line }
+            nodes.reverse.find { |node| node.start_line <= range.begin && node.end_line >= range.end }
           end
 
           sig { params(outer: SemanticNode, inner: SemanticNode).returns(T::Boolean) }

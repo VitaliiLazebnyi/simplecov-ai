@@ -24,6 +24,16 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver::BypassScanner do
     end
   end
 
+  describe '.attribute' do
+    it 'leaves a region alone when no node encloses it, as with a node list lacking a root scope' do
+      lonely = SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.new(
+        name: 'Late#method', type: 'Instance Method', start_line: 6, end_line: 8, bypass_reasons: []
+      )
+      described_class.attribute([lonely], "# simplecov:disable\nTOP = 1\n# simplecov:enable\n\n\ndef method\nend\n")
+      expect(lonely.bypass_reasons).to be_empty
+    end
+  end
+
   describe 'attribution via ASTResolver.resolve' do
     let(:tmpdir) { Dir.mktmpdir }
 

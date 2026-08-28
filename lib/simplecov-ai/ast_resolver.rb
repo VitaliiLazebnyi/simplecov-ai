@@ -1,38 +1,59 @@
 # typed: strict
 # frozen_string_literal: true
 
-require 'parser/current'
+require 'parser'
 require_relative 'ast_resolver/semantic_node'
+require_relative 'ast_resolver/parser_backend'
 require_relative 'ast_resolver/bypass_scanner'
 require_relative 'ast_resolver/metaclass_resolver'
+require_relative 'ast_resolver/dynamic_method_resolver'
+require_relative 'ast_resolver/receiver_resolver'
 require_relative 'ast_resolver/node_classifier'
 
 module SimpleCov
   module Formatter
     class AIFormatter
-      # Employs statically-parsed Abstract Syntax Tree processing via the `parser` gem
-      # to correlate raw line-based deficits with high-level semantically meaningful concepts
-      # like Classes and Methods. This negates the line-number volatility often experienced
-      # by Large Language Models when patching test coverage.
+      # Employs statically-parsed Abstract Syntax Tree processing (Prism's `parser`-compatible
+      # translation where available, the `parser` gem otherwise) to correlate raw line-based
+      # deficits with high-level semantically meaningful concepts like Classes and Methods. This
+      # negates the line-number volatility often experienced by Large Language Models when
+      # patching test coverage.
       class ASTResolver
         extend T::Sig
 
         # Orchestrates the initial mapping algorithm on a target file to extract structural
-        # metadata, circumventing potential syntax violations explicitly.
+        # metadata. The first node is always the synthetic root scope (`main`) spanning the
+        # whole file, followed by the file's classes, modules and methods in source order.
         #
         # @param file_path [String] The absolute path to the Ruby script to parse.
-        # @return [Array<SemanticNode>] A collection of resolvable structural entities.
+        # @return [Array<SemanticNode>] The root scope followed by every resolvable structural
+        #   entity in pre-order; empty when the file does not exist.
+        # @raise [Parser::SyntaxError] When the file is not valid Ruby.
         sig { params(file_path: String).returns(T::Array[SemanticNode]) }
         def self.resolve(file_path)
           return [] unless File.exist?(file_path)
 
-          source = File.read(file_path)
-          ast, = Parser::CurrentRuby.parse_with_comments(source)
+          buffer = Parser::Source::Buffer.new(file_path, source: read_source(file_path))
+          ast = ParserBackend.parse(buffer)
+          source = T.cast(buffer.source, String)
 
           resolver = new
-          nodes = resolver.traverse(ast)
+          nodes = [SemanticNode.root(source.lines.size)] + resolver.traverse(ast)
           resolver.assign_bypasses(nodes, source)
           nodes
+        end
+
+        # Reads the file as bytes, tagged UTF-8 (Ruby's default source encoding) when they form
+        # valid UTF-8 and left binary otherwise so the parser can still recover the structure
+        # of a file with stray bytes. A `# encoding:` magic comment or byte-order mark is
+        # honoured by the source buffer, which transcodes such files before parsing.
+        #
+        # @param file_path [String] The path of the file to read.
+        # @return [String] The source bytes with their encoding tag.
+        sig { params(file_path: String).returns(String) }
+        def self.read_source(file_path)
+          source = File.binread(file_path).force_encoding(Encoding::UTF_8)
+          source.valid_encoding? ? source : source.force_encoding(Encoding::BINARY)
         end
 
         # Recursively navigates an abstract node hierarchy, building SemanticNodes mappings
@@ -67,7 +88,8 @@ module SimpleCov
         # semantics, extending an unmatched marker to end-of-file), and `# simplecov:disable` /
         # `# simplecov:enable` block directives contribute their own regions. Each region is
         # attributed to the outermost semantic nodes it fully contains, or — when it sits inside
-        # a single node — to that innermost enclosing node.
+        # a single node — to that innermost enclosing node; a region wrapping only top-level
+        # code therefore lands on the root scope.
         #
         # @param nodes [Array<SemanticNode>] The resolved structural entities.
         # @param source [String] The full source text of the file.
