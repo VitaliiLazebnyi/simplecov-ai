@@ -20,7 +20,14 @@ The gem supports Ruby `>= 2.7` and SimpleCov `>= 0.18, < 2.0`. CI exercises Ruby
 `bundle exec rake` runs the same gates CI enforces, in this order; each one can also be run on
 its own:
 
-- `rake spec` — `bundle exec rspec`; the suite fails below 100% line and branch coverage.
+- `rake spec` — `RUBYOPT=-w bundle exec rspec`; the suite fails below 100% line, branch and (on
+  MRI with SimpleCov >= 1.0) method coverage, and any Ruby warning emitted from `lib/` fails the
+  run (`spec/support/warnings.rb`). Besides the unit specs it runs an end-to-end child-process
+  spec through SimpleCov's real result-merging path (`spec/integration/`), a resolver run over the
+  sources of every gem in the bundle (`spec/quality/resolver_corpus_spec.rb`;
+  `RESOLVER_CORPUS_MAX_FILES=0` resolves all of them), a seeded property spec for the resolver
+  (`RESOLVER_PROPERTY_SEED`) and a seeded resultset fuzz spec for the formatter
+  (`FORMATTER_FUZZ_SEED`).
 - `rake rubocop` — `bundle exec rubocop`; zero offenses, no `rubocop:disable` directives.
 - `rake typecheck` — `bundle exec srb tc --typed strong`; every file is `# typed: strict`
   (skipped with a warning where sorbet-static has no build).
@@ -36,12 +43,18 @@ Two more tasks are available on demand:
 - `rake quality` runs the advisory tools (reek with `.reek.yml`, flay, flog, debride). CI runs it
   in a non-blocking job; findings are worth reading but do not block a merge.
 - `rake rbi` regenerates the Sorbet RBIs for dependencies (see *Type checking* below).
+- `rake mutant` runs mutation testing with mutant (Ruby >= 3.3; configuration in `.mutant.yml`).
+  CI runs it as a blocking gate and requires every mutation to be killed;
+  `MUTANT_SINCE=<revision>` limits a local run to the subjects touched since that revision. Ignore
+  patterns in `.mutant.yml` must carry a justification, and whole-report specs declare
+  `mutant_expression: MutantScopes.spec_levels` (`spec/support/mutant_scopes.rb`) so that mutant
+  treats each `describe '#name'` block as that method's specification.
 
 CI additionally runs, all as blocking gates unless noted: actionlint and zizmor on the workflow
 files, markdownlint (`npx markdownlint-cli2 "**/*.md"`, rules in `.markdownlint.yml`, ignores in
 `.markdownlint-cli2.yaml`), typos (`_typos.toml`; locally `typos`, installable with
 `brew install typos-cli` or `cargo install typos-cli`), Semgrep (`p/ruby`, `p/secrets`,
-`p/security-audit`, `p/github-actions`), Gitleaks over the full history, CodeQL (Ruby and workflow
+`p/security-audit`, `p/github-actions`), Gitleaks over the full history, mutation testing (`rake mutant`), CodeQL (Ruby and workflow
 files), and — non-blocking — the OpenSSF Scorecard. The release workflow verifies that
 `lib/simplecov-ai/version.rb` matches the tag, refuses to publish unless `CHANGELOG.md` has a
 heading for the tagged version, re-runs the gates, and signs the gem only when `SIMPLECOV_AI_SIGN`
@@ -116,9 +129,11 @@ Re-run `rake rbi` after changing dependency versions and commit the regenerated 
 
 ## Guidelines
 
-- **Coverage is enforced.** New code must be exercised by specs; the suite fails below 100% line
-  and branch coverage. Coverage is measured for real, so make sure `spec/spec_helper.rb` still
-  starts SimpleCov before the library is required.
+- **Coverage is enforced.** New code must be exercised by specs; the suite fails below 100% line,
+  branch and method coverage (method coverage on MRI with SimpleCov >= 1.0), and `rake mutant`
+  must still kill every mutation — a line that is executed but whose behaviour no spec pins down
+  is not covered. Coverage is measured for real, so make sure `spec/spec_helper.rb` still starts
+  SimpleCov before the library is required.
 - **Public API needs YARD docs.** Documentation coverage must stay at 100%.
 - **Types.** Keep files `# typed: strict` and satisfy `srb tc --typed strong`. When adding a
   signature to a dependency overlay, verify it against the installed version.

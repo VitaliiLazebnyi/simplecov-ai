@@ -69,6 +69,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `report_path` still resolves against `SimpleCov.root`, independent of the working directory
   at exit.
 - `output_to_console` echoes the full digest to STDOUT, matching the documented behaviour.
+- Corrupt coverage data no longer aborts the report. When SimpleCov cannot decode a file's branch
+  data (its `eval`-based decoder on SimpleCov < 1.0 raises `SyntaxError`, `RubyDataParser` on
+  >= 1.0 raises `ArgumentError`), that file gets a single error entry, the header figures that
+  depend on it read `N/A (coverage data could not be decoded)`, the status is `FAILED`, and every
+  other file is reported normally.
+- Runs on SimpleCov >= 1.0 that do not enable line coverage report
+  `N/A (line coverage not enabled)` instead of failing.
+- A `def` nested inside a method body within `class << self` is named as a singleton method
+  (`Klass.name`), matching what Ruby defines.
+- Whether a file has deficits is decided from SimpleCov's own missed lines, branches and methods
+  rather than from rounded percentages.
 
 ### Changed
 
@@ -133,6 +144,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   without a `CHANGELOG.md` heading for it.
 - The test suite drives the formatter with real SimpleCov objects, with sorbet-runtime signature
   checks enabled, across SimpleCov 0.18–1.1.
+- Mutation testing with mutant is a blocking gate (`rake mutant`; 100% of mutations killed). The
+  suite additionally runs an end-to-end child-process spec through SimpleCov's real result-merging
+  path, a resolver run over the sources of every gem in the bundle, seeded property and fuzz
+  specs, treats Ruby warnings emitted from `lib/` as failures (`RUBYOPT=-w`), and enforces 100%
+  method coverage on SimpleCov >= 1.0.
 
 ## [0.10.6] - 2026-05-21
 

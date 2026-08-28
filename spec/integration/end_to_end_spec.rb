@@ -139,6 +139,9 @@ module EndToEnd
   # directory like a real test run: SimpleCov 0.18 fixes its root filter from the working
   # directory when it is required, before `SimpleCov.root` can be set.
   def run(project_dir, env = {})
+    # Justification: every argument is static — this interpreter, the gem's lib directory and a
+    # fixture path written by this spec; no external input can reach the child command line.
+    # nosemgrep: ruby.lang.security.dangerous-exec.dangerous-exec
     stdout, stderr, status = Open3.capture3(env, RbConfig.ruby, '-I', LIB_DIR, File.join(project_dir, 'run.rb'),
                                             chdir: project_dir)
     coverage_dir = File.join(project_dir, 'coverage')
