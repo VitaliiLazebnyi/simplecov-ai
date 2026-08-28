@@ -2,6 +2,8 @@ coverage/
 vendor/
 .bundle/
 *.gem
-Gemfile.lock
+gemfiles/*.lock
 .yardoc/
 doc/
+tmp/
+node_modules/

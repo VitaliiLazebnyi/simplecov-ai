@@ -2,95 +2,265 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
+# Every job runs with a read-only token; jobs that need more declare it themselves.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# The single-version quality gates (lint, typecheck, docs, audit, build, quality) run on Ruby 4.0
+# against the committed Gemfile.lock, so they always see the exact dependency set that was
+# verified locally. The multi-Ruby test matrix deletes the lockfile first: it was resolved on
+# Ruby 4.0 and older Rubies cannot install that set (simplecov 1.x needs Ruby >= 3.2, sorbet and
+# tapioca need >= 3.1), so each Ruby resolves its own dependencies exactly like a user's bundle.
 jobs:
   lint:
+    name: RuboCop, actionlint, zizmor, markdownlint, typos
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        ruby: ["4.0"]
     steps:
-    - uses: actions/checkout@v6
-    - name: Set up Ruby
-      uses: ruby/setup-ruby@v1
-      with:
-        ruby-version: ${{ matrix.ruby }}
-        bundler-cache: true
-    - name: Run RuboCop
-      run: bundle exec rubocop
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+      - name: RuboCop
+        run: bundle exec rubocop
+      - name: actionlint (workflow syntax, shellcheck)
+        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
+      - name: zizmor (workflow security)
+        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+        with:
+          # Print findings in the log instead of uploading SARIF (no Advanced Security required).
+          advanced-security: false
+          annotations: true
+      - name: markdownlint
+        run: npx --yes markdownlint-cli2 "**/*.md"
+      - name: typos (spelling in docs and comments)
+        uses: crate-ci/typos@a8168dc2984a9e2352f183ffe788f0f23a300389 # v1.49.1
+
+  typecheck:
+    name: Sorbet (srb tc --typed strong)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+      - name: Run Sorbet
+        run: bundle exec srb tc --typed strong
+
+  docs:
+    name: YARD (builds without warnings, 100% documented)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+      - name: Verify documentation generation
+        run: bundle exec yardoc --fail-on-warning
+      - name: Ensure complete documentation
+        run: |
+          output=$(bundle exec yard stats --list-undoc)
+          echo "$output"
+          if ! echo "$output" | grep -q "100.00% documented"; then
+            echo "::error::Documentation coverage is less than 100%. Missing YARD docs detected."
+            exit 1
+          fi
+
+  audit:
+    name: bundler-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+      - name: Check the locked dependencies against the Ruby Advisory Database
+        run: bundle exec bundler-audit check --update
+
+  build:
+    name: Gem build, spec validation and install smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+        with:
+          ruby-version: "4.0"
+      - name: Build the gem with --strict (specification warnings are fatal)
+        run: gem build simplecov-ai.gemspec --strict
+      - name: Validate the packaged specification
+        run: gem specification ./simplecov-ai-*.gem
+      - name: Install into a clean GEM_HOME and require the gem
+        run: |
+          gem_home=$(mktemp -d)
+          export GEM_HOME="$gem_home" GEM_PATH="$gem_home"
+          gem install --no-document ./simplecov-ai-*.gem
+          ruby -e 'require "simplecov-ai"; puts "Loaded simplecov-ai #{SimpleCov::Formatter::AIFormatter::VERSION}"'
 
   test:
+    name: RSpec (Ruby ${{ matrix.ruby }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         ruby: ["2.7", "3.2", "3.3", "3.4", "4.0"]
     steps:
-    - uses: actions/checkout@v6
-    - name: Set up Ruby
-      uses: ruby/setup-ruby@v1
-      with:
-        ruby-version: ${{ matrix.ruby }}
-        bundler-cache: true
-    - name: Run Tests
-      run: bundle exec rspec
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Resolve dependencies for this Ruby (see the note at the top of this file)
+        run: rm -f Gemfile.lock
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: Run tests
+        run: bundle exec rspec
 
-  typecheck:
+  # Non-blocking: sorbet-static has no Windows build, so the Windows bundle skips the Sorbet
+  # toolchain (see Gemfile) and only the test suite runs. This job cannot be verified locally.
+  test-windows:
+    name: RSpec (Windows, Ruby 3.4)
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Resolve dependencies for this platform (see the note at the top of this file)
+        run: rm -f Gemfile.lock
+        shell: bash
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - name: Run tests
+        run: bundle exec rspec
+        shell: bash
+
+  # Non-blocking: neither JRuby nor TruffleRuby implements branch coverage, so the suite's
+  # `minimum_coverage branch: 100` mandate cannot be satisfied there even though the formatter
+  # itself runs and reports branch coverage as N/A. sorbet-static has no builds for either
+  # engine, so the Sorbet toolchain is skipped by the Gemfile and only the test suite runs.
+  test-engines:
+    name: RSpec (${{ matrix.ruby }})
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: [jruby-9.4, truffleruby]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Resolve dependencies for this engine (see the note at the top of this file)
+        run: rm -f Gemfile.lock
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: Run tests
+        run: bundle exec rspec
+
+  # Every SimpleCov release line inside the gemspec's `>= 0.18, < 2.0` range, each resolved from
+  # its own gemfile (gemfiles/simplecov_<line>.gemfile); Ruby 2.7 additionally covers the floor.
+  simplecov-compat:
+    name: RSpec (SimpleCov ${{ matrix.simplecov }}, Ruby ${{ matrix.ruby }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        ruby: ["4.0"]
+        ruby: ["3.4"]
+        simplecov: ["0.18", "0.21", "0.22", "1.0", "1.1"]
+        include:
+          - ruby: "2.7"
+            simplecov: "0.18"
+    env:
+      BUNDLE_GEMFILE: gemfiles/simplecov_${{ matrix.simplecov }}.gemfile
     steps:
-    - uses: actions/checkout@v6
-    - name: Set up Ruby
-      uses: ruby/setup-ruby@v1
-      with:
-        ruby-version: ${{ matrix.ruby }}
-        bundler-cache: true
-    - name: Run Sorbet Typechecker
-      run: bundle exec srb tc --typed strong
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: Run tests
+        run: bundle exec rspec
 
-  docs:
+  sast:
+    name: Semgrep
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        ruby: ["4.0"]
+    container:
+      image: semgrep/semgrep:1.174.0@sha256:f1f7b71861c7b28b6e0f661225a2c4f58a484f5d0f182465c6d6b3b22f972ade
     steps:
-    - uses: actions/checkout@v6
-    - name: Set up Ruby
-      uses: ruby/setup-ruby@v1
-      with:
-        ruby-version: ${{ matrix.ruby }}
-        bundler-cache: true
-    - name: Verify Documentation Generation
-      run: bundle exec yardoc --fail-on-warning
-    - name: Ensure Complete Documentation
-      run: |
-        OUTPUT=$(bundle exec yard stats --list-undoc)
-        echo "$OUTPUT"
-        if ! echo "$OUTPUT" | grep -q "100.00% documented"; then
-          echo "::error::Documentation coverage is less than 100%. Missing YARD docs detected."
-          exit 1
-        fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Scan with the Ruby, secrets, security-audit and GitHub Actions rule packs
+        run: >-
+          semgrep scan --config p/ruby --config p/secrets --config p/security-audit
+          --config p/github-actions --error --metrics=off
+          --exclude doc --exclude CODE_REVIEW_REPORT.md .
 
-  build:
+  secrets:
+    name: Gitleaks
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        ruby: ["4.0"]
     steps:
-    - uses: actions/checkout@v6
-    - name: Set up Ruby
-      uses: ruby/setup-ruby@v1
-      with:
-        ruby-version: ${{ matrix.ruby }}
-        bundler-cache: true
-    - name: Verify Gem Build
-      run: gem build simplecov-ai.gemspec
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history so leaks in earlier commits are found too.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Scan the repository history for secrets
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # A GITLEAKS_LICENSE secret is only required for organisation-owned repositories.
+
+  # Advisory: reek/flay/flog/debride findings are worth reading but do not block merges.
+  quality:
+    name: reek, flay, flog, debride (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+      - name: Run the quality report
+        run: bundle exec rake quality

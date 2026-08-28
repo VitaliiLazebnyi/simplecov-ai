@@ -5,30 +5,36 @@ on:
     tags:
       - 'v*.*.*'
 
+permissions:
+  contents: read
+
 jobs:
   build_and_release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      id-token: write
+      contents: write # create the GitHub Release
+      id-token: write # RubyGems trusted publishing (OIDC)
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0
+        persist-credentials: false
 
     - name: Set up Ruby
-      uses: ruby/setup-ruby@v1
+      uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
       with:
         ruby-version: "4.0"
-        bundler-cache: true
+        # No dependency cache on the release path: a poisoned cache must never reach a published gem.
+        bundler-cache: false
 
-    - name: Extract Release Version
+    - name: Install dependencies from the committed Gemfile.lock
+      run: bundle install --jobs 4
+
+    - name: Extract release version
       run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_ENV"
 
     - name: Verify committed version matches the tag
-      env:
-        VERSION: ${{ env.VERSION }}
       run: |
         file_version=$(sed -n "s/.*VERSION = T.let('\\([^']*\\)'.*/\\1/p" lib/simplecov-ai/version.rb)
         if [ "$file_version" != "$VERSION" ]; then
@@ -36,20 +42,39 @@ jobs:
           exit 1
         fi
 
+    - name: Verify CHANGELOG.md documents this version
+      run: |
+        if ! grep -Fq "## [${VERSION}]" CHANGELOG.md; then
+          echo "::error::CHANGELOG.md has no '## [${VERSION}]' heading; document the release before tagging."
+          exit 1
+        fi
+
     # Quality gates must pass before anything is built or published.
     - name: Run RuboCop
       run: bundle exec rubocop
 
-    - name: Run Sorbet Typechecker
+    - name: Run Sorbet type checker
       run: bundle exec srb tc --typed strong
 
-    - name: Verify Documentation Generation
+    - name: Verify documentation generation
       run: bundle exec yardoc --fail-on-warning
 
-    - name: Run Tests
+    - name: Ensure complete documentation
+      run: |
+        output=$(bundle exec yard stats --list-undoc)
+        echo "$output"
+        if ! echo "$output" | grep -q "100.00% documented"; then
+          echo "::error::Documentation coverage is less than 100%. Missing YARD docs detected."
+          exit 1
+        fi
+
+    - name: Run tests
       run: bundle exec rspec
 
-    - name: Recover Private Key for Code Signing
+    - name: Audit dependencies
+      run: bundle exec bundler-audit check --update
+
+    - name: Recover private key for code signing
       env:
         GEM_PRIVATE_KEY: ${{ secrets.GEM_PRIVATE_KEY }}
       run: |
@@ -57,23 +82,30 @@ jobs:
           mkdir -p ~/.gem
           printf '%s\n' "$GEM_PRIVATE_KEY" > ~/.gem/gem-private_key.pem
           chmod 0600 ~/.gem/gem-private_key.pem
+          # Opt in to signing; the gemspec verifies the key against certs/ and aborts on a mismatch.
+          echo "SIMPLECOV_AI_SIGN=1" >> "$GITHUB_ENV"
         else
-          echo "No GEM_PRIVATE_KEY secret found, skipping signature recovery."
+          echo "No GEM_PRIVATE_KEY secret found; the gem will be built unsigned."
         fi
 
-    - name: Build Gem
-      run: gem build simplecov-ai.gemspec
+    - name: Build gem
+      run: gem build simplecov-ai.gemspec --strict
 
-    - name: Configure RubyGems Credentials (OIDC)
-      uses: rubygems/configure-rubygems-credentials@v1
+    - name: Verify the built gem is signed when signing was requested
+      run: |
+        if [ -n "${SIMPLECOV_AI_SIGN:-}" ] && ! gem specification "simplecov-ai-${VERSION}.gem" cert_chain | grep -q 'BEGIN CERTIFICATE'; then
+          echo "::error::Signing was requested but simplecov-ai-${VERSION}.gem carries no certificate chain."
+          exit 1
+        fi
+
+    - name: Configure RubyGems credentials (OIDC)
+      uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
 
     # Publish to RubyGems first so a failed push does not leave an orphaned GitHub Release.
     - name: Publish to RubyGems
-      env:
-        VERSION: ${{ env.VERSION }}
       run: gem push "simplecov-ai-${VERSION}.gem"
 
     - name: Create GitHub Release
-      uses: softprops/action-gh-release@v3
+      uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
       with:
         files: simplecov-ai-${{ env.VERSION }}.gem

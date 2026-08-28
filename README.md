@@ -1,6 +1,6 @@
 # simplecov-ai
 
-A custom `SimpleCov::Formatter` designed explicitly for consumption by Large Language Models (LLMs) and autonomous engineering agents. 
+A custom `SimpleCov::Formatter` designed explicitly for consumption by Large Language Models (LLMs) and autonomous engineering agents.
 
 Standard coverage reporters generate massive HTML files or exhaustive JSON/console outputs detailing every line number. This overwhelms strict LLM token constraints and relies on highly volatile line numbers. `simplecov-ai` solves this by generating a concise, structurally optimized **Markdown document** containing only the exact missing semantic coverage blocks.
 

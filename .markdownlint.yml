@@ -1,0 +1,9 @@
+# markdownlint rules (CI runs `npx markdownlint-cli2 "**/*.md"`; ignores live in .markdownlintignore).
+default: true
+# Long lines are deliberate in the requirements and bug write-ups; wrapping would hurt diffs.
+MD013: false
+# Inline HTML (badges, collapsible sections, line breaks) is allowed.
+MD033: false
+# Keep-a-Changelog repeats "Added"/"Changed"/"Fixed" under every release heading.
+MD024:
+  siblings_only: true

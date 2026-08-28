@@ -1,0 +1,18 @@
+# Spell-checking of source comments and documentation (CI: crate-ci/typos; locally: `typos`).
+[files]
+extend-exclude = [
+  # Generated output and machine-written RBIs.
+  "doc/",
+  "coverage/",
+  "sorbet/rbi/",
+  "Gemfile.lock",
+  "gemfiles/*.lock",
+  # Historical audit transcript kept for reference; not maintained as documentation.
+  "CODE_REVIEW_REPORT.md",
+  # Certificates are not prose.
+  "certs/",
+]
+
+[default]
+# "mis-set" (as in mis-configured) is a legitimate hyphenation, not a misspelling of "miss".
+extend-ignore-re = ["\\bmis-set\\b"]

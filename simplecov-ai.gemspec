@@ -1,6 +1,8 @@
 # typed: strict
 # frozen_string_literal: true
 
+require 'openssl'
+
 version_content = File.read(File.expand_path('lib/simplecov-ai/version.rb', __dir__))
 version_match = version_content.match(/VERSION\s*=\s*T\.let\(['"]([^'"]+)['"],\s*String\)/)
 version = version_match&.captures&.first or
@@ -23,12 +25,31 @@ Gem::Specification.new do |spec|
   spec.metadata['changelog_uri'] = "#{spec.homepage}/blob/main/CHANGELOG.md"
   spec.metadata['allowed_push_host'] = 'https://rubygems.org'
 
-  # Code signing configuration. Only advertise the certificate chain when a matching private
-  # key is actually present, so unsigned local builds do not embed a dangling certificate path.
-  cert_path = File.expand_path('certs/simplecov-ai-public_cert.pem', __dir__)
-  private_key_path = File.expand_path('~/.gem/gem-private_key.pem')
-  # Ensure the key file actually has substantial content (not just a newline from an empty secret)
-  if File.exist?(cert_path) && File.exist?(private_key_path) && File.size(private_key_path) > 100
+  # Code signing is opt-in: set SIMPLECOV_AI_SIGN to any non-empty value (the release workflow
+  # does so only when the GEM_PRIVATE_KEY secret is present). When enabled, the private key must
+  # exist and must match the public certificate, otherwise the build aborts with a clear error
+  # instead of producing a gem carrying a broken signature. When unset, the gem builds unsigned.
+  if ENV['SIMPLECOV_AI_SIGN'].to_s.empty?
+    # RubyGems signs with ~/.gem/gem-private_key.pem whenever that file exists, even though the
+    # gemspec asked for nothing, and crashes or signs wrongly when that key belongs to a different
+    # certificate. Point its default lookups at paths that cannot exist so that "unsigned" holds
+    # on every machine, whatever lives in ~/.gem.
+    signing_disabled = File.join(__dir__, 'certs', 'signing-disabled')
+    Gem.define_singleton_method(:default_key_path) { signing_disabled }
+    Gem.define_singleton_method(:default_cert_path) { signing_disabled }
+  else
+    cert_path = File.expand_path('certs/simplecov-ai-public_cert.pem', __dir__)
+    private_key_path = File.expand_path('~/.gem/gem-private_key.pem')
+    unless File.file?(private_key_path)
+      raise "SIMPLECOV_AI_SIGN is set but no signing key exists at #{private_key_path}"
+    end
+
+    certificate = OpenSSL::X509::Certificate.new(File.read(cert_path))
+    private_key = OpenSSL::PKey.read(File.read(private_key_path))
+    unless certificate.check_private_key(private_key)
+      raise "The signing key at #{private_key_path} does not match #{cert_path}; refusing to build a wrongly signed gem"
+    end
+
     spec.cert_chain = [cert_path]
     spec.signing_key = private_key_path
   end
@@ -44,23 +65,25 @@ Gem::Specification.new do |spec|
   # on the internal branch-descriptor layout, which is only verified across the 0.18–1.x line.
   spec.add_dependency 'simplecov', '>= 0.18', '< 2.0'
 
-  # Development & Testing framework expectations
+  # Development & testing dependencies that install on every supported Ruby and platform. The
+  # Sorbet toolchain (sorbet, tapioca, rubocop-sorbet, standard-sorbet, yard-sorbet) lives in the
+  # Gemfile because sorbet-static has no Windows, JRuby or TruffleRuby builds. Floors track the
+  # newest release lines that still resolve on Ruby 2.7.
   spec.add_development_dependency 'base64'
   spec.add_development_dependency 'benchmark'
+  spec.add_development_dependency 'bundler-audit', '~> 0.9.3'
   spec.add_development_dependency 'logger'
   spec.add_development_dependency 'ostruct'
-  spec.add_development_dependency 'rspec', '~> 3.12'
-  spec.add_development_dependency 'rubocop', '>= 1.72'
-  spec.add_development_dependency 'rubocop-performance', '>= 1.14'
-  spec.add_development_dependency 'rubocop-rspec', '>= 2.11'
-  spec.add_development_dependency 'rubocop-sorbet'
-  spec.add_development_dependency 'rubocop-thread_safety'
-  spec.add_development_dependency 'sorbet', '~> 0.5'
-  spec.add_development_dependency 'standard-sorbet'
-  spec.add_development_dependency 'tapioca'
+  spec.add_development_dependency 'rake', '~> 13.0'
+  spec.add_development_dependency 'rspec', '~> 3.13'
+  spec.add_development_dependency 'rubocop', '~> 1.90'
+  spec.add_development_dependency 'rubocop-packaging', '~> 0.6'
+  spec.add_development_dependency 'rubocop-performance', '~> 1.27'
+  spec.add_development_dependency 'rubocop-rake', '~> 0.7'
+  spec.add_development_dependency 'rubocop-rspec', '~> 3.10'
+  spec.add_development_dependency 'rubocop-thread_safety', '~> 0.7'
   spec.add_development_dependency 'tsort'
-  spec.add_development_dependency 'yard'
-  spec.add_development_dependency 'yard-sorbet'
+  spec.add_development_dependency 'yard', '~> 0.9.45'
 
   # Gem files: glob relative to the gemspec directory (not the process CWD) and include only
   # regular files so directory entries are never packaged.

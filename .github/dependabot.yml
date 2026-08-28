@@ -1,0 +1,18 @@
+# Weekly dependency update proposals for the Ruby bundle and the pinned GitHub Actions. The
+# cooldown keeps brand-new releases out for a week so hijacked or quickly-yanked versions are
+# never proposed automatically.
+version: 2
+updates:
+  - package-ecosystem: bundler
+    directory: "/"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 10
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

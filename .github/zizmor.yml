@@ -1,0 +1,12 @@
+# zizmor (GitHub Actions security linter) configuration; CI runs it in the lint job.
+rules:
+  superfluous-actions:
+    ignore:
+      # softprops/action-gh-release is kept deliberately for the release asset upload; the
+      # `gh release` alternative zizmor suggests offers no security benefit here.
+      - release.yml
+  adhoc-packages:
+    ignore:
+      # The build job deliberately `gem install`s the gem it just built into a throwaway
+      # GEM_HOME as an installation smoke test; there is no lockfile for a freshly built gem.
+      - ci.yml
