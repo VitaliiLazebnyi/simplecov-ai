@@ -11,9 +11,6 @@ module SimpleCov
 
         # The explicit value used to designate a file or coverage block as perfectly covered.
         PERFECT_COVERAGE_PERCENT = T.let(100.0, Float)
-
-        # The directive typically employed within comments to force coverage engines to bypass execution tracking.
-        NOCOV_DIRECTIVE = T.let(':nocov:', String)
       end
     end
   end

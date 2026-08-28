@@ -8,10 +8,14 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::SnippetFormat
 
   let(:node) do
     SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.new(
-      name: 'Foo#bar', type: 'Instance Method', start_line: 1, end_line: 4, bypass_reasons: []
+      name: 'Foo#bar', type: 'Instance Method', start_line: 1, end_line: 4
     )
   end
   let(:source_lines) { ["def bar\n", "  x = 1\n", "  x = 1\n", "end\n"] }
+
+  def branch(start_line, end_line, type: :then)
+    SimpleCov::SourceFile::Branch.new(start_line: start_line, end_line: end_line, coverage: 0, inline: true, type: type)
+  end
 
   describe '#fetch_snippet_text' do
     it 'joins stripped non-empty lines' do
@@ -30,12 +34,6 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::SnippetFormat
 
     it 'returns the text unchanged when within budget' do
       expect(harness.truncate_snippet('short', 5)).to eq('short')
-    end
-  end
-
-  describe '#sanitize_inline' do
-    it 'replaces backticks so an inline code span is not broken' do
-      expect(harness.sanitize_inline('a `b` c')).to eq("a 'b' c")
     end
   end
 
@@ -63,36 +61,44 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::SnippetFormat
       expect(harness.calculate_occurrence(3, source_lines, node)).to eq('(Occurrence 2 of 2).')
     end
 
+    it 'skips blank lines inside the node when counting occurrences' do
+      spaced_node = SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.new(
+        name: 'Foo#spaced', type: 'Instance Method', start_line: 1, end_line: 5
+      )
+      spaced_lines = ["def spaced\n", "  x = 1\n", "\n", "  x = 1\n", "end\n"]
+      expect(harness.calculate_occurrence(4, spaced_lines, spaced_node)).to eq('(Occurrence 2 of 2).')
+    end
+
     it 'returns an empty string for a unique snippet' do
       expect(harness.calculate_occurrence(1, source_lines, node)).to eq('')
+    end
+
+    it 'tolerates a node that extends past the end of the source' do
+      expect(harness.calculate_occurrence(2, source_lines.first(2), node)).to eq('')
     end
   end
 
   describe '#extract_branch_text' do
-    let(:branch) { instance_double(SimpleCov::SourceFile::Branch, start_line: 2, end_line: 2) }
-
     it 'falls back to the full line range when column data is absent' do
-      allow(branch).to receive(:instance_variable_get).with(:@start_col).and_return(nil)
-      allow(branch).to receive(:instance_variable_get).with(:@end_col).and_return(nil)
-      expect(harness.extract_branch_text(branch, source_lines)).to eq('x = 1')
+      expect(harness.extract_branch_text(branch(2, 2), source_lines, nil)).to eq('x = 1')
     end
 
-    it 'uses the enriched inline slice when column data is present' do
-      allow(branch).to receive(:instance_variable_get).with(:@start_col).and_return(2)
-      allow(branch).to receive(:instance_variable_get).with(:@end_col).and_return(3)
-      expect(harness.extract_branch_text(branch, ["def bar\n", "  x = 1\n"])).to eq('x')
+    it 'uses the inline slice when column data is present' do
+      expect(harness.extract_branch_text(branch(2, 2), source_lines, [2, 3])).to eq('x')
+    end
+
+    it 'joins the lines of a multi-line branch even when column data is present' do
+      expect(harness.extract_branch_text(branch(1, 2), source_lines, [0, 3])).to eq('def bar x = 1')
     end
   end
 
   describe '#extract_inline_branch' do
     it 'returns nil when the branch line is beyond the source' do
-      branch = instance_double(SimpleCov::SourceFile::Branch, start_line: 99, end_line: 99)
-      expect(harness.extract_inline_branch(branch, 0, 2, source_lines)).to be_nil
+      expect(harness.extract_inline_branch(branch(99, 99), [0, 2], source_lines)).to be_nil
     end
 
     it 'returns nil when the column range exceeds the line length' do
-      branch = instance_double(SimpleCov::SourceFile::Branch, start_line: 2, end_line: 2)
-      expect(harness.extract_inline_branch(branch, 0, 999, source_lines)).to be_nil
+      expect(harness.extract_inline_branch(branch(2, 2), [0, 999], source_lines)).to be_nil
     end
   end
 end

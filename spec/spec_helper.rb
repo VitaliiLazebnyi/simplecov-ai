@@ -11,7 +11,7 @@ SimpleCov.start do
   minimum_coverage line: 100, branch: 100
 end
 
-require_relative '../lib/simplecov-ai'
+require 'simplecov-ai'
 
 SimpleCov::Formatter::AIFormatter.configure do |config|
   config.output_to_console = false
@@ -20,21 +20,18 @@ SimpleCov::Formatter::AIFormatter.configure do |config|
 end
 SimpleCov.formatter = SimpleCov::Formatter::AIFormatter
 
-require 'sorbet-runtime'
-# The suite drives the formatter with RSpec verifying doubles (instance_double), which are not
-# real instances of the classes their `sig`s require. Sorbet's runtime signature checks would
-# reject those doubles, so runtime validation is turned into a no-op here. The library's value
-# guards (Configuration writers, range checks) are plain Ruby and still enforced; production
-# code keeps full sorbet-runtime checking.
-T::Configuration.inline_type_error_handler = ->(_error, _opts) {}
-T::Configuration.call_validation_error_handler = ->(_signature, _opts) {}
+# The suite drives the formatter with real SimpleCov objects (see spec/support), so
+# sorbet-runtime's signature checks stay fully enabled: every `sig` in lib/ is enforced while
+# the examples run, exactly as it is for users.
+Dir[File.join(__dir__, 'support', '**', '*.rb')].sort.each { |support_file| require support_file }
 
 RSpec.configure do |config|
+  config.include SimpleCovFixtures
   config.mock_with :rspec do |mocks|
     mocks.verify_partial_doubles = true
   end
   config.disable_monkey_patching!
-  config.expect_with :rspec do |c|
-    c.syntax = :expect
+  config.expect_with :rspec do |expectations|
+    expectations.syntax = :expect
   end
 end

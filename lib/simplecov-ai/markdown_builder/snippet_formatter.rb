@@ -29,17 +29,6 @@ module SimpleCov
                      .join(' ')
           end
 
-          # Neutralizes backticks so a snippet stays inside a single-backtick Markdown code span
-          # instead of prematurely closing it. Ruby source rarely contains backticks (only shell
-          # execution), so replacing them with apostrophes keeps the report readable and valid.
-          #
-          # @param text [String] The raw snippet text.
-          # @return [String] The snippet safe to embed in an inline code span.
-          sig { params(text: String).returns(String) }
-          def sanitize_inline(text)
-            text.tr('`', "'")
-          end
-
           # Extracts a byte range from a source line. SimpleCov reports branch columns as
           # byte offsets, so slicing on the byte representation and restoring the original
           # encoding keeps sub-line snippets correct for multibyte source.
@@ -78,37 +67,62 @@ module SimpleCov
           #
           # @param branch [SimpleCov::SourceFile::Branch] The missed branch.
           # @param source_lines [Array<String>] Raw file contents.
+          # @param columns [Array(Integer, Integer), nil] The branch's `[start_col, end_col]`
+          #   byte offsets from {BranchEnricher}, when SimpleCov's raw data provided them.
           # @return [String] The branch's source snippet.
-          sig { params(branch: SimpleCov::SourceFile::Branch, source_lines: T::Array[String]).returns(String) }
-          def extract_branch_text(branch, source_lines)
-            start_col = fetch_column(branch, :start_col)
-            end_col = fetch_column(branch, :end_col)
-
-            inline_text = extract_inline_branch(branch, start_col, end_col, source_lines)
+          sig do
+            params(branch: SimpleCov::SourceFile::Branch, source_lines: T::Array[String],
+                   columns: T.nilable([Integer, Integer])).returns(String)
+          end
+          def extract_branch_text(branch, source_lines, columns)
+            inline_text = extract_inline_branch(branch, columns, source_lines)
             return inline_text if inline_text
 
-            lines_range = (branch.start_line..branch.end_line).to_a
-            fetch_snippet_text(lines_range, source_lines)
+            fetch_snippet_text((branch.start_line..branch.end_line).to_a, source_lines)
           end
 
-          # Reads a column offset that BranchEnricher stored as an instance variable on the
-          # branch (SimpleCov's Branch exposes no column accessor of its own).
-          sig { params(branch: SimpleCov::SourceFile::Branch, col: Symbol).returns(T.nilable(Integer)) }
-          def fetch_column(branch, col)
-            T.cast(branch.instance_variable_get(:"@#{col}"), T.nilable(Integer))
-          end
-
+          # The exact sub-line expression of a single-line branch, or nil when the branch spans
+          # several lines, has no column data or its columns fall outside the source line.
+          #
+          # @param branch [SimpleCov::SourceFile::Branch] The missed branch.
+          # @param columns [Array(Integer, Integer), nil] The branch's byte offsets, if known.
+          # @param source_lines [Array<String>] Raw file contents.
+          # @return [String, nil] The stripped inline expression.
           sig do
-            params(branch: SimpleCov::SourceFile::Branch, start_col: T.nilable(Integer),
-                   end_col: T.nilable(Integer), source_lines: T::Array[String]).returns(T.nilable(String))
+            params(branch: SimpleCov::SourceFile::Branch, columns: T.nilable([Integer, Integer]),
+                   source_lines: T::Array[String]).returns(T.nilable(String))
           end
-          def extract_inline_branch(branch, start_col, end_col, source_lines)
-            return nil unless branch.start_line == branch.end_line && start_col && end_col
+          def extract_inline_branch(branch, columns, source_lines)
+            return nil unless columns && branch.start_line == branch.end_line
 
             line_text = source_lines[branch.start_line - 1]
             return nil unless line_text
 
+            start_col, end_col = columns
             byte_slice(line_text, start_col, end_col)&.strip
+          end
+
+          # The first non-empty source line of a branch's range, for arms that are cut short.
+          #
+          # @param branch [SimpleCov::SourceFile::Branch] The missed branch.
+          # @param source_lines [Array<String>] Raw file contents.
+          # @return [String] The stripped first line, or an empty string when the range is blank.
+          sig { params(branch: SimpleCov::SourceFile::Branch, source_lines: T::Array[String]).returns(String) }
+          def first_source_line(branch, source_lines)
+            (branch.start_line..branch.end_line).lazy
+                                                .map { |line_number| fetch_snippet_text([line_number], source_lines) }
+                                                .find { |text| !text.empty? }
+                                                .to_s
+          end
+
+          # Labels a line range the way deficits are tagged: `12` for one line, `12-15` for a span.
+          #
+          # @param start_line [Integer] The first line.
+          # @param end_line [Integer] The last line.
+          # @return [String] The label without the `L` prefix.
+          sig { params(start_line: Integer, end_line: Integer).returns(String) }
+          def line_label(start_line, end_line)
+            start_line == end_line ? start_line.to_s : "#{start_line}-#{end_line}"
           end
 
           # Disambiguates identical code snippets within the same semantic block (e.g., "(Occurrence 2 of 3)").

@@ -3,35 +3,98 @@
 
 require 'spec_helper'
 require 'fileutils'
-require 'stringio'
 require 'tmpdir'
 
 RSpec.describe SimpleCov::Formatter::AIFormatter do
-  extend T::Sig
-
+  let(:tmpdir) { Dir.mktmpdir('scai') }
+  let(:report_path) { File.join(tmpdir, 'report.md') }
   let(:config) { described_class.configuration }
-
-  sig { returns(String) }
-  def read_report
-    File.read(config.report_path)
-  end
+  let(:calc_path) { write_source(tmpdir, 'calc.rb', calc_source) }
+  let(:calc_result) { result_for(calc_path => calc_coverage) }
 
   before do
-    described_class.instance_variable_set(:@configuration, nil)
-    described_class.configure do |c|
-      c.report_path = 'coverage/test_ai_report.md'
-      c.output_to_console = false
-      c.max_file_size_kb = 50
-    end
+    described_class.reset_configuration!
+    described_class.configure { |configuration| configuration.report_path = report_path }
+    # Reports name files relative to SimpleCov.root; pointing the root at the temp directory
+    # keeps the expected documents free of machine-specific paths.
+    allow(SimpleCov).to receive(:root).and_return(tmpdir)
   end
 
   after do
-    FileUtils.rm_f(config.report_path)
+    described_class.reset_configuration!
+    FileUtils.remove_entry(tmpdir)
+  end
+
+  # One covered method with a missed ternary arm and one never-invoked method whose body
+  # repeats a statement, so branch, line and occurrence rendering all show up.
+  def calc_source
+    <<~RUBY
+      module Sample
+        class Calc
+          def sign(number)
+            number.positive? ? :pos : :neg
+          end
+
+          def never_called
+            @never = 1
+            @never = 1
+          end
+        end
+      end
+    RUBY
+  end
+
+  def calc_coverage
+    {
+      'lines' => line_hits(12, covered: [1, 2, 3, 4, 7], missed: [8, 9]),
+      'branches' => {
+        branch_descriptor(calc_source, :if, 0, 4, 'number.positive? ? :pos : :neg') => {
+          branch_descriptor(calc_source, :then, 1, 4, ':pos') => 1,
+          branch_descriptor(calc_source, :else, 2, 4, ':neg') => 0
+        }
+      }
+    }
+  end
+
+  def perfect_lines
+    line_hits(12, covered: [1, 2, 3, 4, 7, 8, 9])
+  end
+
+  def expected_calc_digest
+    <<~MARKDOWN
+      # AI Coverage Digest
+      **Status:** FAILED
+      **Global Line Coverage:** 71.4%
+      **Global Branch Coverage:** 50.0%
+      **Generated At:** TIMESTAMP (Local Timezone)
+      ## Coverage Deficits
+
+      ### `calc.rb`
+      - `Sample::Calc#sign`
+        - **Branch Deficit:** [L4] Missing coverage for `else` branch: `:neg`
+      - `Sample::Calc#never_called`
+        - **Line Deficit:** [L8] `@never = 1` (Occurrence 1 of 2).
+        - **Line Deficit:** [L9] `@never = 1` (Occurrence 2 of 2).
+
+    MARKDOWN
+  end
+
+  def formatter
+    described_class.new
+  end
+
+  def format_and_read(result)
+    capture_stdout { formatter.format(result) }
+    File.read(report_path)
+  end
+
+  def without_timestamp(digest)
+    digest.sub(/\*\*Generated At:\*\* \S+/, '**Generated At:** TIMESTAMP')
   end
 
   describe '.configure' do
-    it 'allows configuring the formatter' do
-      described_class.configure { |c| c.max_file_size_kb = 10 }
+    it 'yields the process-global configuration' do
+      described_class.configure { |configuration| configuration.max_file_size_kb = 10 }
       expect(config.max_file_size_kb).to eq(10)
     end
 
@@ -41,516 +104,209 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
   end
 
   describe '#format' do
-    let(:formatter) { described_class.new }
-    let(:mock_line) { instance_double(SimpleCov::SourceFile::Line, line_number: 2) }
-    let(:mock_file) do
-      instance_double(
-        SimpleCov::SourceFile,
-        filename: 'lib/dummy.rb',
-        project_filename: 'lib/dummy.rb',
-        covered_percent: 50.0,
-        missed_lines: [mock_line, instance_double(SimpleCov::SourceFile::Line, line_number: 3)],
-        missed_branches: []
-      )
-    end
-    let(:mock_result) do
-      instance_double(
-        SimpleCov::Result,
-        covered_percent: 90.0,
-        covered_branches: 10,
-        total_branches: 20,
-        files: [mock_file]
-      )
+    it 'writes the digest to the configured path and announces the path on STDOUT' do
+      announcement = capture_stdout { formatter.format(calc_result) }
+      expect([announcement, File.exist?(report_path)])
+        .to eq(["AI coverage digest written to #{report_path}\n", true])
     end
 
-    before do
-      allow(mock_file).to receive(:respond_to?).with(:branches).and_return(false)
-      allow(mock_file).to receive(:respond_to?).with(:branches_coverage_percent).and_return(false)
-      allow(mock_file).to receive(:respond_to?).with(:coverage_data).and_return(false)
-      allow(mock_file).to receive(:branches).and_return(nil)
-
-      # Mock the AST resolver to avoid file system reads during basic format test
-      node = SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.new(
-        name: 'DummyClass', type: 'Class', start_line: 1, end_line: 10, bypass_reasons: []
-      )
-      child_node = SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.new(
-        name: 'DummyClass#initialize', type: 'Instance Method', start_line: 2, end_line: 4, bypass_reasons: []
-      )
-      allow(SimpleCov::Formatter::AIFormatter::ASTResolver).to receive(:resolve).and_return([node, child_node])
-
-      # Mock file reading to simulate reading source lines for snippets
-      allow(File).to receive(:readlines).with('lib/dummy.rb').and_return([
-                                                                           "class DummyClass\n",
-                                                                           "  def initialize\n",
-                                                                           "    @foo = 1\n",
-                                                                           "  end\n",
-                                                                           "  def branch_test\n",
-                                                                           "    break if stream.closed?\n",
-                                                                           "  end\n",
-                                                                           "  def branch_test_2\n",
-                                                                           "    break if stream.closed?\n",
-                                                                           "  end\n"
-                                                                         ])
+    it 'renders the header, then each deficit file with its nodes and exact snippets in source order' do
+      expect(without_timestamp(format_and_read(calc_result))).to eq(expected_calc_digest)
     end
 
-    context 'when writing a basic digest' do
-      let(:mock_result) do
-        instance_double(
-          SimpleCov::Result,
-          covered_percent: 90.0,
-          covered_branches: 10,
-          total_branches: 20,
-          files: [mock_file]
-        )
-      end
-
-      before { formatter.format(mock_result) }
-
-      it('creates the report file') { expect(File.exist?(config.report_path)).to be(true) }
-      it('includes the main title') { expect(read_report).to include('# AI Coverage Digest') }
-      it('includes the overall status') { expect(read_report).to include('**Status:** FAILED') }
-      it('includes the targeted filename') { expect(read_report).to include('`lib/dummy.rb`') }
-      it('includes the semantic method name') { expect(read_report).to include('`DummyClass#initialize`') }
-      it('includes the correct branch coverage') { expect(read_report).to include('**Global Branch Coverage:** 50.0%') }
-
-      it('includes the formatted generated at timestamp') do
-        regex = /\*\*Generated At:\*\* \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2}) \(Local Timezone\)/
-        expect(read_report).to match(regex)
-      end
+    it 'stamps the generation time as an ISO 8601 local timestamp' do
+      iso8601 = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})/
+      timestamp_line = /^\*\*Generated At:\*\* #{iso8601} \(Local Timezone\)$/
+      expect(format_and_read(calc_result)).to match(timestamp_line)
     end
 
-    it 'echoes the full digest to STDOUT when configured' do
+    it 'keeps the sub-line branch snippet when the result was rebuilt from the JSON resultset' do
+      expect(without_timestamp(format_and_read(merged_result(calc_result)))).to eq(expected_calc_digest)
+    end
+
+    it 'echoes the whole digest instead of the announcement when output_to_console is on' do
       config.output_to_console = true
-      expect { formatter.format(mock_result) }.to output(/# AI Coverage Digest/).to_stdout
+      printed = capture_stdout { formatter.format(calc_result) }
+      expect([printed.start_with?('# AI Coverage Digest'), printed.include?('written to')]).to eq([true, false])
     end
 
-    it 'does not echo the digest to STDOUT by default' do
-      config.output_to_console = false
-      expect { formatter.format(mock_result) }.not_to output.to_stdout
+    it 'summarises each node with coarse granularity' do
+      config.granularity = :coarse
+      expect(format_and_read(calc_result)).to end_with(<<~MARKDOWN)
+        - `Sample::Calc#sign`
+          - **Deficit:** Contains unexecuted lines or branches.
+        - `Sample::Calc#never_called`
+          - **Deficit:** Contains unexecuted lines or branches.
+
+      MARKDOWN
     end
 
-    it 'reports 100.0% coverage when total_branches is zero' do
-      allow(mock_result).to receive(:total_branches).and_return(0)
-      formatter.format(mock_result)
-      expect(File.read(config.report_path)).to include('**Global Branch Coverage:** 100.0%')
+    it 'truncates over-long snippets at the configured line budget' do
+      config.max_snippet_lines = 1
+      long_path = write_source(tmpdir, 'wide.rb', "def wide\n  #{'a' * 100}\nend\n")
+      digest = format_and_read(result_for(long_path => { 'lines' => [1, 0, nil] }))
+      expect(digest).to end_with("- `#wide`\n  - **Line Deficit:** [L2] `#{'a' * 80}...`\n\n")
     end
 
-    it 'reports branch coverage as N/A when branch coverage is not enabled (nil totals)' do
-      allow(mock_result).to receive_messages(total_branches: nil, covered_branches: nil)
-      formatter.format(mock_result)
-      expect(File.read(config.report_path)).to include('**Global Branch Coverage:** N/A (branch coverage not enabled)')
-    end
-
-    context 'when 100% covered' do
-      let(:mock_result_pass) do
-        instance_double(SimpleCov::Result, covered_percent: 100.0, covered_branches: 20, total_branches: 20, files: [])
+    context 'with a fully covered result' do
+      let(:covered_result) do
+        branches = calc_coverage['branches'].transform_values { |arms| arms.transform_values { 1 } }
+        result_for(calc_path => { 'lines' => perfect_lines, 'branches' => branches })
       end
-      let(:content) { File.read(config.report_path) }
 
-      before { formatter.format(mock_result_pass) }
-
-      it('reports PASSED status') { expect(content).to include('**Status:** PASSED') }
-      it('omits Coverage Deficits section') { expect(content).not_to include('## Coverage Deficits') }
+      it 'reports PASSED and nothing but the header' do
+        expect(format_and_read(covered_result))
+          .to match(/\A# AI Coverage Digest\n\*\*Status:\*\* PASSED\n.*\n.*\n.*\n\z/)
+      end
     end
 
-    context 'when 100% line covered but branch deficits exist' do
-      let(:content) { File.read(config.report_path) }
+    context 'when branch coverage is not enabled for the run' do
+      before { allow(SimpleCov).to receive(:branch_coverage?).and_return(false) }
 
+      it 'reports N/A and judges the status by line coverage alone' do
+        digest = format_and_read(result_for(calc_path => { 'lines' => perfect_lines }))
+        expect(digest.lines[1..3].join).to eq(
+          "**Status:** PASSED\n**Global Line Coverage:** 100.0%\n" \
+          "**Global Branch Coverage:** N/A (branch coverage not enabled)\n"
+        )
+      end
+    end
+
+    it 'reports 100.0% branch coverage when the run recorded no branches at all' do
+      digest = format_and_read(result_for(calc_path => { 'lines' => perfect_lines }))
+      expect(digest.lines[3]).to eq("**Global Branch Coverage:** 100.0%\n")
+    end
+
+    context 'when a deficit file is not valid Ruby' do
+      let(:broken_path) { write_source(tmpdir, 'broken.rb', "class Broken\n  def half\n    1 +\n  end\n") }
+
+      it 'degrades that file to raw line numbers under a parse-failure notice' do
+        expect(format_and_read(result_for(broken_path => { 'lines' => [1, 1, 0, nil] }))).to end_with(<<~MARKDOWN)
+          ### `broken.rb`
+            - **ERROR:** AST Parsing Failed. Showing raw line numbers instead.
+            - **Line Deficit:** [L3] `1 +`
+
+        MARKDOWN
+      end
+    end
+
+    context 'with a branch SimpleCov recorded beyond the end of the file (a file that shrank)' do
+      let(:stale_result) do
+        stale_arm = { multiline_branch_descriptor(:then, 1, 99, 100) => 0 }
+        branches = { multiline_branch_descriptor(:if, 0, 99, 100) => stale_arm }
+        result_for(calc_path => { 'lines' => calc_coverage['lines'], 'branches' => branches })
+      end
+
+      it 'labels the deficit by its line range instead of a node' do
+        expect(format_and_read(stale_result)).to end_with(<<~MARKDOWN)
+          - `Lines 99-100`
+            - **Branch Deficit:** [L99-100] Missing coverage for `then` branch: ``
+
+        MARKDOWN
+      end
+    end
+
+    context 'when the source cannot be read while snippets are rendered' do
       before do
-        mock_file_branch_deficit = instance_double(
-          SimpleCov::SourceFile,
-          filename: 'lib/branch_dummy.rb',
-          project_filename: 'lib/branch_dummy.rb',
-          missed_lines: [],
-          missed_branches: [instance_double(SimpleCov::SourceFile::Branch, start_line: 5, end_line: 7, type: :else)]
-        )
-        mock_result_branch_deficit = instance_double(
-          SimpleCov::Result,
-          covered_percent: 100.0,
-          covered_branches: 10,
-          total_branches: 20,
-          files: [mock_file_branch_deficit]
-        )
-
-        # 100% line coverage but only 50% branch coverage. covered_percent returns the line
-        # percentage for the no-argument call and raises for a criterion (matching simplecov
-        # 0.x arity under verify_partial_doubles); the branch percentage comes from the
-        # branches_coverage_percent fallback so the mock is valid on every simplecov version.
-        allow(mock_file_branch_deficit).to receive(:covered_percent) do |*args|
-          args.empty? ? 100.0 : raise(ArgumentError)
-        end
-        allow(mock_file_branch_deficit).to receive(:respond_to?).with(:branches).and_return(true)
-        allow(mock_file_branch_deficit).to receive(:respond_to?).with(:coverage_data).and_return(false)
-        allow(mock_file_branch_deficit).to receive(:respond_to?).with(:branches_coverage_percent).and_return(true)
-        allow(mock_file_branch_deficit).to receive(:branches_coverage_percent).and_return(50.0)
-        allow(mock_file_branch_deficit).to receive_messages(branches: [instance_double(
-          SimpleCov::SourceFile::Branch, start_line: 5, end_line: 7, type: :else
-        )])
-        allow(File).to receive(:readlines).with('lib/branch_dummy.rb').and_return((1..10).map { |i| "line #{i}\n" })
-
-        formatter.format(mock_result_branch_deficit)
+        unreadable = calc_result.files.first
+        [unreadable.missed_lines, unreadable.missed_branches, unreadable.skipped_lines]
+        allow(unreadable).to receive(:src).and_raise(Errno::EACCES)
       end
 
-      it('includes the Coverage Deficits section') { expect(content).to include('## Coverage Deficits') }
-      it('reports the branch deficit despite 100% line coverage') { expect(content).to include('**Branch Deficit:**') }
-    end
+      it 'lists the deficits without snippets rather than raising' do
+        expect(format_and_read(calc_result)).to end_with(<<~MARKDOWN)
+          - `Sample::Calc#sign`
+            - **Branch Deficit:** [L4] Missing coverage for `else` branch: ``
+          - `Sample::Calc#never_called`
+            - **Line Deficit:** [L8] ``
+            - **Line Deficit:** [L9] ``
 
-    context 'when handling branch coverage and truncation' do
-      let(:mock_branch) { instance_double(SimpleCov::SourceFile::Branch, start_line: 5, end_line: 7, type: :if) }
-
-      before do
-        allow(mock_file).to receive(:respond_to?).with(:branches).and_return(true)
-        allow(mock_file).to receive(:respond_to?).with(:branches_coverage_percent).and_return(true)
-        allow(mock_file).to receive(:respond_to?).with(:coverage_data).and_return(false)
-        allow(mock_file).to receive(:branches_coverage_percent).and_return(50.0)
-        allow(mock_file).to receive_messages(branches: [mock_branch], missed_branches: [mock_branch])
-      end
-
-      context 'when formatting branch deficits' do
-        before { formatter.format(mock_result) }
-
-        let(:content) { File.read(config.report_path) }
-
-        it('reports missing branch coverage text') {
-          expect(content).to include('**Branch Deficit:** [L5-7] Missing coverage')
-        }
-
-        it('includes the class name') { expect(content).to include('`DummyClass`') }
-        it('includes the innermost method name for lines') { expect(content).to include('`DummyClass#initialize`') }
-        it('reports exact line 2 snippet') { expect(content).to include('`def initialize`') }
-        it('reports exact line 3 snippet') { expect(content).to include('`@foo = 1`') }
-        it('groups semantic node headers uniquely') { expect(content.scan('- `DummyClass#initialize`').size).to eq(1) }
-        it('groups line deficits together') { expect(content.scan('- **Line Deficit:**').size).to eq(2) }
-
-        it('sorts the output chronologically') do
-          expect(content).to match(/`DummyClass`.*Branch Deficit.*`DummyClass#initialize`.*`def initialize`/m)
-        end
-      end
-
-      context 'when extracting exact sub-snippets for branches on a single line' do
-        before do
-          first_mock_branch = instance_double(SimpleCov::SourceFile::Branch, start_line: 8, end_line: 8, type: :then)
-          first_mock_branch.instance_variable_set(:@start_col, 2)
-          first_mock_branch.instance_variable_set(:@end_col, 6)
-
-          second_mock_branch = instance_double(SimpleCov::SourceFile::Branch, start_line: 8, end_line: 8, type: :else)
-          second_mock_branch.instance_variable_set(:@start_col, 2)
-          second_mock_branch.instance_variable_set(:@end_col, 9)
-
-          allow(mock_file).to receive_messages(
-            branches: [first_mock_branch, second_mock_branch],
-            missed_branches: [first_mock_branch, second_mock_branch]
-          )
-          allow(File).to receive(:readlines).with('lib/dummy.rb').and_return([
-                                                                               "class DummyClass\n",
-                                                                               "  def initialize\n",
-                                                                               "  end\n",
-                                                                               "  def branch_test\n",
-                                                                               "  end\n",
-                                                                               "  def branch_test_2\n",
-                                                                               "  end\n",
-                                                                               "  d&.a&.b&.c\n"
-                                                                             ])
-          formatter.format(mock_result)
-        end
-
-        it 'extracts the exact sub-snippet for the first operator' do
-          expect(File.read(config.report_path))
-            .to include('**Branch Deficit:** [L8] Missing coverage for `then` branch: `d&.a`')
-        end
-
-        it 'extracts the exact sub-snippet for the second operator' do
-          expect(File.read(config.report_path))
-            .to include('**Branch Deficit:** [L8] Missing coverage for `else` branch: `d&.a&.b`')
-        end
-      end
-
-      context 'when enriching branch columns from raw coverage data' do
-        let(:mock_real_branch) do
-          instance_double(SimpleCov::SourceFile::Branch, start_line: 10, end_line: 10, type: :then)
-        end
-
-        before do
-          allow(mock_file).to receive(:respond_to?).with(:branches).and_return(true)
-          allow(mock_file).to receive(:respond_to?).with(:coverage_data).and_return(true)
-          allow(mock_file).to receive_messages(
-            # SimpleCov >= 1.0 exposes branch descriptors as native Arrays keyed as
-            # [type, id, start_line, start_col, end_line, end_col]; no string decoding required.
-            coverage_data: {
-              'branches' => {
-                [:if, 0, 10, 8, 10, 12] => { [:then, 1, 10, 8, 10, 12] => 0 }
-              }
-            },
-            branches: [mock_real_branch],
-            missed_branches: [mock_real_branch]
-          )
-          source_lines = (1..9).map { |i| "line #{i} text\n" } + ["    x ? :yes : :no\n"]
-          allow(File).to receive(:readlines).with('lib/dummy.rb').and_return(source_lines)
-          formatter.format(mock_result)
-        end
-
-        it 'applies the raw column offsets so the exact sub-snippet is extracted' do
-          expect(File.read(config.report_path))
-            .to include('**Branch Deficit:** [L10] Missing coverage for `then` branch: `:yes`')
-        end
-      end
-
-      context 'with coarse granularity' do
-        before do
-          config.granularity = :coarse
-          formatter.format(mock_result)
-        end
-
-        it('includes summary text') { expect(read_report).to include('Contains unexecuted lines or branches.') }
-        it('omits specific code snippets') { expect(read_report).not_to include('`def initialize`') }
-      end
-
-      context 'when truncating extremely long snippets using max_snippet_lines' do
-        before do
-          long_line = "  def initialize #{'A' * 100}\n"
-          allow(File).to receive(:readlines).with('lib/dummy.rb').and_return(["class DummyClass\n", long_line,
-                                                                              "  end\n"])
-          config.max_snippet_lines = 1
-          formatter.format(mock_result)
-        end
-
-        let(:content) { File.read(config.report_path) }
-
-        it('includes the truncated prefix') { expect(content).to include('A' * 50) }
-        it('includes the trailing ellipsis') { expect(content).to include('...') }
-        it('does not include the full string') { expect(content).not_to include('A' * 100) }
-      end
-
-      context 'with identical snippets' do
-        before do
-          allow(mock_line).to receive(:line_number).and_return(9)
-          formatter.format(mock_result)
-        end
-
-        it('labels the duplicate occurrence') { expect(read_report).to include('(Occurrence 2 of 2)') }
-        it('includes the snippet text') { expect(read_report).to include('break if stream.closed?') }
-      end
-
-      context 'with deficits outside every resolved node (a file that shrank after coverage ran)' do
-        before do
-          allow(mock_branch).to receive_messages(start_line: 99, end_line: 100)
-          allow(mock_line).to receive(:line_number).and_return(99)
-          formatter.format(mock_result)
-        end
-
-        it('labels the line deficit by its line') { expect(read_report).to include('`Line 99`') }
-        it('labels the multi-line branch deficit by its range') { expect(read_report).to include('`Lines 99-100`') }
+        MARKDOWN
       end
     end
 
-    context 'when the deficit report exceeds the size budget' do
-      let(:bulky_result) do
-        missed = (2..9).map { |num| instance_double(SimpleCov::SourceFile::Line, line_number: num) }
-        bulky_file = instance_double(
-          SimpleCov::SourceFile, filename: 'lib/bulky.rb', project_filename: 'lib/bulky.rb',
-                                 covered_percent: 10.0, missed_lines: missed, missed_branches: []
-        )
-        allow(bulky_file).to receive(:respond_to?).with(:branches).and_return(false)
-        allow(bulky_file).to receive(:respond_to?).with(:coverage_data).and_return(false)
-        allow(SimpleCov::Formatter::AIFormatter::ASTResolver).to receive(:resolve).and_return([])
-        allow(File).to receive(:readlines).with('lib/bulky.rb').and_return(Array.new(10, "    value = #{'a' * 300}\n"))
-        instance_double(
-          SimpleCov::Result, covered_percent: 10.0, covered_branches: 0, total_branches: 0, files: [bulky_file]
-        )
+    context 'with a bypassed method' do
+      let(:legacy_path) { write_source(tmpdir, 'legacy.rb', legacy_source) }
+      let(:legacy_result) do
+        result_for(legacy_path => { 'lines' => line_hits(11, covered: [1, 8], missed: [3, 4, 9]) })
       end
 
-      it 'truncates output and appends the notification' do
-        config.max_file_size_kb = 1
-        formatter.format(bulky_result)
-        expect(File.read(config.report_path)).to include('TRUNCATION NOTIFICATION')
-      end
-    end
+      def legacy_source
+        <<~RUBY
+          class Legacy
+            #{nocov_marker}
+            def obsolete
+              raise NotImplementedError
+            end
+            #{nocov_marker}
 
-    context 'when AST parser fails or file is corrupt' do
-      it 'degrades gracefully' do
-        allow(SimpleCov::Formatter::AIFormatter::ASTResolver).to receive(:resolve)
-                                                             .and_raise(StandardError.new('Fatal parse'))
-        formatter.format(mock_result)
-        content = File.read(config.report_path)
-        expect(content).to include('**ERROR:** AST Parsing Failed')
-      end
-    end
-
-    context 'when evaluating AST performance' do
-      it 'caches the resolved AST preventing redundant file system reads' do
-        # Clear the allow from the before block for this specific test
-        allow(SimpleCov::Formatter::AIFormatter::ASTResolver).to receive(:resolve).and_call_original
-
-        node = SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.new(
-          name: 'DummyClass', type: 'Class', start_line: 1, end_line: 10, bypass_reasons: [':nocov:']
-        )
-        allow(SimpleCov::Formatter::AIFormatter::ASTResolver).to receive(:resolve)
-                                                             .with('lib/dummy.rb')
-          .and_return([node])
-
-        config.include_bypasses = true
-        formatter.format(mock_result)
-
-        expect(SimpleCov::Formatter::AIFormatter::ASTResolver).to have_received(:resolve).with('lib/dummy.rb').once
-      end
-    end
-
-    context 'when tracking bypasses' do
-      before do
-        node = SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.new(name: 'DummyClass', type: 'Class',
-                                                                                start_line: 1,
-                                                                                end_line: 10,
-                                                                                bypass_reasons: [':nocov:'])
-        allow(SimpleCov::Formatter::AIFormatter::ASTResolver).to receive(:resolve).and_return([node])
-        formatter.format(mock_result)
+            def live
+              :live
+            end
+          end
+        RUBY
       end
 
-      it('includes the bypass section') { expect(read_report).to include('Ignored Coverage Bypasses') }
+      it 'reports the deficit outside the region and the bypass with its directive text' do
+        expect(format_and_read(legacy_result)).to end_with(<<~MARKDOWN)
+          ## Coverage Deficits
 
-      it('emits the captured directive as the bypass reason') {
-        expect(read_report).to include('**Bypass Present:** Coverage explicitly ignored via `:nocov:`.')
-      }
-    end
+          ### `legacy.rb`
+          - `Legacy#live`
+            - **Line Deficit:** [L9] `:live`
 
-    context 'when tracking bypasses with disabled config' do
-      before do
+          ## Ignored Coverage Bypasses
+
+          ### `legacy.rb`
+          - `Legacy#obsolete`
+            - **Bypass Present:** Coverage explicitly ignored via `#{nocov_marker}`.
+
+        MARKDOWN
+      end
+
+      it 'omits the bypass section when bypass auditing is disabled' do
         config.include_bypasses = false
-        node = SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.new(name: 'DummyClass', type: 'Class',
-                                                                                start_line: 1,
-                                                                                end_line: 10,
-                                                                                bypass_reasons: [':nocov:'])
-        allow(SimpleCov::Formatter::AIFormatter::ASTResolver).to receive(:resolve).and_return([node])
-        formatter.format(mock_result)
+        expect(format_and_read(legacy_result)).not_to match(/Ignored Coverage Bypasses|Legacy#obsolete/)
       end
 
-      it('does not report bypasses if disabled') { expect(read_report).not_to include('Ignored Coverage Bypasses') }
+      it 'resolves the AST of a file once for both its deficits and its bypasses' do
+        allow(described_class::ASTResolver).to receive(:resolve).and_call_original
+        capture_stdout { formatter.format(legacy_result) }
+        expect(described_class::ASTResolver).to have_received(:resolve).with(legacy_path).once
+      end
     end
   end
 
-  describe 'ASTResolver' do
-    let(:tmpdir) { Dir.mktmpdir }
-    let(:ruby_file) { File.join(tmpdir, 'sample.rb') }
-    let(:invalid_file) { File.join(tmpdir, 'invalid.rb') }
-
-    after do
-      FileUtils.remove_entry(tmpdir)
+  describe 'report destination' do
+    it 'writes to ai_report.md inside SimpleCov.coverage_path when no report_path is configured' do
+      described_class.reset_configuration!
+      coverage_dir = File.join(tmpdir, 'custom_cov')
+      allow(SimpleCov).to receive(:coverage_path).and_return(coverage_dir)
+      capture_stdout { formatter.format(calc_result) }
+      expect(File.exist?(File.join(coverage_dir, 'ai_report.md'))).to be(true)
     end
 
-    describe '.resolve' do
-      it 'returns empty array for missing files' do
-        expect(SimpleCov::Formatter::AIFormatter::ASTResolver.resolve('missing_file.rb')).to eq([])
-      end
+    it 'resolves a relative report_path against SimpleCov.root' do
+      config.report_path = 'reports/digest.md'
+      capture_stdout { formatter.format(calc_result) }
+      expect(File.exist?(File.join(tmpdir, 'reports', 'digest.md'))).to be(true)
+    end
 
-      it 'returns only the root scope for perfectly empty files' do
-        File.write(ruby_file, '')
-        nodes = SimpleCov::Formatter::AIFormatter::ASTResolver.resolve(ruby_file)
-        expect(nodes.map { |node| [node.name, node.type, node.start_line, node.end_line] })
-          .to eq([['main', 'Root Script Scope', 1, 1]])
-      end
+    it 'uses an absolute report_path unchanged' do
+      absolute = File.join(tmpdir, 'nested', 'abs_report.md')
+      config.report_path = absolute
+      capture_stdout { formatter.format(calc_result) }
+      expect(File.exist?(absolute)).to be(true)
+    end
+  end
 
-      it 'raises error gracefully for syntax errors' do
-        File.write(invalid_file, "class Broken \n end def =")
-        expect { SimpleCov::Formatter::AIFormatter::ASTResolver.resolve(invalid_file) }.to raise_error(Parser::SyntaxError)
-      end
-
-      context 'when resolving modules, singleton classes and paired :nocov: regions' do
-        # The `# :noc%s:` placeholder keeps the literal directive out of this spec's own
-        # source so the repository directive auditor does not flag the fixture.
-        let(:code) do
-          format(<<~RUBY, 'ov', 'ov')
-            module Analytics
-              class Event
-                # :noc%s:
-                def bypassed
-                end
-                # :noc%s:
-                def covered
-                end
-
-                class << self
-                  def singleton_covered
-                  end
-                end
-              end
-            end
-          RUBY
-        end
-        let(:nodes) { SimpleCov::Formatter::AIFormatter::ASTResolver.resolve(ruby_file) }
-
-        before { File.write(ruby_file, code) }
-
-        it('resolves the root scope, module, class and methods in source order with their types') do
-          expect(nodes.map { |node| [node.name, node.type] }).to eq(
-            [['main', 'Root Script Scope'], ['Analytics', 'Module'], ['Analytics::Event', 'Class'],
-             ['Analytics::Event#bypassed', 'Instance Method'], ['Analytics::Event#covered', 'Instance Method'],
-             ['Analytics::Event.singleton_covered', 'Singleton Method']]
-          )
-        end
-
-        it('bypasses only the method inside the paired region, not its ancestors or siblings') do
-          expect(nodes.map(&:bypass_reasons)).to eq([[], [], [], ['# :nocov:'], [], []])
-        end
-      end
-
-      context 'when handling directive variations and compact class names' do
-        let(:code) do
-          <<~RUBY
-            class Outer::Inner
-              def prose_only
-                do_thing # a note about :nocov: that is not a real directive
-              end
-
-              # simplecov:disable
-              def disabled_region
-              end
-              # simplecov:enable
-
-              def normal
-              end
-            end
-          RUBY
-        end
-        let(:nodes) { SimpleCov::Formatter::AIFormatter::ASTResolver.resolve(ruby_file) }
-
-        before { File.write(ruby_file, code) }
-
-        it('preserves the full namespace of a compact class definition') do
-          expect(nodes.map(&:name)).to eq(['main', 'Outer::Inner', 'Outer::Inner#prose_only',
-                                           'Outer::Inner#disabled_region', 'Outer::Inner#normal'])
-        end
-
-        it('does not treat a prose :nocov: mention as a directive') do
-          expect(nodes.find { |node| node.name == 'Outer::Inner#prose_only' }.bypass_reasons).to be_empty
-        end
-
-        it('attributes a simplecov:disable region to the method it wraps') do
-          node = nodes.find { |candidate| candidate.name == 'Outer::Inner#disabled_region' }
-          expect(node.bypass_reasons).to eq(['# simplecov:disable'])
-        end
-
-        it('leaves methods outside the disabled region untouched') do
-          expect(nodes.find { |node| node.name == 'Outer::Inner#normal' }.bypass_reasons).to be_empty
-        end
-      end
-
-      context 'when resolving root level methods correctly' do
-        let(:code) do
-          <<~RUBY
-            def root_method
-            end
-
-            def self.root_class_method
-            end
-          RUBY
-        end
-        let(:nodes) { SimpleCov::Formatter::AIFormatter::ASTResolver.resolve(ruby_file) }
-
-        before { File.write(ruby_file, code) }
-
-        it('resolves root-level methods under the root scope with bare separators') do
-          expect(nodes.map(&:name)).to eq(['main', '#root_method', '.root_class_method'])
-        end
-      end
+  describe 'bypass auditing of a file whose AST cannot be resolved' do
+    it 'reports the raw deficits and no bypass for the skipped region' do
+      source = "class Broken\n#{nocov_marker}\ndef skipped\nend\n#{nocov_marker}\ndef half\n  1 +\nend\n"
+      broken_path = write_source(tmpdir, 'broken.rb', source)
+      coverage = { 'lines' => [1, nil, 1, nil, nil, 1, 0, nil] }
+      capture_stdout { formatter.format(result_for(broken_path => coverage)) }
+      expect(File.read(report_path)).to end_with("  - **Line Deficit:** [L7] `1 +`\n\n")
     end
   end
 end

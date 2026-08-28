@@ -63,11 +63,6 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
         expect(node_table(nodes)).to eq(expected_table)
       end
 
-      it 'attributes the top-level bypass region to the root scope alone' do
-        bypassed = nodes.map { |node| [node.name, node.bypass_reasons] }.reject { |_name, reasons| reasons.empty? }
-        expect(bypassed).to eq([['main', ['# simplecov:disable']]])
-      end
-
       it 'marks only the first node as the root scope' do
         expect(nodes.map(&:root?)).to eq([true] + Array.new(nodes.size - 1, false))
       end
@@ -141,6 +136,42 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
 
     it 'prints no warning to STDERR for code the grammar merely warns about' do
       expect { resolve("def ambiguous\n  puts -1\nend\n") }.not_to output.to_stderr
+    end
+
+    context 'when resolving modules, methods and singleton classes' do
+      let(:nodes) do
+        resolve(<<~RUBY)
+          module Analytics
+            class Event
+              def tracked
+              end
+
+              class << self
+                def singleton_tracked
+                end
+              end
+            end
+          end
+        RUBY
+      end
+
+      it 'lists the root scope, module, class and methods in source order with their types' do
+        expect(nodes.map { |node| [node.name, node.type] }).to eq(
+          [['main', 'Root Script Scope'], ['Analytics', 'Module'], ['Analytics::Event', 'Class'],
+           ['Analytics::Event#tracked', 'Instance Method'],
+           ['Analytics::Event.singleton_tracked', 'Singleton Method']]
+        )
+      end
+    end
+
+    it 'preserves the full namespace of a compact class definition' do
+      nodes = resolve("class Outer::Inner\n  def probe\n  end\nend\n")
+      expect(nodes.map(&:name)).to eq(['main', 'Outer::Inner', 'Outer::Inner#probe'])
+    end
+
+    it 'names root-level methods under the root scope with bare separators' do
+      nodes = resolve("def root_method\nend\n\ndef self.root_class_method\nend\n")
+      expect(nodes.map(&:name)).to eq(['main', '#root_method', '.root_class_method'])
     end
   end
 end

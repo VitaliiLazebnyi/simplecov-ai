@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require 'parser'
+require_relative 'line_span'
 require_relative 'ast_resolver/semantic_node'
 require_relative 'ast_resolver/parser_backend'
 require_relative 'ast_resolver/bypass_scanner'
@@ -37,10 +38,7 @@ module SimpleCov
           ast = ParserBackend.parse(buffer)
           source = T.cast(buffer.source, String)
 
-          resolver = new
-          nodes = [SemanticNode.root(source.lines.size)] + resolver.traverse(ast)
-          resolver.assign_bypasses(nodes, source)
-          nodes
+          [SemanticNode.root(source.lines.size)] + new.traverse(ast)
         end
 
         # Reads the file as bytes, tagged UTF-8 (Ruby's default source encoding) when they form
@@ -80,23 +78,6 @@ module SimpleCov
           end
 
           nodes
-        end
-
-        # Attributes coverage-bypass directives to the semantic nodes they cover.
-        #
-        # `# :nocov:` markers are paired into regions (mirroring SimpleCov's `each_slice(2)`
-        # semantics, extending an unmatched marker to end-of-file), and `# simplecov:disable` /
-        # `# simplecov:enable` block directives contribute their own regions. Each region is
-        # attributed to the outermost semantic nodes it fully contains, or — when it sits inside
-        # a single node — to that innermost enclosing node; a region wrapping only top-level
-        # code therefore lands on the root scope.
-        #
-        # @param nodes [Array<SemanticNode>] The resolved structural entities.
-        # @param source [String] The full source text of the file.
-        # @return [void]
-        sig { params(nodes: T::Array[SemanticNode], source: String).void }
-        def assign_bypasses(nodes, source)
-          BypassScanner.attribute(nodes, source)
         end
       end
     end

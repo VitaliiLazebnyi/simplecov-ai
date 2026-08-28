@@ -2,119 +2,108 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
+require 'fileutils'
+require 'tmpdir'
 
 RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::BranchEnricher do
-  # A minimal stand-in for a SimpleCov branch that records column enrichment.
-  def branch(type:, start_line:, end_line:)
-    instance_double(SimpleCov::SourceFile::Branch, type: type, start_line: start_line, end_line: end_line)
-  end
+  let(:tmpdir) { Dir.mktmpdir('scai') }
+  let(:source) { "def sign(number)\n  number.positive? ? :pos : :neg\nend\n" }
+  let(:path) { write_source(tmpdir, 'sign.rb', source) }
+  let(:condition) { branch_descriptor(source, :if, 0, 2, 'number.positive? ? :pos : :neg') }
+  let(:then_arm) { branch_descriptor(source, :then, 1, 2, ':pos') }
+  let(:else_arm) { branch_descriptor(source, :else, 2, 2, ':neg') }
+  let(:live_coverage) { { 'lines' => [1, 1, nil], 'branches' => { condition => { then_arm => 1, else_arm => 0 } } } }
 
-  def source_file(coverage_data:, branches:)
-    file = instance_double(SimpleCov::SourceFile, branches: branches)
-    has_data = !coverage_data.equal?(:absent)
-    allow(file).to receive(:respond_to?).with(:coverage_data).and_return(has_data)
-    allow(file).to receive(:coverage_data).and_return(coverage_data) if has_data
+  after { FileUtils.remove_entry(tmpdir) }
+
+  # The shape a result has after SimpleCov rebuilt it from .resultset.json; the branches are
+  # built by SimpleCov (with its own decoder) before the example tampers with the decoders.
+  def stringified_file
+    arms = { then_arm.to_s => 1, else_arm.to_s => 0 }
+    file = source_file(path, { 'lines' => [1, 1, nil], 'branches' => { condition.to_s => arms } })
+    file.branches
     file
   end
 
-  it 'applies native array column offsets to the matching branch' do
-    br = branch(type: :then, start_line: 10, end_line: 10)
-    file = source_file(
-      coverage_data: { 'branches' => { [:if, 0, 10, 4, 10, 20] => { [:then, 1, 10, 4, 10, 20] => 0 } } },
-      branches: [br]
-    )
-
-    described_class.enrich(file)
-
-    expect([br.instance_variable_get(:@start_col), br.instance_variable_get(:@end_col)]).to eq([4, 20])
+  def columns_by_type(file)
+    described_class.enrich(file).to_h { |branch, columns| [branch.type, columns] }
   end
 
-  it 'decodes stringified descriptors via restore_ruby_data_structure on simplecov < 1.0' do
-    br = branch(type: :then, start_line: 10, end_line: 10)
-    file = source_file(
-      coverage_data: { 'branches' => { '[:if, 0, 10, 4, 10, 20]' => { '[:then, 1, 10, 4, 10, 20]' => 0 } } },
-      branches: [br]
-    )
-    allow(file).to receive(:respond_to?).with(:restore_ruby_data_structure, true).and_return(true)
-    allow(file).to receive(:send).with(:restore_ruby_data_structure, '[:then, 1, 10, 4, 10, 20]')
-                                 .and_return([:then, 1, 10, 4, 10, 20])
-
-    described_class.enrich(file)
-
-    expect(br.instance_variable_get(:@start_col)).to eq(4)
+  # The real RubyDataParser (SimpleCov >= 1.0) as a spy, or a stand-in on older releases.
+  def ruby_data_parser_spy(file)
+    if defined?(SimpleCov::SourceFile::RubyDataParser)
+      allow(SimpleCov::SourceFile::RubyDataParser).to receive(:call).and_call_original
+      SimpleCov::SourceFile::RubyDataParser
+    else
+      parser = stub_const('SimpleCov::SourceFile::RubyDataParser', Module.new { def self.call(_descriptor); end })
+      allow(parser).to receive(:call) { |descriptor| file.send(:restore_ruby_data_structure, descriptor) }
+      parser
+    end
   end
 
-  it 'leaves a stringified descriptor undecoded when the file offers no decoder' do
-    br = branch(type: :then, start_line: 10, end_line: 10)
-    file = source_file(
-      coverage_data: { 'branches' => { '[:if, 0, 10, 4, 10, 20]' => { '[:then, 1, 10, 4, 10, 20]' => 0 } } },
-      branches: [br]
-    )
-    allow(file).to receive(:respond_to?).with(:restore_ruby_data_structure, true).and_return(false)
-
-    described_class.enrich(file)
-
-    expect(br.instance_variable_get(:@start_col)).to be_nil
+  def without_any_decoder(file)
+    hide_const('SimpleCov::SourceFile::RubyDataParser')
+    if file.respond_to?(:restore_ruby_data_structure, true)
+      file.singleton_class.send(:undef_method, :restore_ruby_data_structure)
+    end
+    file
   end
 
-  it 'leaves a branch untouched when no descriptor matches it' do
-    br = branch(type: :else, start_line: 99, end_line: 99)
-    file = source_file(
-      coverage_data: { 'branches' => { [:if, 0, 10, 4, 10, 20] => { [:then, 1, 10, 4, 10, 20] => 0 } } },
-      branches: [br]
-    )
-
-    described_class.enrich(file)
-
-    expect(br.instance_variable_get(:@start_col)).to be_nil
+  it 'maps every branch to the columns of its native descriptor, keyed by the branch itself' do
+    expect(columns_by_type(source_file(path, live_coverage))).to eq(then: [21, 25], else: [28, 32])
   end
 
-  it 'returns early when the file exposes no coverage data' do
-    file = source_file(coverage_data: :absent, branches: [])
-    expect { described_class.enrich(file) }.not_to raise_error
+  it 'decodes stringified descriptors with the installed SimpleCov decoder' do
+    expect(columns_by_type(stringified_file)).to eq(then: [21, 25], else: [28, 32])
   end
 
-  it 'ignores coverage data that is not a hash' do
-    br = branch(type: :then, start_line: 10, end_line: 10)
-    file = source_file(coverage_data: 'not a hash', branches: [br])
+  it 'prefers RubyDataParser (SimpleCov >= 1.0) for stringified descriptors' do
+    file = stringified_file
+    parser = ruby_data_parser_spy(file)
+    columns_by_type(file)
+    expect(parser).to have_received(:call).with(then_arm.to_s)
+  end
 
+  it 'falls back to restore_ruby_data_structure (SimpleCov < 1.0) when RubyDataParser is absent' do
+    file = stringified_file
+    hide_const('SimpleCov::SourceFile::RubyDataParser')
+    unless file.respond_to?(:restore_ruby_data_structure, true)
+      lookup = { then_arm.to_s => then_arm, else_arm.to_s => else_arm, condition.to_s => condition }
+      file.define_singleton_method(:restore_ruby_data_structure) { |descriptor| lookup.fetch(descriptor) }
+    end
+    expect(columns_by_type(file)).to eq(then: [21, 25], else: [28, 32])
+  end
+
+  it 'leaves branches without columns when no decoder is available' do
+    expect(described_class.enrich(without_any_decoder(stringified_file))).to eq({})
+  end
+
+  it 'never modifies the SimpleCov branch objects' do
+    file = source_file(path, live_coverage)
     described_class.enrich(file)
-
-    expect(br.instance_variable_get(:@start_col)).to be_nil
+    expect(file.branches.map(&:instance_variables).flatten.uniq).not_to include(:@start_col, :@end_col)
   end
 
   it 'ignores coverage data whose branches entry is not a hash' do
-    br = branch(type: :then, start_line: 10, end_line: 10)
-    file = source_file(coverage_data: { 'branches' => [] }, branches: [br])
-
-    described_class.enrich(file)
-
-    expect(br.instance_variable_get(:@start_col)).to be_nil
+    expect(described_class.enrich(source_file(path, { 'lines' => [1, 1, nil], 'branches' => [] }))).to eq({})
   end
 
-  it 'ignores non-hash inner branch entries' do
-    br = branch(type: :then, start_line: 10, end_line: 10)
-    file = source_file(coverage_data: { 'branches' => { [:if, 0, 10, 4, 10, 20] => nil } }, branches: [br])
-
-    described_class.enrich(file)
-
-    expect(br.instance_variable_get(:@start_col)).to be_nil
+  it 'ignores non-hash arm entries' do
+    nil_arms = { 'lines' => [1, 1, nil], 'branches' => { condition => nil } }
+    expect(described_class.enrich(source_file(path, nil_arms))).to eq({})
   end
 
   it 'ignores descriptors that are too short to carry column data' do
-    br = branch(type: :then, start_line: 10, end_line: 10)
-    file = source_file(coverage_data: { 'branches' => { [:if, 0] => { [:then, 1, 10] => 0 } } }, branches: [br])
-
-    described_class.enrich(file)
-
-    expect(br.instance_variable_get(:@start_col)).to be_nil
+    short = { 'lines' => [1, 1, nil], 'branches' => { [:if, 0, 2, 0, 2, 0] => { [:then, 1, 2] => 0 } } }
+    expect(described_class.enrich(source_file(path, short))).to eq({})
   end
 
-  it 'swallows errors raised while reading coverage data' do
-    file = instance_double(SimpleCov::SourceFile)
-    allow(file).to receive(:respond_to?).with(:coverage_data).and_return(true)
-    allow(file).to receive(:coverage_data).and_raise(RuntimeError, 'boom')
+  it 'ignores descriptors that decode to something other than an array' do
+    odd = { 'lines' => [1, 1, nil], 'branches' => { condition => { 42 => 0 } } }
+    expect(described_class.enrich(source_file(path, odd))).to eq({})
+  end
 
-    expect { described_class.enrich(file) }.not_to raise_error
+  it 'yields an empty map when the coverage data cannot be read at all' do
+    expect(described_class.enrich(source_file(path, []))).to eq({})
   end
 end
