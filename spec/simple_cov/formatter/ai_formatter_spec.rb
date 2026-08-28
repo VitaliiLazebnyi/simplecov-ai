@@ -331,15 +331,15 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
         it('includes the snippet text') { expect(read_report).to include('break if stream.closed?') }
       end
 
-      context 'with missing AST nodes' do
+      context 'with deficits outside every resolved node (a file that shrank after coverage ran)' do
         before do
           allow(mock_branch).to receive_messages(start_line: 99, end_line: 100)
           allow(mock_line).to receive(:line_number).and_return(99)
           formatter.format(mock_result)
         end
 
-        it('reports generic Line number') { expect(read_report).to include('`Line 99`') }
-        it('reports generic Lines range') { expect(read_report).to include('`Lines 99-100`') }
+        it('labels the line deficit by its line') { expect(read_report).to include('`Line 99`') }
+        it('labels the multi-line branch deficit by its range') { expect(read_report).to include('`Lines 99-100`') }
       end
     end
 
@@ -441,9 +441,11 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
         expect(SimpleCov::Formatter::AIFormatter::ASTResolver.resolve('missing_file.rb')).to eq([])
       end
 
-      it 'returns empty array for perfectly empty files gracefully' do
+      it 'returns only the root scope for perfectly empty files' do
         File.write(ruby_file, '')
-        expect(SimpleCov::Formatter::AIFormatter::ASTResolver.resolve(ruby_file)).to eq([])
+        nodes = SimpleCov::Formatter::AIFormatter::ASTResolver.resolve(ruby_file)
+        expect(nodes.map { |node| [node.name, node.type, node.start_line, node.end_line] })
+          .to eq([['main', 'Root Script Scope', 1, 1]])
       end
 
       it 'raises error gracefully for syntax errors' do
@@ -477,24 +479,16 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
 
         before { File.write(ruby_file, code) }
 
-        it('resolves Module') { expect(nodes[0].name).to eq('Analytics') }
-        it('resolves Module type') { expect(nodes[0].type).to eq('Module') }
-        it('resolves Class name') { expect(nodes[1].name).to eq('Analytics::Event') }
-        it('resolves Class type') { expect(nodes[1].type).to eq('Class') }
-
-        it('leaves the enclosing class unbypassed because the region belongs to a child method') do
-          expect(nodes[1].bypass_reasons).to be_empty
+        it('resolves the root scope, module, class and methods in source order with their types') do
+          expect(nodes.map { |node| [node.name, node.type] }).to eq(
+            [['main', 'Root Script Scope'], ['Analytics', 'Module'], ['Analytics::Event', 'Class'],
+             ['Analytics::Event#bypassed', 'Instance Method'], ['Analytics::Event#covered', 'Instance Method'],
+             ['Analytics::Event.singleton_covered', 'Singleton Method']]
+          )
         end
 
-        it('resolves the method inside the paired region') { expect(nodes[2].name).to eq('Analytics::Event#bypassed') }
-        it('marks the method inside the region as bypassed') { expect(nodes[2].bypass_reasons).to eq(['# :nocov:']) }
-
-        it('does not bypass the method after the closing marker') do
-          expect([nodes[3].name, nodes[3].bypass_reasons]).to eq(['Analytics::Event#covered', []])
-        end
-
-        it('names methods inside class << self as singleton methods') do
-          expect([nodes[4].name, nodes[4].type]).to eq(['Analytics::Event.singleton_covered', 'Singleton Method'])
+        it('bypasses only the method inside the paired region, not its ancestors or siblings') do
+          expect(nodes.map(&:bypass_reasons)).to eq([[], [], [], ['# :nocov:'], [], []])
         end
       end
 
@@ -521,7 +515,8 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
         before { File.write(ruby_file, code) }
 
         it('preserves the full namespace of a compact class definition') do
-          expect(nodes[0].name).to eq('Outer::Inner')
+          expect(nodes.map(&:name)).to eq(['main', 'Outer::Inner', 'Outer::Inner#prose_only',
+                                           'Outer::Inner#disabled_region', 'Outer::Inner#normal'])
         end
 
         it('does not treat a prose :nocov: mention as a directive') do
@@ -552,8 +547,9 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
 
         before { File.write(ruby_file, code) }
 
-        it('resolves root instance method') { expect(nodes[0].name).to eq('#root_method') }
-        it('resolves root class method') { expect(nodes[1].name).to eq('.root_class_method') }
+        it('resolves root-level methods under the root scope with bare separators') do
+          expect(nodes.map(&:name)).to eq(['main', '#root_method', '.root_class_method'])
+        end
       end
     end
   end

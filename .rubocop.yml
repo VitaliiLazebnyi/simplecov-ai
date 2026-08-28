@@ -171,3 +171,9 @@ Style/UnlessElse:
 Lint/UnreachableLoop:
   Exclude:
     - "spec/fixtures/**/*"
+
+# Justification: the resolver fixture reproduces the exact `CONST ||= value` shape that used to
+# crash AST resolution; the cop's rewrite would remove the construct under test.
+Lint/OrAssignmentToConstant:
+  Exclude:
+    - "spec/fixtures/**/*"
