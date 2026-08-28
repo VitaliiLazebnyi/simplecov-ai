@@ -46,8 +46,8 @@ module SimpleCov
           sig { params(blk: T.proc.returns(T::Array[String])).returns(T::Array[String]) }
           def self.render(&blk)
             yield
-          rescue StandardError, ScriptError => decode_error
-            [format(ERROR_TEMPLATE, decode_error.class.name)]
+          rescue StandardError, ScriptError => error
+            [format(ERROR_TEMPLATE, error.class.name)]
           end
         end
       end

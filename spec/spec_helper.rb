@@ -4,8 +4,10 @@
 # Warnings emitted by the gem's own files fail the run (see spec/support/warnings.rb). The hook
 # is installed before anything of the gem is loaded so that load-time warnings are caught too.
 require_relative 'support/warnings'
-GemWarnings.install! unless ENV['MUTANT']
+gem_warnings = GemWarnings.new
+gem_warnings.install! unless ENV['MUTANT']
 
+require 'coverage'
 require 'simplecov'
 
 # The suite measures its own coverage with every criterion this Ruby and SimpleCov can provide
@@ -29,7 +31,8 @@ else
   # own lines are never instrumented and the 100% mandate below is vacuously satisfied.
   SimpleCov.start do
     suite_criteria.each { |criterion| enable_coverage(criterion) }
-    add_filter '/spec/'
+    # SimpleCov >= 1.1 renamed add_filter to skip and deprecates the old name.
+    respond_to?(:skip) ? skip('/spec/') : add_filter('/spec/')
     minimum_coverage(suite_criteria.to_h { |criterion| [criterion, 100] })
   end
 end
@@ -52,6 +55,7 @@ Dir[File.join(__dir__, 'support', '**', '*.rb')].sort.each { |support_file| requ
 
 RSpec.configure do |config|
   config.include SimpleCovFixtures
+  config.include ReportExpectations
   config.mock_with :rspec do |mocks|
     mocks.verify_partial_doubles = true
   end
@@ -73,5 +77,5 @@ RSpec.configure do |config|
     SimpleCov.coverage_criteria.replace(criteria_before_example)
   end
 
-  config.after(:suite) { GemWarnings.verify! unless ENV['MUTANT'] }
+  config.after(:suite) { gem_warnings.verify! unless ENV['MUTANT'] }
 end

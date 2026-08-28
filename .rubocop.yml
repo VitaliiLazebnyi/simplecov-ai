@@ -175,3 +175,8 @@ Lint/UnreachableLoop:
 Lint/OrAssignmentToConstant:
   Exclude:
     - "spec/fixtures/**/*"
+
+# Justification: single-letter identifiers are forbidden by SCAI-REQ-021, so rescued exceptions
+# are named `error` rather than RuboCop's default `e`.
+Naming/RescuedExceptionsVariableName:
+  PreferredName: error

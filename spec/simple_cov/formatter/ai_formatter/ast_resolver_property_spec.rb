@@ -25,7 +25,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
   # Every pair of nodes is either disjoint or nested, never partially overlapping.
   def overlaps(table)
     table.combination(2).select do |(_, _, outer_start, outer_end), (_, _, inner_start, inner_end)|
-      inner_start <= outer_end && inner_start >= outer_start && inner_end > outer_end
+      inner_start.between?(outer_start, outer_end) && inner_end > outer_end
     end
   end
 
@@ -43,7 +43,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
 
   it "derives the exact node table of #{ProgramGenerator::PROGRAM_COUNT} generated programs" do
     failures = (0...ProgramGenerator::PROGRAM_COUNT).filter_map { |offset| failure_for(base_seed + offset) }
-    expect(failures).to be_empty,
-                        "#{failures.size} of #{ProgramGenerator::PROGRAM_COUNT} programs failed; first:\n#{failures.first}"
+    summary = "#{failures.size} of #{ProgramGenerator::PROGRAM_COUNT} programs failed; first:\n#{failures.first}"
+    expect(failures).to be_empty, summary
   end
 end

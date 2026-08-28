@@ -32,18 +32,18 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
 
   # SimpleCov >= 1.0 rejects every malformed descriptor up front with RubyDataParser; the eval
   # of older releases only fails on invalid Ruby and otherwise yields whatever the text means.
-  def strict_decoder
+  def strict_decoder?
     defined?(SimpleCov::SourceFile::RubyDataParser) ? true : false
   end
 
-  # The unparseable descriptor and its error: an `eval` SyntaxError below SimpleCov 1.0, an
+  # The unparsable descriptor and its error: an `eval` SyntaxError below SimpleCov 1.0, an
   # ArgumentError from RubyDataParser from 1.0 on.
   def corrupt_branches
     { '[' => { '[' => 0 } }
   end
 
-  def decode_error
-    strict_decoder ? 'ArgumentError' : 'SyntaxError'
+  def decode_error_class
+    strict_decoder? ? ArgumentError : SyntaxError
   end
 
   def digest_for(result)
@@ -51,7 +51,16 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
   end
 
   def error_block(error_class)
-    "### `zzz_corrupt.rb`\n  - **ERROR:** SimpleCov could not decode this file's coverage data (#{error_class}); skipped.\n\n"
+    "### `zzz_corrupt.rb`\n  - **ERROR:** SimpleCov could not decode this file's coverage data " \
+      "(#{error_class}); skipped.\n\n"
+  end
+
+  # The report as the sections compose it: the header, the deficit blocks and (when any) the
+  # bypass blocks.
+  def report(header, deficit_blocks, bypass_blocks = [])
+    sections = ["## Coverage Deficits\n\n", *deficit_blocks]
+    sections += ["## Ignored Coverage Bypasses\n\n", *bypass_blocks] if bypass_blocks.any?
+    "#{header}#{sections.join}"
   end
 
   # Every figure is undecodable; the method line appears only where SimpleCov exposes method
@@ -66,15 +75,13 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
   end
 
   it 'reports the decode error for that file first, keeps the other files and marks every global figure N/A' do
-    expect(digest_for(corrupt_result)).to eq(
-      undecodable_header + "## Coverage Deficits\n\n" + error_block(decode_error) + plain_deficits +
-      "## Ignored Coverage Bypasses\n\n" + error_block(decode_error)
-    )
+    error = error_block(decode_error_class)
+    expect(digest_for(corrupt_result)).to eq(report(undecodable_header, [error, plain_deficits], [error]))
   end
 
   it 'surfaces the exact decoder error the installed SimpleCov raises for the descriptor' do
     file = source_file(corrupt_path, { 'lines' => [1, 1, nil], 'branches' => corrupt_branches })
-    expect { file.branches }.to raise_error(Object.const_get(decode_error))
+    expect { file.branches }.to raise_error(decode_error_class)
   end
 
   # A descriptor that is valid Ruby but not an array: the strict decoder rejects it like any
@@ -82,11 +89,10 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
   # signature checks (a TypeError) once the file's deficits are grouped.
   it 'contains a descriptor that decodes to something other than an array' do
     result = result_for(corrupt_path => { 'lines' => [1, 1, nil], 'branches' => { '42' => { 'nil' => 0 } } })
-    expected = if strict_decoder
-                 undecodable_header + "## Coverage Deficits\n\n" + error_block('ArgumentError') +
-                   "## Ignored Coverage Bypasses\n\n" + error_block('ArgumentError')
+    expected = if strict_decoder?
+                 report(undecodable_header, [error_block(ArgumentError)], [error_block(ArgumentError)])
                else
-                 expected_header('FAILED', '100.0%', '0.0%') + "## Coverage Deficits\n\n" + error_block('TypeError')
+                 report(expected_header('FAILED', '100.0%', '0.0%'), [error_block(TypeError)])
                end
     expect(digest_for(result)).to eq(expected)
   end
@@ -101,11 +107,9 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
     it 'still lists the method deficits of the files that decode, matching the N/A method line' do
       skip 'method coverage needs SimpleCov >= 1.0' unless method_coverage_supported?
       digest = measuring_methods(healthy_result, {}) { digest_for(healthy_result) }
-      expect(digest).to eq(
-        undecodable_header + "## Coverage Deficits\n\n" + error_block('ArgumentError') +
-        "### `aaa_plain.rb`\n- `#plain`\n  - **Method Deficit:** [L1-3] `#plain` never invoked\n\n" \
-        "## Ignored Coverage Bypasses\n\n" + error_block('ArgumentError')
-      )
+      method_deficit = "### `aaa_plain.rb`\n- `#plain`\n  - **Method Deficit:** [L1-3] `#plain` never invoked\n\n"
+      expect(digest).to eq(report(undecodable_header, [error_block(ArgumentError), method_deficit],
+                                  [error_block(ArgumentError)]))
     end
   end
 

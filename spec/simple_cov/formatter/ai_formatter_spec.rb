@@ -107,7 +107,8 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
     end
 
     it 'stamps the header with the current time as an ISO 8601 timestamp in the local offset' do
-      expect(format_and_read(calc_result).lines[4]).to eq("**Generated At:** #{FROZEN_ISO8601} (Local Timezone)\n")
+      expect(format_and_read(calc_result).lines[4])
+        .to eq("**Generated At:** #{ReportExpectations::FROZEN_ISO8601} (Local Timezone)\n")
     end
 
     it 'keeps the sub-line branch snippet when the result was rebuilt from the JSON resultset' do
@@ -267,7 +268,8 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
       end
 
       it 'reports the deficit outside the region and the bypass with its directive text' do
-        expect(format_and_read(legacy_result)).to eq(expected_header('FAILED', '66.6%', '100.0%') + expected_legacy_deficits + <<~MARKDOWN)
+        expected = expected_header('FAILED', '66.6%', '100.0%') + expected_legacy_deficits
+        expect(format_and_read(legacy_result)).to eq(expected + <<~MARKDOWN)
           ## Ignored Coverage Bypasses
 
           ### `legacy.rb`
@@ -279,7 +281,8 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
 
       it 'omits the bypass section when bypass auditing is disabled' do
         config.include_bypasses = false
-        expect(format_and_read(legacy_result)).to eq(expected_header('FAILED', '66.6%', '100.0%') + expected_legacy_deficits)
+        expect(format_and_read(legacy_result))
+          .to eq(expected_header('FAILED', '66.6%', '100.0%') + expected_legacy_deficits)
       end
 
       it 'resolves the AST of a file once for both its deficits and its bypasses' do

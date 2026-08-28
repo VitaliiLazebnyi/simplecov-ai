@@ -45,9 +45,11 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
     fuzzer = CoverageFuzzer.new(seed)
     coverage_by_path = paths.first(1 + (seed % 3)).to_h { |path| [path, fuzzer.coverage] }
     result = build_result(coverage_by_path)
-    return nil unless result
+    result ? format_failure(seed, result, coverage_by_path) : nil
+  end
 
-    File.delete(report_path) if File.exist?(report_path)
+  def format_failure(seed, result, coverage_by_path)
+    FileUtils.rm_f(report_path)
     capture_stdout { described_class.new.format(result) }
     File.exist?(report_path) ? nil : "seed #{seed}: no report written for #{coverage_by_path}"
   rescue StandardError, ScriptError => error

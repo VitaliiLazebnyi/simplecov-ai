@@ -12,6 +12,15 @@ require 'fileutils'
 RSpec.describe SimpleCov::Formatter::AIFormatter do
   let(:fixture_path) { File.expand_path('../../fixtures/metaprogramming_constructs.rb', __dir__) }
   let(:report_path) { 'coverage/metaprogramming_test_ai_report.md' }
+  # Each construct as its own node followed by its missed arm, in source order.
+  let(:expected_lines) do
+    deficit = '^  - \\*\\*Branch Deficit:\\*\\* \\[L\\d+\\] Missing coverage for `%s` branch: `%s`$'
+    ['^- `MetaprogrammingConstructs#dynamic_instance_method`$', format(deficit, 'else', ':dynamic_false'),
+     '^- `MetaprogrammingConstructs\\.dynamic_class_method`$', format(deficit, 'else', ':singleton_case_else'),
+     '^- `MetaprogrammingConstructs#evaled_method`$', format(deficit, 'else', ':evaled_false'),
+     '^- `MetaprogrammingConstructs#method_missing`$', format(deficit, 'else', 'super'),
+     '^- `MetaprogrammingConstructs\\.eigen_method`$', format(deficit, 'then', ':eigen_false')]
+  end
 
   # We use a class variable or standard local variable within a shared context to avoid before(:all)
   # But since this is a coverage test, we just run it in a single before block.
@@ -57,17 +66,6 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
   end
 
   it 'lists each construct as its own node with the missed arm, in source order' do
-    expect(File.read(report_path)).to match(Regexp.new(<<~PATTERN.strip.gsub("\n", '.*'), Regexp::MULTILINE))
-      ^- `MetaprogrammingConstructs#dynamic_instance_method`$
-      ^  - \\*\\*Branch Deficit:\\*\\* \\[L\\d+\\] Missing coverage for `else` branch: `:dynamic_false`$
-      ^- `MetaprogrammingConstructs\\.dynamic_class_method`$
-      ^  - \\*\\*Branch Deficit:\\*\\* \\[L\\d+\\] Missing coverage for `else` branch: `:singleton_case_else`$
-      ^- `MetaprogrammingConstructs#evaled_method`$
-      ^  - \\*\\*Branch Deficit:\\*\\* \\[L\\d+\\] Missing coverage for `else` branch: `:evaled_false`$
-      ^- `MetaprogrammingConstructs#method_missing`$
-      ^  - \\*\\*Branch Deficit:\\*\\* \\[L\\d+\\] Missing coverage for `else` branch: `super`$
-      ^- `MetaprogrammingConstructs\\.eigen_method`$
-      ^  - \\*\\*Branch Deficit:\\*\\* \\[L\\d+\\] Missing coverage for `then` branch: `:eigen_false`$
-    PATTERN
+    expect(File.read(report_path)).to match(Regexp.new(expected_lines.join('.*'), Regexp::MULTILINE))
   end
 end

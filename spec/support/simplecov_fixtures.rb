@@ -20,24 +20,6 @@ module SimpleCovFixtures
   # The nocov marker, assembled from fragments so the repository directive auditor (which scans
   # spec sources for literal marker lines) does not flag this helper.
   NOCOV_MARKER = ['# :noc', 'ov:'].join.freeze
-  # The instant every report in the suite is generated at (SCAI-REQ-008: time is mocked), in a
-  # fixed offset so the header's local-timezone label is the same on every machine.
-  FROZEN_TIME = Time.new(2026, 4, 21, 23, 40, 44, '+09:00').freeze
-  # {FROZEN_TIME} as the header prints it.
-  FROZEN_ISO8601 = '2026-04-21T23:40:44+09:00'
-
-  # Pins `Time.now` to {FROZEN_TIME} for the example.
-  def freeze_time
-    allow(Time).to receive(:now).and_return(FROZEN_TIME)
-  end
-
-  # The report header a run at {FROZEN_TIME} produces, with the method line only when given.
-  def expected_header(status, line_label, branch_label, method_label: nil)
-    method_line = method_label ? "**Global Method Coverage:** #{method_label}\n" : ''
-    "# AI Coverage Digest\n**Status:** #{status}\n**Global Line Coverage:** #{line_label}\n" \
-      "**Global Branch Coverage:** #{branch_label}\n#{method_line}" \
-      "**Generated At:** #{FROZEN_ISO8601} (Local Timezone)\n"
-  end
 
   # Duck-typed stand-in for `SimpleCov::SourceFile::Method` on SimpleCov < 1.0.
   EmulatedMethod = Struct.new(:class_name, :method_name, :start_line, :end_line, :coverage) do

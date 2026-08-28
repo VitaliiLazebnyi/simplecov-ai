@@ -21,13 +21,16 @@ module ResolverCorpus
 
   # @return [Array<String>] The sampled corpus, sorted by path.
   def files
-    gem_paths = Bundler.load.specs.map(&:full_gem_path).uniq.sort
-    eligible = gem_paths.flat_map { |gem_path| Dir.glob(File.join(gem_path, 'lib', '**', '*.rb')) }
-                        .uniq.sort.reject { |path| File.size(path) > MAX_FILE_BYTES }
+    eligible = eligible_files
     return eligible if MAX_FILES.zero? || eligible.size <= MAX_FILES
 
-    stride = (eligible.size.to_f / MAX_FILES).ceil
-    eligible.each_slice(stride).map(&:first)
+    eligible.each_slice((eligible.size.to_f / MAX_FILES).ceil).map(&:first)
+  end
+
+  def eligible_files
+    gem_paths = Bundler.load.specs.map(&:full_gem_path).uniq.sort
+    sources = gem_paths.flat_map { |gem_path| Dir.glob(File.join(gem_path, 'lib', '**', '*.rb')) }
+    sources.uniq.sort.reject { |path| File.size(path) > MAX_FILE_BYTES }
   end
 
   # @return [Array<String>, :syntax_error] The contract violations of resolving `path`, or the
@@ -44,14 +47,19 @@ module ResolverCorpus
     root, *rest = nodes
     return ["#{path}: resolved to no nodes"] unless root
 
-    line_count = [RESOLVER.read_source(path).lines.size, 1].max
-    problems = []
-    problems << "first node is #{root.name} (#{root.type}), not the root scope" unless root.root?
-    problems << "root spans #{root.line_range} for #{line_count} lines" unless root.line_range == (1..line_count)
+    problems = root_violations(path, root)
     rest.each_with_index do |node, index|
       problems.concat(node_violations(node, index.zero? ? root : rest[index - 1], root))
     end
     problems.map { |problem| "#{path}: #{problem}" }
+  end
+
+  def root_violations(path, root)
+    line_count = [RESOLVER.read_source(path).lines.size, 1].max
+    problems = []
+    problems << "first node is #{root.name} (#{root.type}), not the root scope" unless root.root?
+    problems << "root spans #{root.line_range} for #{line_count} lines" unless root.line_range == (1..line_count)
+    problems
   end
 
   def node_violations(node, previous, root)
@@ -59,12 +67,20 @@ module ResolverCorpus
     problems << "#{node.name}: a second root scope" if node.root?
     problems << "empty name for #{node.type} at #{node.start_line}" if node.name.empty?
     problems << "#{node.name}: lines #{node.line_range}" unless inside?(node, root)
-    problems << "#{node.name} at #{node.start_line} follows #{previous.name} at #{previous.start_line}" if node.start_line < previous.start_line
+    problems << "#{node.name} follows #{previous.name}: #{order_of(node, previous)}" if out_of_order?(node, previous)
     problems
   end
 
   def inside?(node, root)
-    node.start_line >= 1 && node.start_line <= node.end_line && node.end_line <= root.end_line
+    node.start_line.between?(1, node.end_line) && node.end_line <= root.end_line
+  end
+
+  def out_of_order?(node, previous)
+    node.start_line < previous.start_line
+  end
+
+  def order_of(node, previous)
+    "line #{node.start_line} after line #{previous.start_line}"
   end
 end
 

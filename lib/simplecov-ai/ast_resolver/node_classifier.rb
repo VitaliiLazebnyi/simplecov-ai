@@ -100,10 +100,6 @@ module SimpleCov
             [new_context, SemanticNode.spanning(node, name: new_context, type: node.type.to_s.capitalize), false]
           end
 
-          sig do
-            params(node: Parser::AST::Node, context: String, singleton: T::Boolean)
-              .returns([String, T.nilable(SemanticNode), T::Boolean])
-          end
           # Children traverse under the enclosing context, not the method name, so a nested def
           # is attributed to its class rather than producing names like Outer#outer#inner. They
           # keep the lexical singleton scope: Ruby defines a def nested in a method body on the

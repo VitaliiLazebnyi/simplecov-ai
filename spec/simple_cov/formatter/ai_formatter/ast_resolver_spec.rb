@@ -27,6 +27,31 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
     nodes.map { |node| [node.name, node.type, node.start_line, node.end_line] }
   end
 
+  # Nested defs inside a method, a `def self.` method and a define_method block, all within
+  # `class << self`.
+  def singleton_scoped_source
+    <<~RUBY
+      class Host
+        class << self
+          def outer
+            def inner
+            end
+          end
+
+          def self.meta
+            def inner_meta
+            end
+          end
+
+          define_method(:dynamic) do
+            def inner_dynamic
+            end
+          end
+        end
+      end
+    RUBY
+  end
+
   describe '.resolve' do
     context 'with the resolver fixture' do
       let(:nodes) { described_class.resolve(fixture_path) }
@@ -169,38 +194,21 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
     it 'attributes a def nested in an instance method body to the class as an instance method' do
       nodes = resolve("class Host\n  def outer\n    def inner\n    end\n  end\nend\n")
       expect(node_table(nodes)).to eq([['main', 'Root Script Scope', 1, 6], ['Host', 'Class', 1, 6],
-                                       ['Host#outer', 'Instance Method', 2, 5], ['Host#inner', 'Instance Method', 3, 4]])
+                                       ['Host#outer', 'Instance Method', 2, 5],
+                                       ['Host#inner', 'Instance Method', 3, 4]])
     end
 
     it 'attributes a def nested in a `def self.` body to the class as an instance method' do
       nodes = resolve("class Host\n  def self.outer\n    def inner\n    end\n  end\nend\n")
       expect(node_table(nodes)).to eq([['main', 'Root Script Scope', 1, 6], ['Host', 'Class', 1, 6],
-                                       ['Host.outer', 'Singleton Method', 2, 5], ['Host#inner', 'Instance Method', 3, 4]])
+                                       ['Host.outer', 'Singleton Method', 2, 5],
+                                       ['Host#inner', 'Instance Method', 3, 4]])
     end
 
     it 'attributes defs nested in `class << self` method bodies to the singleton class' do
-      nodes = resolve(<<~RUBY)
-        class Host
-          class << self
-            def outer
-              def inner
-              end
-            end
-
-            def self.meta
-              def inner_meta
-              end
-            end
-
-            define_method(:dynamic) do
-              def inner_dynamic
-              end
-            end
-          end
-        end
-      RUBY
-      expect(nodes.map(&:name)).to eq(['main', 'Host', 'Host.outer', 'Host.inner', 'Host.meta', 'Host.inner_meta',
-                                       'Host.dynamic', 'Host.inner_dynamic'])
+      expect(resolve(singleton_scoped_source).map(&:name))
+        .to eq(['main', 'Host', 'Host.outer', 'Host.inner', 'Host.meta', 'Host.inner_meta', 'Host.dynamic',
+                'Host.inner_dynamic'])
     end
 
     it 'preserves the full namespace of a compact class definition' do

@@ -90,7 +90,7 @@ module EndToEnd
 
   # The child's script. The probe formatter records the class of the branch descriptors the
   # formatters receive: Strings prove the result came back through the resultset merge.
-  RUNNER = <<~'RUBY'
+  RUNNER = <<~RUBY
     # frozen_string_literal: true
 
     require 'simplecov'
@@ -166,7 +166,8 @@ RSpec.describe EndToEnd do
   end
 
   def iso8601_timestamp?(report)
-    report.to_s.match?(/^\*\*Generated At:\*\* \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2}) \(Local Timezone\)$/)
+    iso8601 = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})/
+    report.to_s.match?(/^\*\*Generated At:\*\* #{iso8601} \(Local Timezone\)$/)
   end
 
   def gem_warnings(stderr)
@@ -202,18 +203,13 @@ RSpec.describe EndToEnd do
   end
 
   # Without directive support the inline-disabled line and the branch-disabled arm are
-  # ordinary deficits; with method coverage the never-invoked method is one everywhere.
-  def legacy_deficits(method_deficits: false)
-    if method_deficits
-      file_block('lib/shapes/legacy.rb', '- `Shapes::Legacy#fail_loudly`',
-                 method_deficit('11-13', 'Shapes::Legacy#fail_loudly'))
-    else
-      file_block('lib/shapes/legacy.rb',
-                 '- `Shapes::Legacy#fail_loudly`',
-                 "  - **Line Deficit:** [L12] `raise 'x' # simplecov:disable`",
-                 '- `Shapes::Legacy#pick`',
-                 '  - **Branch Deficit:** [L17] Missing coverage for `else` branch: `:no`')
-    end
+  # ordinary deficits.
+  def legacy_deficits
+    file_block('lib/shapes/legacy.rb',
+               '- `Shapes::Legacy#fail_loudly`',
+               "  - **Line Deficit:** [L12] `raise 'x' # simplecov:disable`",
+               '- `Shapes::Legacy#pick`',
+               '  - **Branch Deficit:** [L17] Missing coverage for `else` branch: `:no`')
   end
 
   def point_deficits
@@ -228,24 +224,41 @@ RSpec.describe EndToEnd do
     ["- `#{node}`", "  - **Bypass Present:** Coverage explicitly ignored via `#{reason}`."]
   end
 
-  def bypasses
+  # The file blocks of the bypass section, in path order.
+  def bypass_blocks
     legacy_entries = bypass('Shapes::Legacy#obsolete', described_class::NOCOV)
     if directives
       legacy_entries += bypass('Shapes::Legacy#fail_loudly', '# simplecov:disable')
       legacy_entries += bypass('Shapes::Legacy#pick', '# simplecov:disable branch')
     end
-    "## Ignored Coverage Bypasses\n\n" + file_block('lib/shapes/legacy.rb', *legacy_entries) +
-      file_block('lib/shapes/point.rb', *bypass('main', described_class::NOCOV))
+    [file_block('lib/shapes/legacy.rb', *legacy_entries),
+     file_block('lib/shapes/point.rb', *bypass('main', described_class::NOCOV))]
+  end
+
+  # The file blocks of the deficit section of the default run, lowest line coverage first.
+  def default_deficit_blocks
+    [calc_deficits, *(directives ? [] : [legacy_deficits]), point_deficits]
+  end
+
+  def report_with(header, deficit_blocks)
+    "#{header}## Coverage Deficits\n\n#{deficit_blocks.join}## Ignored Coverage Bypasses\n\n#{bypass_blocks.join}"
   end
 
   def expected_default_report
-    deficits = calc_deficits + (directives ? '' : legacy_deficits) + point_deficits
-    "#{header(directives ? '83.3%' : '78.9%')}## Coverage Deficits\n\n#{deficits}#{bypasses}"
+    report_with(header(directives ? '83.3%' : '78.9%'), default_deficit_blocks)
   end
 
+  # SimpleCov measures five methods here: a method overlapping a skipped chunk is skipped too,
+  # so `obsolete` (inside the nocov region) and `fail_loudly` (its only body line is
+  # inline-disabled) are not deficits; of the rest, `sign`, `pick` and `side` were invoked.
   def expected_method_report
-    deficits = calc_deficits(method_deficits: true) + legacy_deficits(method_deficits: true) + point_deficits
-    "#{header('83.3%', method_pct: '50.0%')}## Coverage Deficits\n\n#{deficits}#{bypasses}"
+    deficit_blocks = [calc_deficits(method_deficits: true), point_deficits]
+    report_with(header('83.3%', method_pct: '60.0%'), deficit_blocks)
+  end
+
+  # A file block counts as omitted or cut short unless the truncated report contains all of it.
+  def omitted_count(report, blocks)
+    blocks.count { |block| !report.include?(block) }
   end
 
   it 'writes the exact digest through SimpleCov\'s merged result, announces it and emits no warning of its own' do
@@ -258,8 +271,8 @@ RSpec.describe EndToEnd do
   it 'keeps a 1 kB report within 1000 bytes and closes it with the truncation notice' do
     child = described_class.run(project_dir, 'SCAI_E2E_MAX_KB' => '1')
     report = child.report.to_s
-    omitted_deficits = (directives ? 2 : 3) - report[/## Coverage Deficits.*?(?=\n## |\z)/m].to_s.scan(/^### /).size
-    omitted_bypasses = 2 - report[/## Ignored Coverage Bypasses.*?\z/m].to_s.scan(/^### /).size
+    omitted_deficits = omitted_count(report, default_deficit_blocks)
+    omitted_bypasses = omitted_count(report, bypass_blocks)
     expect([report.bytesize <= 1000, report.lines.last(2).join]).to eq([true, <<~MARKDOWN])
       > **[WARNING] TRUNCATION NOTIFICATION:**
       > The report reached the maximum token constraint (1 kB) and was truncated: #{omitted_deficits} deficit file(s) and #{omitted_bypasses} bypass file(s) omitted or cut short. Lowest-coverage files are listed first; resolve the deficits above to reveal the remaining ones in subsequent test runs.
