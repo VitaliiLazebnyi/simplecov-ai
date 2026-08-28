@@ -1,0 +1,11 @@
+# markdownlint-cli2 options (the rule set lives in .markdownlint.yml).
+ignores:
+  # Generated output and third-party Markdown.
+  - "doc/**"
+  - "coverage/**"
+  - "node_modules/**"
+  - "vendor/**"
+  # Historical audit transcript kept for reference; not maintained as documentation.
+  - "CODE_REVIEW_REPORT.md"
+  # Kept verbatim pending the maintainer's decision on whether it stays in the repository.
+  - "gem_practices_guide.md"
