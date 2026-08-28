@@ -238,7 +238,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Gemfile.lock` is no longer committed; each Ruby in the CI matrix resolves its own dependency
   set.
 - The root-cause analyses behind the fixes in this release are recorded in the commit history
-  (formerly `BUGS.md`, entries BUG-SCAI-010 to BUG-SCAI-022).
+  (formerly `BUGS.md`).
 
 ## [0.10.3] - 2026-04-24
 
