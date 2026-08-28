@@ -11,6 +11,11 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::Configuration do
       expect([config.report_path, config.report_path_configured?]).to eq(['coverage/ai_report.md', false])
     end
 
+    it 'declares every setting up front, the report path as unset' do
+      expect(config.instance_variables).to eq(%i[@report_path @max_file_size_kb @max_snippet_lines @output_to_console
+                                                 @granularity @include_bypasses])
+    end
+
     it 'defaults to fine granularity, bypasses on, console off' do
       expect([config.granularity, config.include_bypasses, config.output_to_console])
         .to eq([:fine, true, false])
@@ -31,7 +36,9 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::Configuration do
       expect { config.report_path = "report\0.md" }.to raise_error(ArgumentError, /NUL/)
     end
 
-    it 'rejects a non-String path at assignment' do
+    # The signature does the rejecting; mutant re-inserts methods without their `sig`, so the
+    # example is excluded there.
+    it 'rejects a non-String path at assignment', mutant: false do
       expect { config.report_path = :report }.to raise_error(TypeError)
     end
   end
@@ -43,11 +50,13 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::Configuration do
     end
 
     it 'rejects zero' do
-      expect { config.max_file_size_kb = 0 }.to raise_error(ArgumentError, /max_file_size_kb/)
+      expect { config.max_file_size_kb = 0 }
+        .to raise_error(ArgumentError, 'max_file_size_kb must be a positive Integer, got 0')
     end
 
     it 'rejects a negative value' do
-      expect { config.max_file_size_kb = -5 }.to raise_error(ArgumentError, /positive/)
+      expect { config.max_file_size_kb = -5 }
+        .to raise_error(ArgumentError, 'max_file_size_kb must be a positive Integer, got -5')
     end
   end
 
@@ -58,7 +67,8 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::Configuration do
     end
 
     it 'rejects a non-positive value' do
-      expect { config.max_snippet_lines = 0 }.to raise_error(ArgumentError, /max_snippet_lines/)
+      expect { config.max_snippet_lines = 0 }
+        .to raise_error(ArgumentError, 'max_snippet_lines must be a positive Integer, got 0')
     end
   end
 
@@ -68,8 +78,9 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::Configuration do
       expect(config.granularity).to eq(:coarse)
     end
 
-    it 'rejects an unknown granularity' do
-      expect { config.granularity = :medium }.to raise_error(ArgumentError, /granularity/)
+    it 'rejects an unknown granularity, naming the accepted ones' do
+      expect { config.granularity = :medium }
+        .to raise_error(ArgumentError, 'granularity must be one of [:fine, :coarse], got :medium')
     end
   end
 

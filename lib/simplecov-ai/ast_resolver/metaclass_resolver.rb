@@ -27,8 +27,11 @@ module SimpleCov
             send_node = builder_send(node)
             return nil unless send_node
 
-            kind = receiver_const_name(send_node)
-            BUILDERS[kind] == T.cast(send_node.children[1], Symbol) ? kind : nil
+            receiver = NodeChildren.node_at(send_node, 0)
+            return nil unless receiver && receiver.type == :const
+
+            kind = NodeChildren.symbol_at(receiver, 1).to_s
+            kind if BUILDERS[kind] == NodeChildren.symbol_at(send_node, 1)
           end
 
           # @param node [Parser::AST::Node] Any AST node.
@@ -45,8 +48,8 @@ module SimpleCov
           #   the block belongs to something else (`super do … end`, `yield { … }`).
           sig { params(node: Parser::AST::Node).returns(T.nilable(Parser::AST::Node)) }
           def self.block_call(node)
-            call = T.cast(node.children[0], Parser::AST::Node)
-            call.type == :send ? call : nil
+            call = NodeChildren.required_node_at(node, 0)
+            call if call.type == :send
           end
 
           # The call a block-valued constant assignment wraps, or nil when the assignment has no
@@ -54,21 +57,13 @@ module SimpleCov
           # multiple assignment (`MAJOR, MINOR = …`) or an or-assignment (`FOO ||= …`).
           sig { params(node: Parser::AST::Node).returns(T.nilable(Parser::AST::Node)) }
           def self.builder_send(node)
-            value = T.cast(node.children[2], T.nilable(Parser::AST::Node))
+            value = NodeChildren.node_at(node, 2)
             return nil unless value && block?(value)
 
             block_call(value)
           end
 
-          sig { params(send_node: Parser::AST::Node).returns(String) }
-          def self.receiver_const_name(send_node)
-            receiver = T.cast(send_node.children[0], T.nilable(Parser::AST::Node))
-            return '' unless receiver && receiver.type == :const
-
-            T.cast(receiver.children[1], Symbol).to_s
-          end
-
-          private_class_method :builder_send, :receiver_const_name
+          private_class_method :builder_send
         end
       end
     end

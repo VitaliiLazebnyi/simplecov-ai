@@ -117,6 +117,17 @@ module SimpleCovFixtures
     path.delete_prefix(SimpleCov.root).delete_prefix('/')
   end
 
+  # Makes `object` look like a SimpleCov without `method`: where the installed release has it,
+  # `respond_to?` is stubbed to deny it and the method raises if called anyway; older releases
+  # lack it for real and need no stub.
+  def without_method(object, method)
+    return unless object.respond_to?(method)
+
+    allow(object).to receive(:respond_to?).and_call_original
+    allow(object).to receive(:respond_to?).with(method).and_return(false)
+    allow(object).to receive(method).and_raise(NoMethodError)
+  end
+
   # Runs the block with STDOUT captured and returns what it printed.
   def capture_stdout
     original_stdout = $stdout

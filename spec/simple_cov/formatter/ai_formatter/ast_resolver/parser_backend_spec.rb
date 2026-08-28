@@ -32,6 +32,19 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver::ParserBackend do
       expect(grammars).to eq([Parser::Ruby27, Parser::Ruby30, Parser::Ruby31, Parser::Ruby32])
     end
 
+    it 'selects the grammar of the running Ruby and installed parser gem by default' do
+      expect(described_class.select_grammar).to eq(described_class::GRAMMAR)
+    end
+
+    it 'treats a parser gem version with fewer segments than the floor as below it' do
+      expect(described_class.select_grammar(ruby_version: '3.4.10', parser_version: '3.3')).to eq(Parser::Ruby34)
+    end
+
+    it 'treats a Prism version with fewer segments than the floor as equal when the rest is zero' do
+      stub_const('Prism::VERSION', '1.2')
+      expect(described_class.select_grammar(ruby_version: '3.4.10')).to eq(Prism::Translation::Parser34)
+    end
+
     it 'uses the exact parser gem grammar when the parser gem is too old for Prism translation' do
       grammars = %w[3.3.12 3.4.10].map do |ruby|
         described_class.select_grammar(ruby_version: ruby, parser_version: '3.1.0')
@@ -52,6 +65,10 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver::ParserBackend do
 
     it 'loads parser/current for a Ruby the parser gem has no exact grammar for' do
       expect(described_class.select_grammar(ruby_version: '4.0.6', parser_version: '3.1.0')).to eq(Parser::CurrentRuby)
+    end
+
+    it 'loads parser/current for a Ruby older than the grammars it knows, even one the parser gem ships' do
+      expect(described_class.select_grammar(ruby_version: '2.6.10', parser_version: '3.1.0')).to eq(Parser::CurrentRuby)
     end
 
     it 'loads parser/current when the listed grammar file is missing from the installed parser gem' do
@@ -82,8 +99,63 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver::ParserBackend do
       expect { described_class.parse(buffer_for('class')) }.to raise_error(Parser::SyntaxError)
     end
 
+    it 'accepts string literals whose escapes are invalid in UTF-8, as MRI does' do
+      expect(described_class.parse(buffer_for("\"\\xf0-\\xff\"\n")).type).to eq(:str)
+    end
+
+    it 'prints nothing for code the grammar merely warns about' do
+      expect { described_class.parse(buffer_for("def ambiguous\n  puts -1\nend\n")) }.not_to output.to_stderr
+    end
+
     it 'selects a Parser::Base grammar for the running Ruby at load time' do
       expect(described_class::GRAMMAR).to be < Parser::Base
+    end
+  end
+
+  describe '.silence_warnings' do
+    def silence_warnings(&block)
+      described_class.send(:silence_warnings, &block)
+    end
+
+    def stderr_of
+      original_stderr = $stderr
+      $stderr = StringIO.new
+      yield
+      $stderr.string
+    ensure
+      $stderr = original_stderr
+    end
+
+    it 'runs the block, muting the Ruby warnings it raises' do
+      executed = false
+      printed = stderr_of do
+        silence_warnings do
+          warn 'noise'
+          executed = true
+        end
+      end
+      expect([printed, executed]).to eq(['', true])
+    end
+
+    def verbosities_after_silencing
+      $VERBOSE = true
+      silence_warnings { nil }
+      after_success = $VERBOSE
+      begin
+        silence_warnings { raise LoadError, 'missing' }
+      rescue LoadError
+        nil
+      end
+      [after_success, $VERBOSE]
+    end
+
+    it 'restores the verbosity afterwards, even when the block raises' do
+      verbosity = $VERBOSE
+      begin
+        expect(verbosities_after_silencing).to eq([true, true])
+      ensure
+        $VERBOSE = verbosity
+      end
     end
   end
 end

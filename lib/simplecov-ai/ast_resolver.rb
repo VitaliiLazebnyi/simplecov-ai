@@ -4,6 +4,7 @@
 require 'parser'
 require_relative 'line_span'
 require_relative 'ast_resolver/semantic_node'
+require_relative 'ast_resolver/node_children'
 require_relative 'ast_resolver/parser_backend'
 require_relative 'ast_resolver/bypass_scanner'
 require_relative 'ast_resolver/metaclass_resolver'
@@ -34,11 +35,10 @@ module SimpleCov
         def self.resolve(file_path)
           return [] unless File.exist?(file_path)
 
-          buffer = Parser::Source::Buffer.new(file_path, source: read_source(file_path))
-          ast = ParserBackend.parse(buffer)
-          source = T.cast(buffer.source, String)
+          source = read_source(file_path)
+          buffer = Parser::Source::Buffer.new(file_path, source: source)
 
-          [SemanticNode.root(source.lines.size)] + new.traverse(ast)
+          [SemanticNode.root(source.lines.size)] + new.traverse(ParserBackend.parse(buffer))
         end
 
         # Reads the file as bytes, tagged UTF-8 (Ruby's default source encoding) when they form
@@ -67,17 +67,13 @@ module SimpleCov
             .returns(T::Array[SemanticNode])
         end
         def traverse(node, context = '', singleton: false)
-          return [] unless node.is_a?(Parser::AST::Node)
+          return [] unless node
 
-          nodes = T.let([], T::Array[SemanticNode])
           current_context, semantic_node, child_singleton = NodeClassifier.classify(node, context, singleton)
-          nodes << semantic_node if semantic_node
-
-          node.children.grep(Parser::AST::Node).each do |child|
-            nodes.concat(traverse(child, current_context, singleton: child_singleton))
+          nested = node.children.grep(Parser::AST::Node).flat_map do |child|
+            traverse(child, current_context, singleton: child_singleton)
           end
-
-          nodes
+          semantic_node ? [semantic_node] + nested : nested
         end
       end
     end

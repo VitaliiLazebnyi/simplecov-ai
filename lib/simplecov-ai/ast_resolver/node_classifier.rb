@@ -33,7 +33,7 @@ module SimpleCov
             when :class, :module then class_metadata(node, context)
             when :sclass then singleton_class_metadata(node, context)
             when :def then method_metadata(node, context, singleton)
-            when :defs then singleton_method_metadata(node, context)
+            when :defs then singleton_method_metadata(node, context, singleton)
             when :casgn then constant_assignment_metadata(node, context, singleton)
             else MetaclassResolver.block?(node) ? block_metadata(node, context, singleton) : [context, nil, singleton]
             end
@@ -51,15 +51,15 @@ module SimpleCov
             kind = MetaclassResolver.builder_kind(node)
             return [context, nil, singleton] unless kind
 
-            name = T.cast(node.children[1], Symbol).to_s
-            scope = ReceiverResolver.const_name(T.cast(node.children[0], T.nilable(Parser::AST::Node)))
-            full_name = scope.empty? ? name : "#{scope}#{NAMESPACE_SEPARATOR}#{name}"
-            [nest(context, full_name), SemanticNode.spanning(node, name: nest(context, full_name), type: kind), false]
+            name = NodeChildren.symbol_at(node, 1).to_s
+            full_name = nest(context, nest(ReceiverResolver.const_name(NodeChildren.node_at(node, 0)), name))
+            [full_name, SemanticNode.spanning(node, name: full_name, type: kind), false]
           end
 
           # A `define_method(:name) do … end` / `define_singleton_method(:name) { … }` block with
           # a literal name is the body of the method it defines, so it becomes a method node
-          # spanning the block; every other block is transparent.
+          # spanning the block; every other block is transparent. Like a method body (see
+          # {method_metadata}), the block keeps the lexical singleton scope for its children.
           sig do
             params(node: Parser::AST::Node, context: String, singleton: T::Boolean)
               .returns([String, T.nilable(SemanticNode), T::Boolean])
@@ -69,7 +69,7 @@ module SimpleCov
             return [context, nil, singleton] unless definition
 
             name, singleton_definer = definition
-            [context, method_node(node, context, name, singleton || singleton_definer), false]
+            [context, method_node(node, context, name, singleton || singleton_definer), singleton]
           end
 
           # `class << self` opens the singleton class of the lexical class, so enclosed `def`s are
@@ -82,7 +82,7 @@ module SimpleCov
               .returns([String, T.nilable(SemanticNode), T::Boolean])
           end
           def self.singleton_class_metadata(node, context)
-            receiver = T.cast(node.children[0], Parser::AST::Node)
+            receiver = NodeChildren.required_node_at(node, 0)
             return [context, nil, true] if receiver.type == :self
 
             receiver_name = ReceiverResolver.singleton_class_name(receiver)
@@ -94,31 +94,30 @@ module SimpleCov
               .returns([String, T.nilable(SemanticNode), T::Boolean])
           end
           def self.class_metadata(node, context)
-            name = ReceiverResolver.const_name(T.cast(node.children[0], T.nilable(Parser::AST::Node)))
-            new_context = nest(context, name)
+            new_context = nest(context, ReceiverResolver.const_name(NodeChildren.node_at(node, 0)))
             [new_context, SemanticNode.spanning(node, name: new_context, type: node.type.to_s.capitalize), false]
+          end
+
+          # Children traverse under the enclosing context, not the method name, so a nested def
+          # is attributed to its class rather than producing names like Outer#outer#inner. They
+          # keep the lexical singleton scope: Ruby defines a def nested in a method body on the
+          # class open at that point, which inside `class << self` is the singleton class.
+          sig do
+            params(node: Parser::AST::Node, context: String, singleton: T::Boolean)
+              .returns([String, T.nilable(SemanticNode), T::Boolean])
+          end
+          def self.method_metadata(node, context, singleton)
+            [context, method_node(node, context, NodeChildren.symbol_at(node, 0).to_s, singleton), singleton]
           end
 
           sig do
             params(node: Parser::AST::Node, context: String, singleton: T::Boolean)
               .returns([String, T.nilable(SemanticNode), T::Boolean])
           end
-          def self.method_metadata(node, context, singleton)
-            name = T.cast(node.children.first, Symbol).to_s
-            # Children traverse under the enclosing context, not the method name, so a nested
-            # def is attributed to its class rather than producing names like Outer#outer#inner.
-            [context, method_node(node, context, name, singleton), false]
-          end
-
-          sig do
-            params(node: Parser::AST::Node, context: String)
-              .returns([String, T.nilable(SemanticNode), T::Boolean])
-          end
-          def self.singleton_method_metadata(node, context)
-            receiver = T.cast(node.children[0], Parser::AST::Node)
+          def self.singleton_method_metadata(node, context, singleton)
+            receiver = NodeChildren.required_node_at(node, 0)
             receiver_name = ReceiverResolver.singleton_method_receiver(receiver, context)
-            name = T.cast(node.children[1], Symbol).to_s
-            [context, method_node(node, receiver_name, name, true), false]
+            [context, method_node(node, receiver_name, NodeChildren.symbol_at(node, 1).to_s, true), singleton]
           end
 
           # Qualifies a name with its enclosing context, e.g. `Outer::Inner`.
@@ -128,7 +127,7 @@ module SimpleCov
           end
 
           # Builds a method node named `Context#name` (instance) or `Context.name` (singleton);
-          # at the top level the context is empty and the name keeps just its separator.
+          # at the top level the context is empty and the name is just the separator and name.
           sig do
             params(node: Parser::AST::Node, context: String, name: String, singleton: T::Boolean)
               .returns(SemanticNode)
@@ -136,8 +135,7 @@ module SimpleCov
           def self.method_node(node, context, name, singleton)
             separator = singleton ? SINGLETON_SEPARATOR : INSTANCE_SEPARATOR
             type = singleton ? TYPE_SINGLETON_METHOD : TYPE_INSTANCE_METHOD
-            qualified_name = context.empty? ? "#{separator}#{name}" : "#{context}#{separator}#{name}"
-            SemanticNode.spanning(node, name: qualified_name, type: type)
+            SemanticNode.spanning(node, name: "#{context}#{separator}#{name}", type: type)
           end
 
           private_class_method :block_metadata, :singleton_class_metadata, :class_metadata, :method_metadata,

@@ -123,7 +123,8 @@ module SimpleCov
 
           # An arm whose range strictly contains other missed arms of the same node (the `else`
           # of an `elsif` chain spans the whole chain) would repeat every inner arm's text, so it
-          # is cut to its first source line; every other arm quotes its exact expression.
+          # is cut to its first source line; every other arm quotes its exact expression. Strict
+          # enclosure never holds between an arm and itself.
           sig do
             params(branch: SimpleCov::SourceFile::Branch, siblings: T::Array[SimpleCov::SourceFile::Branch]).returns(String)
           end
@@ -142,9 +143,7 @@ module SimpleCov
           end
           def encloses_sibling?(branch, siblings)
             arm_range = branch.start_line..branch.end_line
-            siblings.any? do |sibling|
-              !sibling.equal?(branch) && LineSpan.strictly_encloses?(arm_range, sibling.start_line..sibling.end_line)
-            end
+            siblings.any? { |sibling| LineSpan.strictly_encloses?(arm_range, sibling.start_line..sibling.end_line) }
           end
         end
       end

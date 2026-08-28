@@ -29,26 +29,28 @@ module SimpleCov
             call = MetaclassResolver.block_call(node)
             return nil unless call && implicit_receiver?(call)
 
-            singleton_definer = DEFINERS[T.cast(call.children[1], Symbol)]
+            singleton_definer = DEFINERS[NodeChildren.symbol_at(call, 1)]
             name = literal_name(call)
-            singleton_definer.nil? || name.nil? ? nil : [name, singleton_definer]
+            return nil if singleton_definer.nil? || name.nil?
+
+            [name, singleton_definer]
           end
 
           # True when the call has no receiver or `self` as its receiver, i.e. it defines the
           # method on the lexical class being resolved.
           sig { params(call: Parser::AST::Node).returns(T::Boolean) }
           def self.implicit_receiver?(call)
-            receiver = T.cast(call.children[0], T.nilable(Parser::AST::Node))
+            receiver = NodeChildren.node_at(call, 0)
             receiver.nil? || receiver.type == :self
           end
 
           # The first argument of the call as a method name, when it is a symbol or string literal.
           sig { params(call: Parser::AST::Node).returns(T.nilable(String)) }
           def self.literal_name(call)
-            argument = T.cast(call.children[2], T.nilable(Parser::AST::Node))
+            argument = NodeChildren.node_at(call, 2)
             return nil unless argument && LITERAL_NAME_TYPES.include?(argument.type)
 
-            T.cast(argument.children[0], T.any(Symbol, String)).to_s
+            NodeChildren.literal_value(argument)
           end
 
           private_class_method :implicit_receiver?, :literal_name

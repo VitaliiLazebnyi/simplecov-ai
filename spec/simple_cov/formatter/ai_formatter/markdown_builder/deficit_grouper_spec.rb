@@ -53,6 +53,16 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::DeficitGroupe
     expect([group_names(forward), group_names(backward)]).to eq([%w[Outer Outer#inner], %w[Outer Outer#inner]])
   end
 
+  it 'orders a wider node before a narrower one opening on the same line, whatever their names' do
+    nodes = [node('Zeta', 3, 10), node('Alpha.run', 3, 5)]
+    expect(group_names(build(file_with(missed_lines: [4, 8]), nodes))).to eq(['Zeta', 'Alpha.run'])
+  end
+
+  it 'orders a positional multi-line group before a single-line one starting on the same line' do
+    file = file_with(missed_lines: [9], branches: { arm(:if, 9, 11) => { arm(:then, 9, 11) => 0 } })
+    expect(build(file, [node('Solo#work', 1, 5)]).keys).to eq(['Lines 9-11', 'Line 9'])
+  end
+
   it 'labels a deficit no node spans by position, merging a line and a single-line branch there' do
     file = file_with(missed_lines: [9], branches: { arm(:if, 9) => { arm(:then, 9) => 0 } })
     groups = build(file, [node('Solo#work', 1, 5)])

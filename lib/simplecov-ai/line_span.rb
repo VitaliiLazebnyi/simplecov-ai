@@ -14,7 +14,7 @@ module SimpleCov
         # @return [Boolean] Whether every line of `inner` lies within `outer`.
         sig { params(outer: T::Range[Integer], inner: T::Range[Integer]).returns(T::Boolean) }
         def self.encloses?(outer, inner)
-          outer.begin <= inner.begin && outer.end >= inner.end
+          outer.cover?(inner)
         end
 
         # @param outer [Range<Integer>] The candidate enclosing range.
@@ -27,7 +27,7 @@ module SimpleCov
 
         sig { params(range: T::Range[Integer]).returns(Integer) }
         def self.line_count(range)
-          range.end - range.begin
+          range.count
         end
 
         private_class_method :line_count

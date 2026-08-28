@@ -1,0 +1,49 @@
+# Mutation testing with mutant (`bundle exec rake mutant`, or `bundle exec mutant run` directly;
+# `bundle exec mutant run --since origin/main` limits it to subjects touched on a branch).
+# Every constant and method under the gem's namespace is a subject; a mutation that no example
+# fails on survives, which fails the run. Mutations that provably cannot change behaviour are
+# excluded below with their justification instead of by dropping subjects. A pattern skips the
+# whole subtree of the nodes it matches, so each one is kept as narrow as its justification.
+usage: opensource
+integration:
+  name: rspec
+includes:
+  - lib
+requires:
+  - simplecov-ai
+environment_variables:
+  # spec/spec_helper.rb neither starts SimpleCov nor enforces the coverage minimums when set:
+  # the specs run once per mutation in forked workers, where measuring coverage is meaningless
+  # and slow, and warnings-as-errors is left to the ordinary suite so a kill always means a
+  # failing example.
+  MUTANT: '1'
+matcher:
+  subjects:
+    - SimpleCov::Formatter::AIFormatter*
+mutation:
+  ignore_patterns:
+    # `T.cast`, `T.let` and `T.must` only assert a type for Sorbet: removing one changes no
+    # behaviour on well-typed input, so such a mutant can only be killed by a test that feeds a
+    # wrongly typed value to exercise sorbet-runtime rather than the gem. The code keeps their
+    # arguments trivial (a variable or a plain read) so nothing else hides under this pattern.
+    - send{receiver=const{name=T} selector=(cast,let,must)}
+    # `require` is idempotent and every feature the gem requires is already loaded in the test
+    # process, so removing a require — or the warning muting around the one that can warn on
+    # first load — is unobservable there.
+    - send{selector=require}
+    - block{receiver=send{selector=silence_warnings}}
+    # `Kernel.format` is the same method as the private `format`; its arguments are locals.
+    - send{receiver=const{name=Kernel} selector=format}
+    # `range.count` on an Integer range equals `range.size`.
+    - send{receiver=lvar{value=range} selector=count}
+    # `children.grep(Parser::AST::Node)`: Parser emits no other node class, so grepping for the
+    # superclass `AST::Node` selects exactly the same children.
+    - send{selector=grep}
+    # `percent >= 100.0` in the status check: a percentage never exceeds 100, so `==` and `>=`
+    # coincide; the comparison also keeps NaN (an undecodable figure) from reading as perfect.
+    - send{receiver=lvar{value=percent} selector=>=}
+    # `value.strip.empty?`: an all-whitespace path is empty after `lstrip` and `rstrip` too.
+    - send{receiver=lvar{value=value} selector=strip}
+    # `raw.is_a?(Array)` on a decoded descriptor: coverage data holds plain Arrays, so
+    # `instance_of?` is indistinguishable.
+    - send{receiver=lvar{value=raw} selector=is_a?}

@@ -6,12 +6,21 @@ require 'coverage'
 require 'tmpdir'
 require 'fileutils'
 
-# Integration tests require specific setup and multi-step assertions
-# that naturally violate some RSpec style guidelines.
-# Justification: Integration tests setup
-RSpec.describe SimpleCov::Formatter::AIFormatter do
+# Measures the fixture's real coverage through the suite's own Coverage session and formats it.
+# Under mutant no coverage session runs (see spec_helper.rb), so these examples are excluded
+# there (`mutant: false`); the formatter's subjects are covered by the exact-report specs.
+RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
   let(:fixture_path) { File.expand_path('../../fixtures/metaprogramming_constructs.rb', __dir__) }
   let(:report_path) { 'coverage/metaprogramming_test_ai_report.md' }
+  # Each construct as its own node followed by its missed arm, in source order.
+  let(:expected_lines) do
+    deficit = '^  - \\*\\*Branch Deficit:\\*\\* \\[L\\d+\\] Missing coverage for `%s` branch: `%s`$'
+    ['^- `MetaprogrammingConstructs#dynamic_instance_method`$', format(deficit, 'else', ':dynamic_false'),
+     '^- `MetaprogrammingConstructs\\.dynamic_class_method`$', format(deficit, 'else', ':singleton_case_else'),
+     '^- `MetaprogrammingConstructs#evaled_method`$', format(deficit, 'else', ':evaled_false'),
+     '^- `MetaprogrammingConstructs#method_missing`$', format(deficit, 'else', 'super'),
+     '^- `MetaprogrammingConstructs\\.eigen_method`$', format(deficit, 'then', ':eigen_false')]
+  end
 
   # We use a class variable or standard local variable within a shared context to avoid before(:all)
   # But since this is a coverage test, we just run it in a single before block.
@@ -56,16 +65,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
     FileUtils.rm_f(report_path)
   end
 
-  # Justification: Integration tests require multi-step assertions on a single generated report.
-  it 'generates a report with expected branch deficit snippets for metaprogramming constructs' do
-    report_content = File.read(report_path)
-
-    expect(report_content).to include(
-      'Missing coverage for `else` branch: `:dynamic_false`',
-      'Missing coverage for `else` branch: `:singleton_case_else`',
-      'Missing coverage for `else` branch: `:evaled_false`',
-      'Missing coverage for `else` branch: `super`',
-      'Missing coverage for `then` branch: `:eigen_false`'
-    )
+  it 'lists each construct as its own node with the missed arm, in source order' do
+    expect(File.read(report_path)).to match(Regexp.new(expected_lines.join('.*'), Regexp::MULTILINE))
   end
 end

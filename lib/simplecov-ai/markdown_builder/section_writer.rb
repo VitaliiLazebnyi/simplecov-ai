@@ -28,7 +28,7 @@ module SimpleCov
           def initialize(budget, heading)
             @budget = budget
             @heading = heading
-            @opened = T.let(false, T::Boolean)
+            @heading_pending = T.let(true, T::Boolean)
             @closed = T.let(false, T::Boolean)
             @written_blocks = T.let(0, Integer)
           end
@@ -60,10 +60,10 @@ module SimpleCov
             return if @closed
 
             first_fragment, *further_fragments = node_fragments
-            opening = "#{@heading unless @opened}#{file_heading}\n#{first_fragment}"
+            opening = "#{@heading if @heading_pending}#{file_heading}\n#{first_fragment}"
             return close!(block_started: false) unless @budget.admit(opening)
 
-            @opened = true
+            @heading_pending = false
             return close!(block_started: true) unless further_fragments.all? { |fragment| @budget.admit(fragment) }
 
             @budget.write("\n")

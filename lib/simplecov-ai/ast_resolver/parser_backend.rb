@@ -9,7 +9,8 @@ module SimpleCov
     class AIFormatter
       class ASTResolver
         # Chooses the parsing backend once, at load time, and parses source buffers with it
-        # without ever writing to STDERR. Prism's `parser`-compatible translation layer is
+        # without ever writing to STDERR (the diagnostics engine is given no consumer, so
+        # warnings are dropped and only errors surface). Prism's `parser`-compatible translation layer is
         # preferred whenever it offers a grammar for the running Ruby (Ruby >= 3.3 with
         # Prism >= 1.2 and a `parser` gem recent enough for the translation to load); otherwise
         # the `parser` gem's exact grammar for the running Ruby is loaded, falling back to
@@ -66,8 +67,8 @@ module SimpleCov
             prism_grammar(ruby_version, parser_version) || parser_gem_grammar(ruby_version)
           end
 
-          # Parses a source buffer with the selected grammar, muting every diagnostic and
-          # accepting the literals MRI accepts (see {LenientLiterals}).
+          # Parses a source buffer with the selected grammar, raising on syntax errors, dropping
+          # warnings and accepting the literals MRI accepts (see {LenientLiterals}).
           #
           # @param buffer [Parser::Source::Buffer] The source to parse.
           # @return [Parser::AST::Node, nil] The root AST node, or nil for an empty or
@@ -77,10 +78,7 @@ module SimpleCov
           def self.parse(buffer)
             parser = GRAMMAR.new
             T.cast(parser.builder, Parser::Builders::Default).extend(LenientLiterals)
-            diagnostics = T.cast(parser.diagnostics, Parser::Diagnostic::Engine)
-            diagnostics.all_errors_are_fatal = true
-            diagnostics.ignore_warnings = true
-            diagnostics.consumer = ->(_diagnostic) {}
+            T.cast(parser.diagnostics, Parser::Diagnostic::Engine).all_errors_are_fatal = true
             T.cast(parser.parse(buffer), T.nilable(Parser::AST::Node))
           end
 
@@ -142,14 +140,15 @@ module SimpleCov
             $VERBOSE = previous_verbosity
           end
 
-          # Compares dotted version strings numerically, segment by segment, treating missing
-          # trailing segments as zero (so "3.3" and "3.3.0" are equal).
+          # Compares dotted version strings numerically, segment by segment: a version with fewer
+          # segments than the floor is padded with zeros (so "3.3" and "3.3.0" are equal), and
+          # segments beyond the floor's length cannot make a version lower.
           sig { params(version: String, floor: String).returns(T::Boolean) }
           def self.below?(version, floor)
             version_segments = numeric_segments(version)
-            floor_segments = numeric_segments(floor)
-            width = [version_segments.size, floor_segments.size].max
-            orderings = (0...width).map { |index| version_segments.fetch(index, 0) <=> floor_segments.fetch(index, 0) }
+            orderings = numeric_segments(floor).each_with_index.map do |floor_segment, index|
+              version_segments.at(index).to_i <=> floor_segment
+            end
             orderings.find { |ordering| !ordering.zero? } == -1
           end
 

@@ -26,7 +26,7 @@ module SimpleCov
           def initialize(nodes)
             @nodes = nodes
             @node_deficits = T.let({}, T::Hash[String, DeficitGroup])
-            @sort_keys = T.let({}, T::Hash[String, [Integer, Integer, String]])
+            @sort_keys = T.let({}, T::Hash[String, [Integer, Integer]])
           end
 
           # Groups every deficit of the file under its innermost node.
@@ -59,14 +59,12 @@ module SimpleCov
           end
 
           # Orders groups by start line, then wider spans first so an enclosing node precedes the
-          # children opening on its line, then name so two nodes sharing a span (a class and a
-          # method defined on one line) always come out in the same order.
+          # children opening on its line. No two groups share a span: every deficit inside a span
+          # lands on the innermost node covering it.
           sig { returns(T::Hash[String, DeficitGroup]) }
           def sort_deficits
-            T.let(
-              @node_deficits.sort_by { |group_key, _deficit_group| @sort_keys.fetch(group_key) }.to_h,
-              T::Hash[String, DeficitGroup]
-            )
+            sorted = @node_deficits.sort_by { |group_key, _group| @sort_keys.fetch(group_key) }
+            T.let(sorted.to_h, T::Hash[String, DeficitGroup])
           end
 
           sig { params(file: SimpleCov::SourceFile).void }
@@ -117,19 +115,19 @@ module SimpleCov
             @node_deficits[group_key] ||= DeficitGroup.new(semantic_node: node)
           end
 
-          sig { params(node: ASTResolver::SemanticNode).returns([String, [Integer, Integer, String]]) }
+          sig { params(node: ASTResolver::SemanticNode).returns([String, [Integer, Integer]]) }
           def node_identity(node)
-            ["#{node.name}@#{node.start_line}", [node.start_line, -node.end_line, node.name]]
+            ["#{node.name}@#{node.start_line}", [node.start_line, -node.end_line]]
           end
 
-          sig { params(start_line: Integer, end_line: Integer).returns([String, [Integer, Integer, String]]) }
+          sig { params(start_line: Integer, end_line: Integer).returns([String, [Integer, Integer]]) }
           def positional_identity(start_line, end_line)
             label = if start_line == end_line
                       format(FALLBACK_LINE_NAME, start_line)
                     else
                       format(FALLBACK_RANGE_NAME, start_line, end_line)
                     end
-            [label, [start_line, -end_line, label]]
+            [label, [start_line, -end_line]]
           end
         end
       end

@@ -5,7 +5,9 @@ require 'spec_helper'
 require 'tmpdir'
 require 'fileutils'
 
-RSpec.describe SimpleCov::Formatter::AIFormatter do
+# Edge cases of the whole pipeline; part of every subject's selection under mutant (see
+# spec/support/mutant_scopes.rb).
+RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScopes.spec_levels do
   let(:tmpdir) { Dir.mktmpdir('scai') }
   let(:report_path) { File.join(tmpdir, 'report.md') }
 
@@ -32,12 +34,12 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
   describe 'ASTResolver edge cases' do
     it 'attributes a singleton method to its explicit foreign receiver' do
       nodes = resolve("class Patcher\n  def String.shout\n    upcase\n  end\nend\n")
-      expect(nodes.map(&:name)).to include('String.shout')
+      expect(nodes.map(&:name)).to eq(['main', 'Patcher', 'String.shout'])
     end
 
     it 'attributes a singleton method on a non-constant receiver to the enclosing context' do
       nodes = resolve("class Holder\n  obj = Object.new\n  def obj.assist\n  end\nend\n")
-      expect(nodes.map(&:name)).to include('Holder.assist')
+      expect(nodes.map(&:name)).to eq(['main', 'Holder', 'Holder.assist'])
     end
 
     it 'attributes methods in Struct.new / Data.define / Class.new blocks to the assigned constant' do
@@ -45,7 +47,12 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
                       "Cfg = Data.define(:h) do\n  def url\n  end\nend\n" \
                       "Registry::Entry = Class.new do\n  def render\n  end\nend\n" \
                       "class Box\n  Item = Struct.new(:v) do\n    def show\n    end\n  end\nend\n")
-      expect(nodes.map(&:name)).to include('Point#dist', 'Cfg#url', 'Registry::Entry#render', 'Box::Item#show')
+      expect(nodes.map { |node| [node.name, node.type] }).to eq(
+        [['main', 'Root Script Scope'], ['Point', 'Struct'], ['Point#dist', 'Instance Method'],
+         ['Cfg', 'Data'], ['Cfg#url', 'Instance Method'], ['Registry::Entry', 'Class'],
+         ['Registry::Entry#render', 'Instance Method'], ['Box', 'Class'], ['Box::Item', 'Struct'],
+         ['Box::Item#show', 'Instance Method']]
+      )
     end
 
     it 'does not treat non-class constant assignments as metaprogramming classes' do
@@ -56,7 +63,8 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
                       "SAFE = obj&.each do\n  1\nend\n" \
                       "BARE = build do\n  2\nend\n" \
                       "MAPPED = [1].map do |i|\n  i\nend\n" \
-                      "WRONG = Struct.old do\n  3\nend\n")
+                      "WRONG = Struct.old do\n  3\nend\n" \
+                      "OTHER = Registry.new do\n  4\nend\n")
       expect(nodes.map(&:name)).to eq(['main'])
     end
   end
@@ -66,32 +74,6 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
       described_class.configure { |config| config.max_file_size_kb = 7 }
       described_class.reset_configuration!
       expect(described_class.configuration.max_file_size_kb).to eq(50)
-    end
-  end
-
-  describe 'branch coverage percent fallback for simplecov < 1.0' do
-    let(:source) { "def pick(flag)\n  flag ? :a : :b\nend\n" }
-    let(:path) { write_source(tmpdir, 'pick.rb', source) }
-    let(:legacy_result) do
-      branches = { branch_descriptor(source, :if, 0, 2, 'flag ? :a : :b') => {
-        branch_descriptor(source, :then, 1, 2, ':a') => 1, branch_descriptor(source, :else, 2, 2, ':b') => 0
-      } }
-      result_for(path => { 'lines' => [1, 1, nil], 'branches' => branches })
-    end
-
-    before do
-      # simplecov < 1.0's SourceFile#covered_percent takes no criterion and raises ArgumentError
-      # when given one, and its branches_coverage_percent computes the figure itself; on newer
-      # releases (where the latter delegates to covered_percent) that shape is reproduced on the
-      # real object.
-      legacy_file = legacy_result.files.first
-      allow(legacy_file).to receive(:covered_percent) { |*criterion| criterion.empty? ? 100.0 : raise(ArgumentError) }
-      allow(legacy_file).to receive(:branches_coverage_percent).and_return(50.0)
-    end
-
-    it 'falls back to branches_coverage_percent so the branch deficit is still reported' do
-      expect(report_for(legacy_result))
-        .to end_with("  - **Branch Deficit:** [L2] Missing coverage for `else` branch: `:b`\n\n")
     end
   end
 
@@ -105,7 +87,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter do
 
     it 'renders a file whose comments carry stray non-UTF-8 bytes without raising' do
       path = File.join(tmpdir, 'latin.rb')
-      File.binwrite(path, "# caf\xe9\ndef read\n  1\nend\n".b)
+      File.binwrite(path, "# Latin-1 \xe9\ndef read\n  1\nend\n".b)
       result = result_for(path => { 'lines' => [nil, 1, 0, nil] })
       skip 'SimpleCov < 1.1 raises on invalid UTF-8 bytes itself (1.1 scrubs them)' unless classifiable?(result)
       expect(report_for(result)).to end_with("  - **Line Deficit:** [L3] `1`\n\n")

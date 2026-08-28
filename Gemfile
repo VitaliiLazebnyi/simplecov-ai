@@ -34,3 +34,12 @@ if sorbet_toolchain_supported && Gem::Version.new(RUBY_VERSION) >= Gem::Version.
     gem 'reek', '~> 6.5'
   end
 end
+
+# Mutation testing behind `rake mutant` (see .mutant.yml). mutant 0.16 requires Ruby >= 3.3, so
+# older Rubies skip it rather than resolve an outdated release; it runs in CI on the lockfile
+# Ruby only.
+if sorbet_toolchain_supported && Gem::Version.new(RUBY_VERSION) >= Gem::Version.new('3.3')
+  group :mutation do
+    gem 'mutant-rspec', '~> 0.16.3'
+  end
+end

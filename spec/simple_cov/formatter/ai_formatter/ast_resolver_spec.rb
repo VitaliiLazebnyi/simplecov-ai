@@ -23,8 +23,40 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
     nil
   end
 
+  def syntax_error_for(code)
+    resolve(code)
+    nil
+  rescue Parser::SyntaxError => error
+    error
+  end
+
   def node_table(nodes)
     nodes.map { |node| [node.name, node.type, node.start_line, node.end_line] }
+  end
+
+  # Nested defs inside a method, a `def self.` method and a define_method block, all within
+  # `class << self`.
+  def singleton_scoped_source
+    <<~RUBY
+      class Host
+        class << self
+          def outer
+            def inner
+            end
+          end
+
+          def self.meta
+            def inner_meta
+            end
+          end
+
+          define_method(:dynamic) do
+            def inner_dynamic
+            end
+          end
+        end
+      end
+    RUBY
   end
 
   describe '.resolve' do
@@ -66,6 +98,27 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
       it 'marks only the first node as the root scope' do
         expect(nodes.map(&:root?)).to eq([true] + Array.new(nodes.size - 1, false))
       end
+
+      it 'marks exactly the instance and singleton methods as methods' do
+        methods = nodes.select(&:method?).map(&:name)
+        expect(methods).to eq(['Versioned#version', 'Mixin#helper', 'Point#distance', 'Dynamic#literal_symbol',
+                               'Dynamic#braced', 'Dynamic#numbered', 'Dynamic.build', 'Dynamic.singleton_scoped',
+                               'Delegator#relay', 'handler.assist', 'Delegator.make', 'Registrar#opaque',
+                               'Registrar#initialize', 'Registrar#install', '@store.lookup', 'Registrar.registered'])
+      end
+
+      it 'exposes each node\'s lines as an inclusive range' do
+        expect(nodes[2].line_range).to eq(19..21)
+      end
+    end
+
+    it 'reads valid UTF-8 as UTF-8 and stray bytes as binary' do
+      utf8_path = File.join(tmpdir, 'utf8.rb')
+      File.binwrite(utf8_path, "# UTF-8 \u00e9\n".b)
+      latin1_path = File.join(tmpdir, 'latin1.rb')
+      File.binwrite(latin1_path, "# Latin-1 \xe9\n".b)
+      encodings = [described_class.read_source(utf8_path).encoding, described_class.read_source(latin1_path).encoding]
+      expect(encodings).to eq([Encoding::UTF_8, Encoding::BINARY])
     end
 
     it 'returns an empty array for a missing file' do
@@ -121,13 +174,26 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
     end
 
     it 'keeps the structure of a file whose comments contain stray non-UTF-8 bytes' do
-      nodes = resolve("# caf\xe9\nclass Latin\n  def read\n    1\n  end\nend\n".b)
+      nodes = resolve("# Latin-1 \xe9\nclass Latin\n  def read\n    1\n  end\nend\n".b)
       expect(node_table(nodes)).to eq([['main', 'Root Script Scope', 1, 6], ['Latin', 'Class', 2, 6],
                                        ['Latin#read', 'Instance Method', 3, 5]])
     end
 
-    it 'raises Parser::SyntaxError for invalid Ruby' do
-      expect { resolve("class Broken\nend def =") }.to raise_error(Parser::SyntaxError)
+    it 'raises Parser::SyntaxError for invalid Ruby, naming the file in the diagnostic' do
+      error = syntax_error_for("class Broken\nend def =")
+      expect([error.class, error.diagnostic.location.source_buffer.name])
+        .to eq([Parser::SyntaxError, File.join(tmpdir, 'sample.rb')])
+    end
+
+    it 'leaves a block on a call that defines no method transparent even when its argument is a literal' do
+      nodes = resolve("class Named\n  register(:hook) do\n    def inner\n    end\n  end\nend\n")
+      expect(node_table(nodes)).to eq([['main', 'Root Script Scope', 1, 6], ['Named', 'Class', 1, 6],
+                                       ['Named#inner', 'Instance Method', 3, 4]])
+    end
+
+    it 'does not mistake a method named like a builder for one' do
+      nodes = resolve("Shape = factory.Struct.new(:x) do\n  def area\n  end\nend\n")
+      expect(node_table(nodes)).to eq([['main', 'Root Script Scope', 1, 4], ['#area', 'Instance Method', 2, 3]])
     end
 
     it 'prints no diagnostic to STDERR for invalid Ruby' do
@@ -162,6 +228,28 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
            ['Analytics::Event.singleton_tracked', 'Singleton Method']]
         )
       end
+    end
+
+    # Ruby defines a def nested in a method body (or a define_method block) on the class open
+    # at that point: the lexical class, or its singleton class inside `class << self`.
+    it 'attributes a def nested in an instance method body to the class as an instance method' do
+      nodes = resolve("class Host\n  def outer\n    def inner\n    end\n  end\nend\n")
+      expect(node_table(nodes)).to eq([['main', 'Root Script Scope', 1, 6], ['Host', 'Class', 1, 6],
+                                       ['Host#outer', 'Instance Method', 2, 5],
+                                       ['Host#inner', 'Instance Method', 3, 4]])
+    end
+
+    it 'attributes a def nested in a `def self.` body to the class as an instance method' do
+      nodes = resolve("class Host\n  def self.outer\n    def inner\n    end\n  end\nend\n")
+      expect(node_table(nodes)).to eq([['main', 'Root Script Scope', 1, 6], ['Host', 'Class', 1, 6],
+                                       ['Host.outer', 'Singleton Method', 2, 5],
+                                       ['Host#inner', 'Instance Method', 3, 4]])
+    end
+
+    it 'attributes defs nested in `class << self` method bodies to the singleton class' do
+      expect(resolve(singleton_scoped_source).map(&:name))
+        .to eq(['main', 'Host', 'Host.outer', 'Host.inner', 'Host.meta', 'Host.inner_meta', 'Host.dynamic',
+                'Host.inner_dynamic'])
     end
 
     it 'preserves the full namespace of a compact class definition' do

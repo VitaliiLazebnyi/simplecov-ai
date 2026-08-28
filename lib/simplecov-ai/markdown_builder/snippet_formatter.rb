@@ -24,14 +24,15 @@ module SimpleCov
           sig { params(line_nums: T::Array[Integer], source_lines: T::Array[String]).returns(String) }
           def fetch_snippet_text(line_nums, source_lines)
             line_nums.select(&:positive?)
-                     .filter_map { |line_number| source_lines[line_number - 1]&.strip }
+                     .filter_map { |line_number| source_lines.at(line_number - 1)&.strip }
                      .reject(&:empty?)
                      .join(' ')
           end
 
           # Extracts a byte range from a source line. SimpleCov reports branch columns as
           # byte offsets, so slicing on the byte representation and restoring the original
-          # encoding keeps sub-line snippets correct for multibyte source.
+          # encoding keeps sub-line snippets correct for multibyte source; a slice that cuts a
+          # multibyte character is scrubbed.
           #
           # @param line_text [String] The full source line.
           # @param start_col [Integer] Inclusive start byte offset.
@@ -42,9 +43,10 @@ module SimpleCov
             bytes = line_text.b
             return nil unless bytes.length >= end_col
 
-            slice = bytes[start_col...end_col].to_s
-            slice.force_encoding(line_text.encoding)
-            slice.valid_encoding? ? slice : slice.scrub
+            slice = bytes[start_col...end_col]
+            return '' unless slice
+
+            slice.force_encoding(line_text.encoding).scrub
           end
 
           # Safely limits the character length of a code snippet according to global configurations.
@@ -56,7 +58,7 @@ module SimpleCov
           def truncate_snippet(snippet_text, max_snippet_lines)
             max_chars = max_snippet_lines * ESTIMATED_CHARS_PER_LINE
             if snippet_text.length > max_chars
-              "#{snippet_text[0...max_chars]}#{TRUNCATION_ELLIPSIS}"
+              "#{snippet_text[0, max_chars]}#{TRUNCATION_ELLIPSIS}"
             else
               snippet_text
             end
@@ -95,7 +97,7 @@ module SimpleCov
           def extract_inline_branch(branch, columns, source_lines)
             return nil unless columns && branch.start_line == branch.end_line
 
-            line_text = source_lines[branch.start_line - 1]
+            line_text = source_lines.at(branch.start_line - 1)
             return nil unless line_text
 
             start_col, end_col = columns
@@ -109,10 +111,11 @@ module SimpleCov
           # @return [String] The stripped first line, or an empty string when the range is blank.
           sig { params(branch: SimpleCov::SourceFile::Branch, source_lines: T::Array[String]).returns(String) }
           def first_source_line(branch, source_lines)
-            (branch.start_line..branch.end_line).lazy
-                                                .map { |line_number| fetch_snippet_text([line_number], source_lines) }
-                                                .find { |text| !text.empty? }
-                                                .to_s
+            (branch.start_line..branch.end_line).each do |line_number|
+              text = fetch_snippet_text([line_number], source_lines)
+              return text unless text.empty?
+            end
+            ''
           end
 
           # Labels a line range the way deficits are tagged: `12` for one line, `12-15` for a span.
@@ -138,18 +141,18 @@ module SimpleCov
           def calculate_occurrence(line_num, source_lines, node)
             return '' if node.nil?
 
-            snippet = source_lines[line_num - 1]&.strip
-            return '' if snippet.nil? || snippet.empty?
-
-            positions = occurrence_index(node, source_lines)[snippet] || []
+            snippet = source_lines.at(line_num - 1).to_s.strip
+            positions = occurrence_index(node, source_lines).fetch(snippet, [])
             return '' unless positions.size > 1
 
-            Kernel.format(OCCURRENCE_TEMPLATE, positions.index(line_num).to_i + 1, positions.size)
+            ordinal = T.must(positions.index(line_num)) + 1
+            Kernel.format(OCCURRENCE_TEMPLATE, ordinal, positions.size)
           end
 
           # Builds (once per node) a map of stripped line text to the line numbers where it
           # occurs within the node, so occurrence disambiguation is O(node span) instead of
-          # O(deficits × node span). Results are memoized on the including formatter instance.
+          # O(deficits × node span). Blank lines are left out, so a blank snippet never has an
+          # occurrence. Results are memoized on the including formatter instance.
           sig do
             params(node: ASTResolver::SemanticNode, source_lines: T::Array[String])
               .returns(T::Hash[String, T::Array[Integer]])
@@ -169,7 +172,7 @@ module SimpleCov
           def build_occurrence_index(node, source_lines)
             index = T.let({}, T::Hash[String, T::Array[Integer]])
             (node.start_line..node.end_line).each do |line_number|
-              content = source_lines[line_number - 1]&.strip
+              content = source_lines.at(line_number - 1)&.strip
               next if content.nil? || content.empty?
 
               (index[content] ||= []) << line_number

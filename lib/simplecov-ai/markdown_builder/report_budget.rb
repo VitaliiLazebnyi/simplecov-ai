@@ -39,7 +39,8 @@ module SimpleCov
             @buffer = buffer
             @limit_kb = limit_kb
             reserved_bytes = notice(file_count, file_count).bytesize + SEPARATOR_MARGIN
-            @admissible_bytes = T.let((limit_kb * BYTES_PER_KB) - reserved_bytes, Integer)
+            admissible_bytes = (limit_kb * BYTES_PER_KB) - reserved_bytes
+            @admissible_bytes = T.let(admissible_bytes, Integer)
           end
 
           # Appends the fragment when the report stays within the admissible size.
@@ -49,7 +50,7 @@ module SimpleCov
           sig { params(fragment: String).returns(T::Boolean) }
           def admit(fragment)
             fits = @buffer.string.bytesize + fragment.bytesize <= @admissible_bytes
-            @buffer.write(fragment) if fits
+            write(fragment) if fits
             fits
           end
 
@@ -70,7 +71,7 @@ module SimpleCov
           # @return [void]
           sig { params(omitted_deficit_files: Integer, omitted_bypass_files: Integer).void }
           def write_notice(omitted_deficit_files, omitted_bypass_files)
-            @buffer.write(notice(omitted_deficit_files, omitted_bypass_files))
+            write(notice(omitted_deficit_files, omitted_bypass_files))
           end
 
           private
