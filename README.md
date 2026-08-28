@@ -1,19 +1,43 @@
 # simplecov-ai
 
-A custom `SimpleCov::Formatter` designed explicitly for consumption by Large Language Models (LLMs) and autonomous engineering agents.
+A `SimpleCov::Formatter` that writes a compact Markdown digest of missing coverage for Large
+Language Models (LLMs) and autonomous engineering agents.
 
-Standard coverage reporters generate massive HTML files or exhaustive JSON/console outputs detailing every line number. This overwhelms strict LLM token constraints and relies on highly volatile line numbers. `simplecov-ai` solves this by generating a concise, structurally optimized **Markdown document** containing only the exact missing semantic coverage blocks.
+Standard coverage reporters produce large HTML files or exhaustive JSON/console output keyed by
+line numbers, which fills an LLM's context window with coordinates that shift on every edit.
+`simplecov-ai` resolves each missed line and branch to its enclosing module, class or method
+through the Ruby AST and emits only those semantic groups, each with the exact unexecuted
+expression.
 
-## Why use simplecov-ai?
+## What the digest contains
 
-- **Semantic Resolution:** Instead of volatile line numbers, missing coverage is resolved via Abstract Syntax Tree (AST) mapping into immutable semantic groupings (e.g., Class, Module, Instance Method).
-- **Maximum Token Conservation:** Fully covered files are completely omitted. If the report exceeds size limits, it safely truncates the output prioritizing the lowest-coverage files.
-- **Actionable Delta Directives:** Missing branches and lines are mapped directly to method names, letting the AI instantly search the code and write targeted specs.
-- **Directive Auditing:** Explicitly reports `:nocov:` bypasses, ensuring artificial metric inflation is completely transparent to the reviewing AI.
+- **Semantic resolution.** Deficits are grouped under the innermost enclosing node:
+  `Module::Class#method` for instance methods, `Module::Class.method` for singleton methods
+  (`def self.x`, `class << self`), constants bound to `Struct.new`, `Class.new`, `Module.new` or
+  `Data.define` blocks (`Point#distance`), `define_method` / `define_singleton_method` blocks with
+  a literal name, and `class << obj` singleton classes opened on a variable or constant
+  (`obj.name`, `@ivar.name`, `Foo::Bar.name`). Code outside any class or method belongs to
+  `main`, the root scope of the file.
+- **Exact snippets.** Each deficit carries its line(s) as `[L<n>]` or `[L<n>-<m>]` and the exact
+  source text: a missed branch quotes only its own arm (the `:neg` of `x.positive? ? :pos : :neg`),
+  the `else` arm that spans an `elsif` chain is cut to its first line plus `...`, and identical
+  lines within one node are told apart with `(Occurrence N of M)`.
+- **Token conservation.** Fully covered files are omitted, the `## Coverage Deficits` section
+  disappears on a perfect run, and `max_file_size_kb` is a hard ceiling on the written file.
+- **Bypass audit.** Every region SimpleCov skipped (`# :nocov:`, `# simplecov:disable`) is listed
+  with the directive that caused it, so artificially inflated metrics stay visible to the reader.
+- **Method coverage.** With SimpleCov >= 1.0 and `enable_coverage :method`, never-invoked methods
+  are reported too.
+
+## Requirements
+
+- **Ruby** 2.7 through 4.0 (MRI). JRuby and TruffleRuby run the formatter but implement no branch
+  coverage, so only line deficits are reported there and the header shows `N/A` for branches.
+- **SimpleCov** `>= 0.18, < 2.0`. Branch coverage needs `enable_coverage :branch`. Method
+  coverage and `# simplecov:disable` directives are SimpleCov 1.x features; on older releases they
+  are neither measured nor reported.
 
 ## Installation
-
-Add this line to your application's `Gemfile` strictly in the `test` group:
 
 ```ruby
 group :test do
@@ -22,75 +46,201 @@ group :test do
 end
 ```
 
-## Usage & Configuration
+## Usage
 
-Require and configure the formatter in your test helper (`spec_helper.rb` or `test_helper.rb`) after requiring `simplecov`:
+Require the formatter after `simplecov` in your test helper and register it with SimpleCov:
 
 ```ruby
 require 'simplecov'
 require 'simplecov-ai'
 
-# Optional Configuration (defaults shown below):
-SimpleCov::Formatter::AIFormatter.configure do |config|
-  config.report_path = 'coverage/ai_report.md'      # Output location
-  config.max_file_size_kb = 50                      # Maximum size (Token Ceiling)
-  config.max_snippet_lines = 5                      # AST context truncation limit
-  config.output_to_console = false                  # Echo digest to STDOUT
-  config.granularity = :fine                        # :fine (statements) or :coarse (methods)
-  config.include_bypasses = true                    # Audit `:nocov:` ignores
+SimpleCov.start do
+  enable_coverage :branch
+  skip '/spec/'         # SimpleCov >= 1.0; use `add_filter '/spec/'` on 0.x (1.x deprecates it)
 end
 
-SimpleCov.start do
-  # Combine with your existing formatters
-  SimpleCov.formatters = SimpleCov::Formatter::MultiFormatter.new([
-    SimpleCov::Formatter::HTMLFormatter,
-    SimpleCov::Formatter::AIFormatter
-  ])
+SimpleCov.formatter = SimpleCov::Formatter::AIFormatter
+# Alongside other formatters:
+# SimpleCov.formatters = [SimpleCov::Formatter::HTMLFormatter, SimpleCov::Formatter::AIFormatter]
+```
+
+When the suite exits, the formatter writes the report and announces it on STDOUT:
+
+```text
+AI coverage digest written to /path/to/project/coverage/ai_report.md
+```
+
+### Configuration
+
+All settings are optional; the defaults are shown:
+
+```ruby
+SimpleCov::Formatter::AIFormatter.configure do |config|
+  config.report_path = 'coverage/ai_report.md' # default: ai_report.md inside SimpleCov's coverage_dir
+  config.max_file_size_kb = 50                 # hard ceiling on the written file (metric kB)
+  config.max_snippet_lines = 5                 # snippets longer than 5 x 80 characters end in `...`
+  config.output_to_console = false             # true: print the digest to STDOUT instead of the notice
+  config.granularity = :fine                   # :fine (every line/branch) or :coarse (one line per node)
+  config.include_bypasses = true               # false: omit the "Ignored Coverage Bypasses" section
 end
 ```
 
-## Example Output
+- `report_path` — unset, the digest goes to `ai_report.md` inside `SimpleCov.coverage_path`, so
+  a custom `coverage_dir` is honoured (the reader reports this default as
+  `coverage/ai_report.md`). An explicit absolute path is used as-is; an explicit relative path is
+  resolved against `SimpleCov.root`, independent of the working directory at exit. Blank values
+  and values containing a NUL byte are rejected.
+- `max_file_size_kb`, `max_snippet_lines` — positive Integers.
+- `granularity` — `:fine` or `:coarse`.
+- `output_to_console`, `include_bypasses` — `true` or `false`.
 
-The output is written to `coverage/ai_report.md` (or your configured path), perfect for providing directly as context to an LLM:
+Every setting is validated when it is assigned: a value of the wrong type raises `TypeError`
+(the writers are typed with sorbet-runtime) and an out-of-range value raises `ArgumentError`
+naming the setting, for example `granularity must be one of [:fine, :coarse], got :medium`.
+`SimpleCov::Formatter::AIFormatter.reset_configuration!` discards the configuration so the next
+access starts from the defaults (useful in test suites).
+
+## Example output
+
+Generated from a small sample project on Ruby 4.0 and SimpleCov 1.1.1, trimmed by one file and
+one node that quotes a 300-character line:
 
 ```md
 # AI Coverage Digest
 **Status:** FAILED
-**Global Line Coverage:** 92.5%
-**Global Branch Coverage:** 88.0%
-**Generated At:** 2026-04-21T23:40:44+09:00 (Local Timezone)
-
+**Global Line Coverage:** 69.3%
+**Global Branch Coverage:** 38.4%
+**Generated At:** 2026-08-28T06:05:29+00:00 (Local Timezone)
 ## Coverage Deficits
 
-### `lib/my_gem/client.rb`
-- `MyGem::Client#initialize`
-  - **Line Deficit:** [L4] `@token = nil`
-- `MyGem::Client#authenticate!`
-  - **Branch Deficit:** [L12] Missing coverage for `else` branch: `raise ExpiredTokenError`
+### `lib/sample/weird.rb`
+- `Sample::Weird#dupes`
+  - **Line Deficit:** [L11] `a += 1` (Occurrence 1 of 3).
+  - **Line Deficit:** [L12] `a += 1` (Occurrence 2 of 3).
+  - **Line Deficit:** [L13] `a += 1` (Occurrence 3 of 3).
+  - **Line Deficit:** [L14] `a`
 
-### `lib/my_gem/parser/processor.rb`
-- `MyGem::Parser::Processor.parse_stream`
-  - **Branch Deficit:** [L8] Missing coverage for `then` branch: `break if stream.closed?`
+### `lib/sample/calc.rb`
+- `Sample::Calc#sign`
+  - **Branch Deficit:** [L7] Missing coverage for `else` branch: `:neg`
+- `Sample::Calc#classify`
+  - **Line Deficit:** [L13] `elsif n.odd?`
+  - **Line Deficit:** [L14] `:odd`
+  - **Line Deficit:** [L16] `:even`
+  - **Branch Deficit:** [L13-17] Missing coverage for `else` branch: `elsif n.odd?...`
+  - **Branch Deficit:** [L14] Missing coverage for `then` branch: `:odd`
+  - **Branch Deficit:** [L16] Missing coverage for `else` branch: `:even`
+- `Sample::Calc#bucket`
+  - **Line Deficit:** [L23] `when 2 then :two`
+  - **Line Deficit:** [L24] `else :many`
+  - **Branch Deficit:** [L23] Missing coverage for `when` branch: `:two`
+  - **Branch Deficit:** [L24] Missing coverage for `else` branch: `:many`
+- `Sample::Calc#never_called`
+  - **Line Deficit:** [L29] `@never = 1`
+  - **Line Deficit:** [L30] `@never += 1`
+- `Sample::Calc.unused_factory`
+  - **Line Deficit:** [L55] `new.tap { |c| c.sign(1) }`
+- `Sample::Point#origin?`
+  - **Line Deficit:** [L66] `x.zero? && y.zero?`
+
+### `lib/sample/boot.rb`
+- `main`
+  - **Branch Deficit:** [L9] Missing coverage for `then` branch: `true`
 
 ## Ignored Coverage Bypasses
 
-### `lib/my_gem/legacy_handler.rb`
-- `MyGem::LegacyHandler#obsolete_action`
-  - **Bypass Present:** Coverage explicitly ignored via `:nocov:`.
+### `lib/sample/boot.rb`
+- `main`
+  - **Bypass Present:** Coverage explicitly ignored via `# :nocov:`.
+
+### `lib/sample/calc.rb`
+- `Sample::Calc#legacy_skipped`
+  - **Bypass Present:** Coverage explicitly ignored via `# :nocov:`.
+- `Sample::Calc#inline_disabled`
+  - **Bypass Present:** Coverage explicitly ignored via `# simplecov:disable`.
+- `Sample::Calc#branch_scoped`
+  - **Bypass Present:** Coverage explicitly ignored via `# simplecov:disable branch`.
 ```
 
-Each deficit is tagged with its source line(s) (`[L<n>]`) and the exact code snippet, so an
-agent can locate the gap without depending on the surrounding line numbers. When branch coverage
-is not enabled for the run, the header reports `N/A` for **Global Branch Coverage** rather than a
-misleading `100%`.
+Things to notice:
 
-## Error Handling
+- Files are ordered by coverage, lowest first (path as the tie-break); nodes appear in source
+  order.
+- `main` is the root scope of `lib/sample/boot.rb`: the missed `then` arm belongs to a top-level
+  statement (`SAMPLE_DEBUG = ENV['SAMPLE_DEBUG'] ? true : false`), and the `# :nocov:` region
+  wraps only top-level code.
+- `[L13-17] … elsif n.odd?...` is the `else` arm of the outer `if` in `classify`; it spans the
+  whole `elsif` chain, so it is cut to its first line instead of repeating the inner arms.
+- The `Status` is `PASSED` only when every measured criterion is at 100%, and percentages are
+  floored to one decimal, so a run at 99.96% reads `99.9%`.
 
-Coverage reporting is best-effort and never aborts a passing test run. When the AST parser cannot
-process a file, that file degrades gracefully to raw line numbers (marked with an `AST Parsing
-Failed` notice) instead of semantic groupings; column enrichment that a given SimpleCov version
-does not support falls back to full-line snippets. Report generation is resilient to unreadable
-or non-UTF-8 source files, emitting the report without the affected snippets rather than raising.
+### Method coverage (SimpleCov >= 1.0)
+
+With `enable_coverage :method` the header gains a method line, the status accounts for it, and
+each never-invoked method is listed under its node before its line and branch deficits. From the
+same sample:
+
+```md
+**Global Method Coverage:** 53.3%
+```
+
+```md
+- `Sample::Calc#never_called`
+  - **Method Deficit:** [L28-31] `Sample::Calc#never_called` never invoked
+  - **Line Deficit:** [L29] `@never = 1`
+  - **Line Deficit:** [L30] `@never += 1`
+```
+
+### Bypass audit
+
+The `## Ignored Coverage Bypasses` section lists what SimpleCov actually skipped, attributed to
+the outermost nodes a skipped region contains (or to the node enclosing it, `main` at worst), with
+the directive comment quoted verbatim as the reason. Because it is derived from SimpleCov's own
+skip verdicts rather than from a second scan of the comments:
+
+- `# :nocov:` pairs (including a custom `nocov_token`), inline `# simplecov:disable` comments and
+  `# simplecov:disable line` / `# simplecov:disable branch` regions are all reported;
+- a directive inside a heredoc, which SimpleCov ignores, is not reported;
+- on SimpleCov < 1.0, which does not implement `# simplecov:disable`, those lines stay ordinary
+  deficits and only `# :nocov:` regions appear. The same sample on SimpleCov 0.22.0 lists
+  `raise 'unreachable' # simplecov:disable` as a line deficit and a single bypass.
+
+SimpleCov 1.x itself deprecates `# :nocov:` in favour of `# simplecov:disable` /
+`# simplecov:enable`; both are audited.
+
+### Size ceiling
+
+`max_file_size_kb` bounds the written file. Both sections are filled lowest-coverage file first,
+one semantic node at a time, until the next node would no longer fit; a single notice then closes
+the report. With a 1 kB limit the sample above ends in:
+
+```md
+> **[WARNING] TRUNCATION NOTIFICATION:**
+> The report reached the maximum token constraint (1 kB) and was truncated: 3 deficit file(s) and 2 bypass file(s) omitted or cut short. Lowest-coverage files are listed first; resolve the deficits above to reveal the remaining ones in subsequent test runs.
+```
+
+A file whose block was cut short counts towards those numbers. No notice is printed when
+everything fits.
+
+## Parser backend
+
+Sources are parsed with Prism's `parser`-compatible translation on Ruby >= 3.3 when Prism >= 1.2
+and `parser` >= 3.3.7.2 are installed (the exact grammar of the running Ruby, about twice as fast
+as the `parser` gem); otherwise the `parser` gem's grammar for the running Ruby is used, with
+`parser/current` as a muted last resort. Ruby 2.7 to 3.2 always use the `parser` gem. The
+selection happens once at load time, and no parser diagnostic — including the
+`parser/current is loading …` version warning — is ever written to STDERR.
+
+## Error handling
+
+Reporting is best-effort and never aborts a passing test run. A file the parser cannot process is
+listed with its raw line numbers under an `AST Parsing Failed` notice while the other files are
+resolved normally. Sources are read as bytes and decoded per their `# encoding:` magic comment or
+byte-order mark, string literals whose escapes are invalid in UTF-8 (`"\xf0-\xff"`) are accepted
+as MRI accepts them, and a file that cannot be read at all is reported without snippets. Branch
+column data that a SimpleCov version does not provide degrades to full-line snippets. Snippets,
+names, paths and directive comments are rendered as code spans that stay intact whatever
+characters they contain (see `SECURITY.md`).
 
 ## License
 
