@@ -20,7 +20,7 @@ This gem provides the best approach because it introduces **Semantic Resolution*
 
 **Sub-Domain Identifier:** `SCAI` (SimpleCov AI)
 
-Requirements revised for the 0.11.0 release carry a trailing *Revised in 0.11.0* note stating the reason for the change and the `BUGS.md` entry behind it; requirements introduced by that release state what introduced them.
+Requirements revised for the 0.11.0 release carry a trailing *Revised in 0.11.0* note stating the reason for the change and the defect (BUG-SCAI-nnn, see the git history) behind it; requirements introduced by that release state what introduced them.
 
 ### 3.1. Functional Behavior
 
@@ -61,160 +61,11 @@ Requirements revised for the 0.11.0 release carry a trailing *Revised in 0.11.0*
 - **SCAI-REQ-016 (SimpleCov Version Constraint):** The gem declares a `simplecov` dependency of `>= 0.18, < 2.0` and MUST pass its suite on every release line in that range (0.18, 0.21, 0.22, 1.0, 1.1 in CI). The `0.18` floor is API-accurate — it is the first release exposing the internal Branch Coverage telemetry required by `SCAI-REQ-005` — though the *effective installable* floor on Ruby `>= 3.0` is higher, because Bundler resolves later 0.x/1.x releases there; on Ruby 2.7 the 0.x line resolves. The `< 2.0` ceiling bounds the range across which branch enrichment has been verified. Features that only exist on SimpleCov `>= 1.0` — method coverage (`SCAI-REQ-023`) and `# simplecov:disable` directives (`SCAI-REQ-013`) — MUST be reported only where the installed SimpleCov implements them; on `< 1.0`, branch descriptors read back from `.resultset.json` are decoded by SimpleCov's `eval`-based helper (see `SECURITY.md`). *Revised in 0.11.0: the compatibility matrix and version-dependent features are stated.*
 - **SCAI-REQ-025 (Parser Backend Selection):** The parsing grammar MUST be chosen once, at load time: Prism's `parser`-compatible translation with the grammar class of the running Ruby (`Prism::Translation::Parser33` … `Parser41`, the base translation class for a newer Ruby) whenever Ruby `>= 3.3`, Prism `>= 1.2` and `parser` `>= 3.3.7.2` are present; otherwise the `parser` gem's exact grammar for the running Ruby (`Parser::Ruby27` … `Parser::Ruby34`), and `parser/current` — loaded with its version-deviation warning muted — only when no exact grammar exists. The parser MUST be instantiated with all diagnostics muted so nothing is ever written to `STDERR`; syntax errors MUST still surface as `Parser::SyntaxError`; string literals whose escapes are invalid in the source encoding (`"\xf0-\xff"`) MUST be accepted as MRI accepts them; sources MUST be read as bytes and decoded per their `# encoding:` magic comment or byte-order mark. *Introduced in 0.11.0 (BUG-SCAI-016, BUG-SCAI-017).*
 
-## 4. Usage & Configuration
+## 4. Usage, Configuration & Example Output
 
-This section outlines integration, configuration, and the expected developer-side workflow.
-
-### 4.1. Installation
-
-First, the library must be mapped in the project dependencies, strictly constrained to the testing environments to prevent production bloat:
-
-```ruby
-# Gemfile
-group :test do
-  gem 'simplecov'
-  gem 'simplecov-ai', require: false
-end
-```
-
-### 4.2. Integration & Configuration
-
-To utilize the tool, it must be explicitly required subsequent to loading SimpleCov. The developer can also optionally override internal file size constraints and custom paths if the default location (`ai_report.md` inside SimpleCov's coverage directory) does not fit their architecture.
-
-```ruby
-# spec_helper.rb or test_helper.rb
-require 'simplecov'
-require 'simplecov-ai'
-
-# Optional: override default behaviors and output data.
-# Every value is validated at assignment (SCAI-REQ-026): a wrong type raises TypeError,
-# an out-of-range value raises ArgumentError naming the setting.
-SimpleCov::Formatter::AIFormatter.configure do |config|
-  # Output Targeting & File Constraints
-  config.report_path = 'coverage/custom_digest.md'      # Default: ai_report.md in SimpleCov.coverage_path;
-                                                        # absolute as-is, relative against SimpleCov.root
-  config.max_file_size_kb = 100                         # Default: 50. Hard ceiling on the written file (kB).
-  config.max_snippet_lines = 5                          # Default: 5. Snippets beyond 5 x 80 chars end in "...".
-  config.output_to_console = true                       # Default: false. Prints the digest instead of the notice.
-
-  # Structural Formats & Granularity
-  config.granularity = :fine            # Default: :fine. Options: :fine (every line/branch) or :coarse (one line per node)
-
-  # Fine-grained control over what data is stored in the digest:
-  config.include_bypasses = true        # Default: true. Audits the regions SimpleCov skipped.
-end
-
-SimpleCov.start do
-  enable_coverage :branch
-  # SimpleCov >= 1.0 deprecates add_filter in favour of skip (same arguments):
-  skip '/spec/'            # `add_filter '/spec/'` on SimpleCov < 1.0
-  skip '/config/'
-end
-
-# Formatter registration: alone, or alongside other formatters.
-SimpleCov.formatter = SimpleCov::Formatter::AIFormatter
-# SimpleCov.formatters = [SimpleCov::Formatter::HTMLFormatter, SimpleCov::Formatter::AIFormatter]
-```
-
-`SimpleCov::Formatter::AIFormatter.reset_configuration!` discards the configuration so the next access starts from the defaults; test suites for the formatter itself use it for isolation.
-
-### 4.3. Developer Workflow & Result Generation
-
-The execution lifecycle remains entirely transparent from the end-user's perspective:
-
-1. **Execution:** The developer or CI agent executes the test suite exactly as usual (e.g., `bundle exec rspec`).
-2. **Collection:** `SimpleCov` tracks the executed Ruby trace points.
-3. **AST Resolution:** Upon exit, the AI formatter hooks into the lifecycle, ingests the raw target coordinates, maps the deficits to their immutable AST boundaries, and prunes 100%-covered files.
-4. **Persistence:** The formatter writes the digest, stopping at semantic-node granularity if `max_file_size_kb` is hit to protect token ceilings, and prints `AI coverage digest written to <path>`.
-
-### 4.4. CI/CD & Artifact Retrieval
-
-The formatter writes the resulting digest to a predictable path: `coverage/ai_report.md` unless `SimpleCov.coverage_dir` or `report_path` is customised, and the path is echoed on `STDOUT` at the end of the test log.
-
-In an automated CI/CD pipeline, the engineer only needs to ensure the coverage directory is exported as an artifact. A downstream autonomous agent or LLM reviewer can simply `cat coverage/ai_report.md` directly in the pipeline to immediately review the exact unexecuted classes, methods, or logical branches, bypassing manual review of massive HTML structures and eliminating token bloat.
-
-### 4.5. Error Handling & Failure States
-
-In adherence to `SCAI-REQ-011`, coverage reporting is best-effort and MUST NOT abort an otherwise-passing test run. Failures are contained at the file level:
-
-1. **Broken Code Syntax:** If the AST parser cannot process an under-covered file, that file MUST degrade gracefully to raw line numbers, annotated in the Markdown with an `AST Parsing Failed` notice (its method deficits, if any, listed the same way), while the remaining files are processed normally. A file SimpleCov skipped something in but which cannot be parsed reports no bypasses.
-2. **Parser Diagnostics:** Warnings and non-fatal diagnostics from the parser MUST be dropped, never written to `STDERR`; only a genuine syntax error triggers the degradation above (`SCAI-REQ-025`).
-3. **Encodings:** Sources MUST be read as bytes and decoded per their `# encoding:` magic comment or byte-order mark (a Shift_JIS file resolves); stray bytes that are invalid in the source encoding MUST NOT discard the structure of an otherwise valid file, and snippets are scrubbed so report generation never raises `Encoding::CompatibilityError`.
-4. **Missing Telemetry:** If a given SimpleCov version or result shape does not provide the branch column data used for inline sub-snippets, the formatter MUST fall back to full-line snippets rather than raising.
-5. **Unreadable Sources:** Files that cannot be read MUST be reported without their snippets rather than interrupting artifact generation.
-6. **Misconfiguration:** Invalid configuration values fail at the assignment that supplies them (`SCAI-REQ-026`), never at exit.
-
-## 5. Example Output Reference
-
-Produced by a sample project on Ruby 4.0 and SimpleCov 1.1.1, trimmed by one file and one node that quotes a 300-character line:
-
-```md
-# AI Coverage Digest
-**Status:** FAILED
-**Global Line Coverage:** 69.3%
-**Global Branch Coverage:** 38.4%
-**Generated At:** 2026-08-28T06:05:29+00:00 (Local Timezone)
-## Coverage Deficits
-
-### `lib/sample/weird.rb`
-- `Sample::Weird#dupes`
-  - **Line Deficit:** [L11] `a += 1` (Occurrence 1 of 3).
-  - **Line Deficit:** [L12] `a += 1` (Occurrence 2 of 3).
-  - **Line Deficit:** [L13] `a += 1` (Occurrence 3 of 3).
-  - **Line Deficit:** [L14] `a`
-
-### `lib/sample/calc.rb`
-- `Sample::Calc#sign`
-  - **Branch Deficit:** [L7] Missing coverage for `else` branch: `:neg`
-- `Sample::Calc#classify`
-  - **Line Deficit:** [L13] `elsif n.odd?`
-  - **Line Deficit:** [L14] `:odd`
-  - **Line Deficit:** [L16] `:even`
-  - **Branch Deficit:** [L13-17] Missing coverage for `else` branch: `elsif n.odd?...`
-  - **Branch Deficit:** [L14] Missing coverage for `then` branch: `:odd`
-  - **Branch Deficit:** [L16] Missing coverage for `else` branch: `:even`
-- `Sample::Calc#never_called`
-  - **Line Deficit:** [L29] `@never = 1`
-  - **Line Deficit:** [L30] `@never += 1`
-- `Sample::Calc.unused_factory`
-  - **Line Deficit:** [L55] `new.tap { |c| c.sign(1) }`
-- `Sample::Point#origin?`
-  - **Line Deficit:** [L66] `x.zero? && y.zero?`
-
-### `lib/sample/boot.rb`
-- `main`
-  - **Branch Deficit:** [L9] Missing coverage for `then` branch: `true`
-
-## Ignored Coverage Bypasses
-
-### `lib/sample/boot.rb`
-- `main`
-  - **Bypass Present:** Coverage explicitly ignored via `# :nocov:`.
-
-### `lib/sample/calc.rb`
-- `Sample::Calc#legacy_skipped`
-  - **Bypass Present:** Coverage explicitly ignored via `# :nocov:`.
-- `Sample::Calc#inline_disabled`
-  - **Bypass Present:** Coverage explicitly ignored via `# simplecov:disable`.
-- `Sample::Calc#branch_scoped`
-  - **Bypass Present:** Coverage explicitly ignored via `# simplecov:disable branch`.
-```
-
-With `enable_coverage :method` (SimpleCov >= 1.0) the header carries `**Global Method Coverage:** 53.3%` after the branch line and each never-invoked method precedes its node's other deficits:
-
-```md
-- `Sample::Calc#never_called`
-  - **Method Deficit:** [L28-31] `Sample::Calc#never_called` never invoked
-  - **Line Deficit:** [L29] `@never = 1`
-  - **Line Deficit:** [L30] `@never += 1`
-```
-
-With `max_file_size_kb = 1` the same run stops after the first node of the first file in each section and closes with:
-
-```md
-> **[WARNING] TRUNCATION NOTIFICATION:**
-> The report reached the maximum token constraint (1 kB) and was truncated: 3 deficit file(s) and 2 bypass file(s) omitted or cut short. Lowest-coverage files are listed first; resolve the deficits above to reveal the remaining ones in subsequent test runs.
-```
+Installation, the `configure` block with every setting and its default, validation rules, and a
+full example digest are documented in [README.md](README.md), which is the authoritative reference
+for user-facing behaviour. This document only specifies the requirements behind them.
 
 ## [ARCHIVED]
 
