@@ -1,6 +1,8 @@
 # Spell-checking of source comments and documentation (CI: crate-ci/typos; locally: `typos`).
 [files]
 extend-exclude = [
+  # Claude Code agent worktrees (local only, git-ignored).
+  ".claude/",
   # Generated output and machine-written RBIs.
   "doc/",
   "coverage/",

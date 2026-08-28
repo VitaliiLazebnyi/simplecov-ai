@@ -1,5 +1,6 @@
 # markdownlint-cli2 options (the rule set lives in .markdownlint.yml).
 ignores:
+  - ".claude/**"
   # Generated output and third-party Markdown.
   - "doc/**"
   - "coverage/**"
