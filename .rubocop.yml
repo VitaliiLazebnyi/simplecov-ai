@@ -2,11 +2,23 @@ AllCops:
   TargetRubyVersion: 2.7
   NewCops: enable
   SuggestExtensions: true
+  # Setting Exclude replaces RuboCop's defaults, so they are restated here. The generated gem
+  # RBIs (`bin/tapioca gem`) are machine-written and never hand-edited, hence not linted.
+  Exclude:
+    - ".git/**/*"
+    - "coverage/**/*"
+    - "doc/**/*"
+    - "node_modules/**/*"
+    - "sorbet/rbi/gems/**/*"
+    - "tmp/**/*"
+    - "vendor/**/*"
 
 # The `plugins:` key requires rubocop >= 1.72, which the gemspec's rubocop floor matches.
 plugins:
   - standard-sorbet
+  - rubocop-packaging
   - rubocop-performance
+  - rubocop-rake
   - rubocop-rspec
   - rubocop-thread_safety
   - rubocop-sorbet
@@ -40,6 +52,14 @@ RSpec/ExampleLength:
 
 Gemspec/DevelopmentDependencies:
   Enabled: false
+
+# TEMPORARY: spec/spec_helper.rb loads the library with `require_relative '../lib/simplecov-ai'`,
+# which rubocop-packaging flags because packaged tests should load the gem from the load path
+# (`require 'simplecov-ai'`; RSpec and Bundler both put lib/ on it). That one-line spec change is
+# tracked separately; drop this exclusion as soon as it lands.
+Packaging/RequireRelativeHardcodingLib:
+  Exclude:
+    - "spec/spec_helper.rb"
 
 RSpec/MultipleMemoizedHelpers:
   Enabled: true

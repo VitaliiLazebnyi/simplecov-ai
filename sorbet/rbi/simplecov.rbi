@@ -1,10 +1,15 @@
 # typed: strict
 
+# Typed overlay for the `simplecov` gem. The generated RBI under sorbet/rbi/gems reflects every
+# method but carries no signatures, and `srb tc --typed strong` rejects untyped intermediate
+# values, so the SimpleCov API the library consumes directly is given signatures here. Each
+# definition must keep the exact arity of its generated counterpart (delegated methods are
+# `(*args, **kwargs, &block)`), otherwise Sorbet reports a conflicting redefinition. Methods the
+# library narrows with `T.cast` at the call site (e.g. `SimpleCov.root`) are deliberately left
+# untyped so those casts stay meaningful.
 module SimpleCov
   # SimpleCov::Result#files returns a FileList (an Enumerable wrapper), not a plain Array.
   class FileList
-    include Enumerable
-
     sig { params(arg: T.untyped, arg1: T.untyped, arg2: T.untyped).returns(T::Array[SimpleCov::SourceFile]) }
     def to_a(*arg, **arg1, &arg2); end
 
@@ -53,6 +58,8 @@ module SimpleCov
     sig { returns(String) }
     def filename; end
 
+    # simplecov >= 1.0 accepts a coverage criterion (:line / :branch / :method); older releases
+    # take no argument and raise ArgumentError when one is passed, which the library rescues.
     sig { params(criterion: T.untyped).returns(Float) }
     def covered_percent(criterion = nil); end
 

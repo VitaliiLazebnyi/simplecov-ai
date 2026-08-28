@@ -44,23 +44,25 @@ Gem::Specification.new do |spec|
   # on the internal branch-descriptor layout, which is only verified across the 0.18–1.x line.
   spec.add_dependency 'simplecov', '>= 0.18', '< 2.0'
 
-  # Development & Testing framework expectations
+  # Development & testing dependencies that install on every supported Ruby and platform. The
+  # Sorbet toolchain (sorbet, tapioca, rubocop-sorbet, standard-sorbet, yard-sorbet) lives in the
+  # Gemfile because sorbet-static has no Windows, JRuby or TruffleRuby builds. Floors track the
+  # newest release lines that still resolve on Ruby 2.7.
   spec.add_development_dependency 'base64'
   spec.add_development_dependency 'benchmark'
+  spec.add_development_dependency 'bundler-audit', '~> 0.9.3'
   spec.add_development_dependency 'logger'
   spec.add_development_dependency 'ostruct'
-  spec.add_development_dependency 'rspec', '~> 3.12'
-  spec.add_development_dependency 'rubocop', '>= 1.72'
-  spec.add_development_dependency 'rubocop-performance', '>= 1.14'
-  spec.add_development_dependency 'rubocop-rspec', '>= 2.11'
-  spec.add_development_dependency 'rubocop-sorbet'
-  spec.add_development_dependency 'rubocop-thread_safety'
-  spec.add_development_dependency 'sorbet', '~> 0.5'
-  spec.add_development_dependency 'standard-sorbet'
-  spec.add_development_dependency 'tapioca'
+  spec.add_development_dependency 'rake', '~> 13.0'
+  spec.add_development_dependency 'rspec', '~> 3.13'
+  spec.add_development_dependency 'rubocop', '~> 1.90'
+  spec.add_development_dependency 'rubocop-packaging', '~> 0.6'
+  spec.add_development_dependency 'rubocop-performance', '~> 1.27'
+  spec.add_development_dependency 'rubocop-rake', '~> 0.7'
+  spec.add_development_dependency 'rubocop-rspec', '~> 3.10'
+  spec.add_development_dependency 'rubocop-thread_safety', '~> 0.7'
   spec.add_development_dependency 'tsort'
-  spec.add_development_dependency 'yard'
-  spec.add_development_dependency 'yard-sorbet'
+  spec.add_development_dependency 'yard', '~> 0.9.45'
 
   # Gem files: glob relative to the gemspec directory (not the process CWD) and include only
   # regular files so directory entries are never packaged.

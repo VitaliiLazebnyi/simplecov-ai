@@ -87,7 +87,7 @@ module SimpleCov
             inline_text = extract_inline_branch(branch, start_col, end_col, source_lines)
             return inline_text if inline_text
 
-            lines_range = T.cast((branch.start_line..branch.end_line).to_a, T::Array[Integer])
+            lines_range = (branch.start_line..branch.end_line).to_a
             fetch_snippet_text(lines_range, source_lines)
           end
 
