@@ -27,7 +27,7 @@ module SimpleCov
           #   not a node.
           sig { params(node: Parser::AST::Node, index: Integer).returns(T.nilable(Parser::AST::Node)) }
           def self.node_at(node, index)
-            child = node.children[index]
+            child = node.children.at(index)
             case child
             when Parser::AST::Node then child
             end
@@ -48,7 +48,7 @@ module SimpleCov
           # @raise [TypeError] When the child is not a Symbol.
           sig { params(node: Parser::AST::Node, index: Integer).returns(Symbol) }
           def self.symbol_at(node, index)
-            child = node.children[index]
+            child = node.children.at(index)
             case child
             when Symbol then child
             else raise TypeError, unexpected(node, index, 'a Symbol')
@@ -60,7 +60,7 @@ module SimpleCov
           # @raise [TypeError] When the value is neither a Symbol nor a String.
           sig { params(node: Parser::AST::Node).returns(String) }
           def self.literal_value(node)
-            child = node.children[0]
+            child = node.children.at(0)
             case child
             when Symbol, String then child.to_s
             else raise TypeError, unexpected(node, 0, 'a Symbol or String')

@@ -28,6 +28,8 @@ module SimpleCov
       # STDERR notice printed when the report cannot be written, naming the path and the error
       WRITE_FAILED_MESSAGE = 'AI coverage digest could not be written to %s (%s)'
 
+      @configuration = T.let(nil, T.nilable(Configuration))
+
       # Retrieves the global configuration for the AI formatter.
       # The instantiation pattern ensures that defaults are securely lazily loaded
       # before any coverage processing begins.
@@ -35,7 +37,7 @@ module SimpleCov
       # @return [SimpleCov::Formatter::AIFormatter::Configuration] The active configuration state.
       sig { returns(SimpleCov::Formatter::AIFormatter::Configuration) }
       def self.configuration
-        @configuration ||= T.let(Configuration.new, T.nilable(Configuration))
+        @configuration ||= Configuration.new
       end
 
       # Discards the memoized configuration so the next access starts from defaults. Primarily
@@ -107,7 +109,7 @@ module SimpleCov
         FileUtils.mkdir_p(File.dirname(path))
         File.write(path, digest)
       rescue SystemCallError, IOError => error
-        warn Kernel.format(WRITE_FAILED_MESSAGE, path, error.message)
+        warn Kernel.format(WRITE_FAILED_MESSAGE, path, error)
       end
     end
   end

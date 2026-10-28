@@ -27,7 +27,7 @@ module SimpleCov
           sig { params(node: Parser::AST::Node).returns(T.nilable([String, T::Boolean])) }
           def self.definition(node)
             call = MetaclassResolver.block_call(node)
-            call && implicit_receiver?(call) ? literal_definition(call) : nil
+            literal_definition(call) if call && implicit_receiver?(call)
           end
 
           sig { params(call: Parser::AST::Node).returns(T.nilable([String, T::Boolean])) }

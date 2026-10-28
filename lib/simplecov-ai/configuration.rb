@@ -26,6 +26,8 @@ module SimpleCov
         DEFAULT_GRANULARITY = :fine
         # Default flag for including bypassed regions in the report
         DEFAULT_INCLUDE_BYPASSES = T.let(true, T::Boolean)
+        # A value made of whitespace only (or nothing at all).
+        BLANK = /\A[[:space:]]*\z/.freeze
         # The set of granularity levels the report generator understands.
         VALID_GRANULARITIES = %i[fine coarse].freeze
 
@@ -146,7 +148,7 @@ module SimpleCov
         sig { params(value: String).void }
         def report_path=(value)
           raise ArgumentError, 'report_path must not contain a NUL byte' if value.include?("\0")
-          raise ArgumentError, 'report_path must not be blank' if value.strip.empty?
+          raise ArgumentError, 'report_path must not be blank' if value.match?(BLANK)
 
           @settings.report_path = value
         end

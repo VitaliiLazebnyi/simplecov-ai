@@ -35,7 +35,7 @@ module SimpleCov
             # @return [BasicObject] The decoded descriptor.
             sig { params(_file: SimpleCov::SourceFile, descriptor: BasicObject).returns(BasicObject) }
             def self.call(_file, descriptor)
-              SimpleCov::SourceFile::RubyDataParser.call(descriptor)
+              SourceFile::RubyDataParser.call(descriptor)
             end
           end
 
@@ -82,7 +82,7 @@ module SimpleCov
 
             sig { returns(ColumnMap) }
             def empty_column_map
-              T.let({}.compare_by_identity, ColumnMap)
+              T.let({}, ColumnMap)
             end
 
             # The decoded descriptor of every arm. A `branches` entry or an arm map that is not
@@ -96,8 +96,7 @@ module SimpleCov
             # The decoded descriptors of one condition's arm map.
             sig { params(file: SimpleCov::SourceFile, arms: BasicObject).returns(T::Array[BasicObject]) }
             def decoded_arms(file, arms)
-              arm_map = Hash.try_convert(arms)
-              arm_map ? arm_map.keys.map { |descriptor| DECODER.call(file, descriptor) } : []
+              (Hash.try_convert(arms) || {}).keys.map { |descriptor| DECODER.call(file, descriptor) }
             end
 
             # Groups the raw column offsets by their (type, start_line, end_line) identity so
@@ -121,7 +120,7 @@ module SimpleCov
               when Array
                 return nil if raw.size < DESCRIPTOR_LENGTH
 
-                positions = raw.values_at(2, 3, 4, 5).grep(Integer)
+                positions = raw.drop(2).first(4).grep(Integer)
                 raise TypeError, 'branch descriptor positions must be Integers' unless positions.size == 4
 
                 key = branch_key(raw.fetch(0), positions.fetch(0), positions.fetch(2))

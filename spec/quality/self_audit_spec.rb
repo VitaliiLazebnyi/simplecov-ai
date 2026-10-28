@@ -39,8 +39,10 @@ RSpec.describe SelfAudit do
     expect(offenders { |file| file.branches.select(&:skipped?).map(&:start_line) }).to eq([])
   end
 
-  it 'has no method SimpleCov skips in any lib file' do
-    skip 'method coverage needs SimpleCov >= 1.0' unless method_coverage_supported?
-    expect(offenders { |file| file.methods.select(&:skipped?).map(&:start_line) }).to eq([])
+  # SimpleCov < 1.0 has no methods to skip.
+  if SimpleCovFixtures.method_coverage_supported?
+    it 'has no method SimpleCov skips in any lib file' do
+      expect(offenders { |file| file.methods.select(&:skipped?).map(&:start_line) }).to eq([])
+    end
   end
 end

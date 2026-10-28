@@ -76,6 +76,10 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::SnippetFormat
     it 'scrubs a slice that cuts a multibyte character' do
       expect(described_class.byte_slice('é', 0, 1)).to eq('�')
     end
+
+    it 'strips the slice on both sides' do
+      expect(described_class.byte_slice('  y = 2  ', 1, 8)).to eq('y = 2')
+    end
   end
 
   describe '#occurrence' do
@@ -117,6 +121,10 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::SnippetFormat
       expect(snippets_of(source_lines.first(2)).occurrence(2, node)).to eq('')
     end
 
+    it 'labels nothing for a line outside the node, whatever its text' do
+      expect(snippets.occurrence(3, semantic_node('Foo#bar', 1, 2))).to eq('')
+    end
+
     it 'indexes each node on its own' do
       first = snippets.occurrence(2, node)
       expect([first, snippets.occurrence(2, semantic_node('Foo#bar', 1, 2))]).to eq(['(Occurrence 1 of 2).', ''])
@@ -130,6 +138,11 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::SnippetFormat
 
     it 'labels nothing for a unique line' do
       expect(described_class.occurrence_label([3], 3)).to eq('')
+    end
+
+    it 'labels both lines of a pair' do
+      expect([described_class.occurrence_label([3, 7], 3), described_class.occurrence_label([3, 7], 7)])
+        .to eq(['(Occurrence 1 of 2).', '(Occurrence 2 of 2).'])
     end
   end
 
@@ -169,6 +182,10 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::SnippetFormat
 
     it 'returns nil when the column range exceeds the line length' do
       expect(described_class.inline_slice(source_lines, 2..2, [0, 999])).to be_nil
+    end
+
+    it 'reads the first line of the range' do
+      expect(described_class.inline_slice(["a = 1\n", "b = 2\n"], 1..1, [0, 1])).to eq('a')
     end
   end
 

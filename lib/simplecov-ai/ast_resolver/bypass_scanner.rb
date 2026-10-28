@@ -29,7 +29,7 @@ module SimpleCov
           sig { params(nodes: T::Array[SemanticNode], regions: T::Array[Region]).returns(ReasonsByNode) }
           def self.attribute(nodes, regions)
             attributions = regions.flat_map { |range, reason| targets_of(nodes, range).product([reason]) }
-            attributions.each_with_object(T.let({}.compare_by_identity, ReasonsByNode)) do |(node, reason), reasons|
+            attributions.each_with_object(T.let({}, ReasonsByNode)) do |(node, reason), reasons|
               reasons[node] = reasons.fetch(node, []) | [reason]
             end
           end

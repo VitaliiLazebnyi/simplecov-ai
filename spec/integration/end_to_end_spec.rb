@@ -308,10 +308,12 @@ RSpec.describe EndToEnd do
     MARKDOWN
   end
 
-  it 'reports the method line and every never-invoked method with method coverage on (SimpleCov >= 1.0)' do
-    skip 'method coverage needs SimpleCov >= 1.0 on an engine that records it' unless method_coverage_measurable?
-    child = described_class.run(project_dir, 'SCAI_E2E_METHODS' => '1')
-    expect([normalise(child.report), child.stdout, child.status.exitstatus, gem_warnings(child.stderr)])
-      .to eq([expected_method_report, announcement, 0, []])
+  # Method coverage needs SimpleCov >= 1.0 on an engine that records it.
+  if SimpleCovFixtures.method_coverage_measurable?
+    it 'reports the method line and every never-invoked method with method coverage on (SimpleCov >= 1.0)' do
+      child = described_class.run(project_dir, 'SCAI_E2E_METHODS' => '1')
+      expect([normalise(child.report), child.stdout, child.status.exitstatus, gem_warnings(child.stderr)])
+        .to eq([expected_method_report, announcement, 0, []])
+    end
   end
 end

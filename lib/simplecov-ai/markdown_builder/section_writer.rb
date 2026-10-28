@@ -17,6 +17,8 @@ module SimpleCov
 
           # Template for file-level headings in both sections
           FILE_HEADING_TEMPLATE = '### %s'
+          # The section heading while it is still to be written with the first block; empty after.
+          Headings = T.type_alias { T::Array[String] }
 
           # Renders the heading line of a file block from the file's project-relative path.
           #
@@ -32,8 +34,8 @@ module SimpleCov
           sig { params(budget: ReportBudget, heading: String).void }
           def initialize(budget, heading)
             @budget = budget
-            @pending_heading = heading
-            @closed = T.let(false, T::Boolean)
+            @pending_headings = T.let([heading], Headings)
+            @open = T.let(true, T::Boolean)
             @written_blocks = T.let(0, Integer)
           end
 
@@ -50,7 +52,7 @@ module SimpleCov
           end
           def write_files(files, &blk)
             files.each do |file|
-              break if @closed
+              break unless @open
 
               write_file_block(SectionWriter.file_heading(file), yield(file))
             end
@@ -78,12 +80,12 @@ module SimpleCov
           # @return [void]
           sig { params(file_heading: String, node_fragments: T::Array[String]).void }
           def write_file_block(file_heading, node_fragments)
-            return if @closed
+            return unless @open
 
             first_fragment, *further_fragments = node_fragments
-            complete = @budget.admit("#{@pending_heading}#{file_heading}\n#{first_fragment}") &&
+            complete = @budget.admit("#{@pending_headings.join}#{file_heading}\n#{first_fragment}") &&
                        write_further(further_fragments)
-            @closed = !complete
+            @open = complete
             @written_blocks += 1 if complete
           end
 
@@ -92,7 +94,7 @@ module SimpleCov
           # section starts on a fresh paragraph.
           sig { params(fragments: T::Array[String]).returns(T::Boolean) }
           def write_further(fragments)
-            @pending_heading = ''
+            @pending_headings.clear
             complete = fragments.all? { |fragment| @budget.admit(fragment) }
             @budget.write("\n")
             complete

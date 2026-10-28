@@ -30,6 +30,9 @@ module SimpleCov
       class MarkdownBuilder
         extend T::Sig
 
+        # The resolved nodes of every file, nil for a file that could not be resolved.
+        ASTCache = T.type_alias { T::Hash[String, T.nilable(T::Array[ASTResolver::SemanticNode])] }
+
         # Initializes the Markdown sequence compilation.
         #
         # @param coverage_metrics [SimpleCov::Result] Application-wide coverage aggregation metrics
@@ -39,7 +42,7 @@ module SimpleCov
           @coverage_metrics = coverage_metrics
           @config = config
           @buffer = T.let(StringIO.new, StringIO)
-          @ast_cache = T.let({}, T::Hash[String, T.nilable(T::Array[ASTResolver::SemanticNode])])
+          @ast_cache = T.let({}, ASTCache)
         end
 
         # Executes the primary buffer composition logic yielding a monolithic compiled output.

@@ -13,6 +13,11 @@ module SimpleCov
         class DeficitGrouper
           extend T::Sig
 
+          # The groups by their key, in the order they were created.
+          Groups = T.type_alias { T::Hash[String, DeficitGroup] }
+          # The sort key of every group, by group key.
+          SortKeys = T.type_alias { T::Hash[String, [Integer, Integer]] }
+
           # Positional label for a single-line deficit no resolved node spans; a missed line and
           # a single-line branch at the same line share it.
           FALLBACK_LINE_NAME = 'Line %d'
@@ -64,8 +69,8 @@ module SimpleCov
           sig { params(nodes: T::Array[ASTResolver::SemanticNode]).void }
           def initialize(nodes)
             @nodes = nodes
-            @node_deficits = T.let({}, T::Hash[String, DeficitGroup])
-            @sort_keys = T.let({}, T::Hash[String, [Integer, Integer]])
+            @node_deficits = T.let({}, Groups)
+            @sort_keys = T.let({}, SortKeys)
           end
 
           # Orders groups by start line, then wider spans first so an enclosing node precedes the

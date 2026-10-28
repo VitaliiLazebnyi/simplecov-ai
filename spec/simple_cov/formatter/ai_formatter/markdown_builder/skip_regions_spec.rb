@@ -124,8 +124,9 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::SkipRegions d
     branches = { branch_descriptor(source, :if, 0, 3, 'flag ? 1 : 2') => {
       branch_descriptor(source, :then, 1, 3, '1') => 1, branch_descriptor(source, :else, 2, 3, '2') => 0
     } }
-    skip 'branch directives need SimpleCov >= 1.0' unless simplecov_directives_supported?
-    expect(regions_of(source, branches: branches)).to eq([[3..3, '# simplecov:disable branch'], [5..7, nocov_marker]])
+    # SimpleCov < 1.0 does not implement `simplecov:disable`, so only the nocov region is a bypass there.
+    branch_region = simplecov_directives_supported? ? [[3..3, '# simplecov:disable branch']] : []
+    expect(regions_of(source, branches: branches)).to eq(branch_region + [[5..7, nocov_marker]])
   end
 
   it 'honours the nocov token SimpleCov is configured with when reading reasons, escaping it' do
@@ -146,9 +147,10 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::SkipRegions d
 
   it 'reads the token through nocov_token on a SimpleCov without current_nocov_token (< 1.0)' do
     file = file_for("def a\n  #{nocov_marker}\n  1\n  #{nocov_marker}\nend\n")
+    file.skipped_lines
     stub_const("#{described_class}::CURRENT_TOKEN_READER", false)
-    allow(SimpleCov).to receive(:nocov_token).and_return('nocov')
-    expect(described_class.of(file, file.src)).to eq([[2..4, nocov_marker]])
+    allow(SimpleCov).to receive(:nocov_token).and_return('legacy')
+    expect(described_class.of(file, file.src.map { |line| line.sub('nocov', 'legacy') })).to eq([[2..4, '# :legacy:']])
   end
 
   it 'knows at load time whether the installed SimpleCov has current_nocov_token' do
@@ -178,13 +180,12 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::SkipRegions d
       expect(described_class.any?(file_for("#{nocov_marker}\nA = 1\n#{nocov_marker}\n"))).to be(true)
     end
 
-    it 'is true when SimpleCov skipped only a branch' do
+    it 'is true when SimpleCov skipped only a branch (SimpleCov < 1.0 skips nothing for the directive)' do
       source = "def a(flag)\n  # simplecov:disable branch\n  flag ? 1 : 2\n  # simplecov:enable branch\nend\n"
       branches = { branch_descriptor(source, :if, 0, 3, 'flag ? 1 : 2') => {
         branch_descriptor(source, :then, 1, 3, '1') => 1, branch_descriptor(source, :else, 2, 3, '2') => 0
       } }
-      skip 'branch directives need SimpleCov >= 1.0' unless simplecov_directives_supported?
-      expect(described_class.any?(file_for(source, branches: branches))).to be(true)
+      expect(described_class.any?(file_for(source, branches: branches))).to be(simplecov_directives_supported?)
     end
 
     it 'is false for a file with branches none of which is skipped' do

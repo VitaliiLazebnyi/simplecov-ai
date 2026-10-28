@@ -19,6 +19,8 @@ module SimpleCov
         module SkipRegions
           extend T::Sig
 
+          # Runs of consecutive skipped lines.
+          Runs = T.type_alias { T::Array[T::Array[SimpleCov::SourceFile::Line]] }
           # Reason reported when the directive that produced a region cannot be located.
           FALLBACK_REASON = 'coverage skipped by SimpleCov'
           # Whether the installed SimpleCov (>= 1.0) has the non-deprecated token reader,
@@ -80,7 +82,7 @@ module SimpleCov
             params(lines: T::Array[SimpleCov::SourceFile::Line]).returns(T::Array[T::Array[SimpleCov::SourceFile::Line]])
           end
           def self.contiguous_runs(lines)
-            lines.each_with_object(T.let([], T::Array[T::Array[SimpleCov::SourceFile::Line]])) do |line, runs|
+            lines.each_with_object(T.let([], Runs)) do |line, runs|
               open_run = runs.last
               if open_run && open_run.fetch(-1).line_number + 1 == line.line_number
                 open_run << line
@@ -124,7 +126,7 @@ module SimpleCov
           # it: the public `nocov_token` reader warns about its own deprecation there.
           sig { returns(String) }
           def self.nocov_token
-            CURRENT_TOKEN_READER ? SimpleCov.current_nocov_token : SimpleCov.nocov_token
+            (CURRENT_TOKEN_READER && SimpleCov.current_nocov_token) || SimpleCov.nocov_token
           end
 
           private_class_method :enclosed?, :skipped_branch_ranges, :skipped_line_ranges, :relevant_run?,

@@ -29,7 +29,7 @@ module SimpleCov
           # @return [Integer] The number of files with bypasses that were omitted or cut short.
           sig { params(budget: ReportBudget).returns(Integer) }
           def write_bypasses(budget)
-            blocks = @coverage_metrics.files.to_a.filter_map { |file| file_block(file) }
+            blocks = @coverage_metrics.files.filter_map { |file| file_block(file) }
             SectionWriter.new(budget, HEADING).write_blocks(blocks)
           end
 

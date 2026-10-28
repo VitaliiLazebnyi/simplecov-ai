@@ -57,7 +57,7 @@ module SimpleCov
           sig { returns(T::Boolean) }
           def passing?
             percent = @percent
-            percent ? percent >= Constants::PERFECT_COVERAGE_PERCENT : true
+            percent ? percent == Constants::PERFECT_COVERAGE_PERCENT : true
           end
 
           # One floored decimal, so a run at 99.96% never reads as 100.0% beside a FAILED status;

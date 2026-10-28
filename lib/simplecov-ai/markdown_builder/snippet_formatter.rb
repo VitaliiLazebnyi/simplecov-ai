@@ -15,6 +15,12 @@ module SimpleCov
           TRUNCATION_ELLIPSIS = '...'
           # Template for identical snippet occurrences indicator
           OCCURRENCE_TEMPLATE = '(Occurrence %d of %d).'
+          # The stripped text of every non-blank line, by line number.
+          TextsByLine = T.type_alias { T::Hash[Integer, String] }
+          # Per node (nodes compare by identity), the lines holding each text; nil for blank lines.
+          OccurrenceIndexes = T.type_alias do
+            T::Hash[ASTResolver::SemanticNode, T::Hash[T.nilable(String), T::Array[Integer]]]
+          end
 
           # Extracts a byte range from a source line. SimpleCov reports branch columns as
           # byte offsets, so slicing on the byte representation and restoring the original
@@ -76,11 +82,9 @@ module SimpleCov
           sig { params(source_lines: T::Array[String], max_snippet_lines: Integer).void }
           def initialize(source_lines, max_snippet_lines)
             @source_lines = source_lines
-            @texts_by_line = T.let(SnippetFormatter.texts_by_line(source_lines), T::Hash[Integer, String])
+            @texts_by_line = T.let(SnippetFormatter.texts_by_line(source_lines), TextsByLine)
             @max_chars = T.let(max_snippet_lines * ESTIMATED_CHARS_PER_LINE, Integer)
-            @occurrence_indexes = T.let(
-              {}.compare_by_identity, T::Hash[ASTResolver::SemanticNode, T::Hash[T.nilable(String), T::Array[Integer]]]
-            )
+            @occurrence_indexes = T.let({}, OccurrenceIndexes)
           end
 
           # Extracts and normalizes the exact text of source lines.

@@ -48,6 +48,11 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver::NodeChildren do
       expect(described_class.symbol_at(casgn, 1)).to eq(:Beta)
     end
 
+    it 'raises TypeError for an absent child' do
+      expect { described_class.symbol_at(casgn, 5) }
+        .to raise_error(TypeError, 'child 5 of a :casgn node is not a Symbol')
+    end
+
     it 'raises TypeError naming the node when the child is not a Symbol' do
       expect { described_class.symbol_at(casgn, 2) }
         .to raise_error(TypeError, 'child 2 of a :casgn node is not a Symbol')
@@ -58,6 +63,11 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver::NodeChildren do
     it 'returns the value of a Symbol or String literal as a String' do
       expect([node(:sym, :run), node(:str, 'stop')].map { |literal| described_class.literal_value(literal) })
         .to eq(%w[run stop])
+    end
+
+    it 'raises TypeError for a literal node without a value' do
+      expect { described_class.literal_value(node(:sym)) }
+        .to raise_error(TypeError, 'child 0 of a :sym node is not a Symbol or String')
     end
 
     it 'raises TypeError naming the node when the value is neither' do

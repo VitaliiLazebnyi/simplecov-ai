@@ -23,9 +23,8 @@ require 'simplecov'
 # the real SimpleCov objects there all the same (spec_helper.rb lifts SimpleCov's engine gate for
 # the examples); only a child process measuring real code (spec/integration) depends on the engine.
 module SimpleCovFixtures
-  # The nocov marker, assembled from fragments so the repository directive auditor (which scans
-  # spec sources for literal marker lines) does not flag this helper.
-  NOCOV_MARKER = ['# :noc', 'ov:'].join.freeze
+  # The nocov marker the examples write into their fixture sources.
+  NOCOV_MARKER = '# :nocov:'
 
   # What this Ruby's Coverage records in a live run — a different question from what the
   # installed SimpleCov has an API for (see {#method_coverage_supported?}).
@@ -53,8 +52,10 @@ module SimpleCovFixtures
       end
     end
 
-    # Gives a real SimpleCov < 1.0 SourceFile the `missed_methods` reader of SimpleCov >= 1.0.
+    # Gives a real SimpleCov < 1.0 SourceFile the `missed_methods` reader of SimpleCov >= 1.0, and
+    # tells the formatter (which detects the API once, at load time) that the API is there.
     def emulate_method_coverage!(file, methods)
+      stub_const('SimpleCov::Formatter::AIFormatter::MarkdownBuilder::MethodDeficit::API_AVAILABLE', true)
       emulated = methods.map do |descriptor, hits|
         class_name, method_name, start_line, _start_col, end_line, _end_col = descriptor
         EmulatedMethod.new(class_name, method_name, start_line, end_line, hits)
@@ -64,6 +65,7 @@ module SimpleCovFixtures
 
     # Gives a real SimpleCov < 1.0 Result the aggregate method counters of SimpleCov >= 1.0.
     def emulate_method_totals!(result, covered:, total:)
+      stub_const('SimpleCov::Formatter::AIFormatter::MarkdownBuilder::MethodDeficit::API_AVAILABLE', true)
       result.define_singleton_method(:total_methods) { total }
       result.define_singleton_method(:covered_methods) { covered }
     end
@@ -75,43 +77,69 @@ module SimpleCovFixtures
     NOCOV_MARKER
   end
 
-  # @return [Boolean] Whether the installed SimpleCov honours `# simplecov:disable` directives.
-  def simplecov_directives_supported?
-    defined?(SimpleCov::Directive) ? true : false
-  end
+  # The capabilities of the installed SimpleCov and of this Ruby's Coverage. They decide which
+  # examples are defined at all: an example asserting a capability the platform lacks is not
+  # defined there (never skipped), and the CI matrix runs every example on a platform that has it.
+  module Capabilities
+    # @return [Boolean] Whether the installed SimpleCov honours `# simplecov:disable` directives.
+    def simplecov_directives_supported?
+      defined?(SimpleCov::Directive) ? true : false
+    end
 
-  # @return [Boolean] Whether the installed SimpleCov (>= 1.0) has the method coverage API.
-  def method_coverage_supported?
-    SimpleCov::SourceFile.method_defined?(:missed_methods)
-  end
+    # @return [Boolean] Whether the installed SimpleCov (>= 1.0) has the method coverage API.
+    def method_coverage_supported?
+      SimpleCov::SourceFile.method_defined?(:missed_methods)
+    end
 
-  # @return [Boolean] Whether a run on this Ruby records branch coverage.
-  def branch_coverage_measurable?
-    Engine.measures?(:branches)
-  end
+    # @return [Boolean] Whether a run on this Ruby records branch coverage.
+    def branch_coverage_measurable?
+      Engine.measures?(:branches)
+    end
 
-  # @return [Boolean] Whether a run on this Ruby with the installed SimpleCov records method
-  #   coverage.
-  def method_coverage_measurable?
-    method_coverage_supported? && Engine.measures?(:methods)
+    # @return [Boolean] Whether a run on this Ruby with the installed SimpleCov records method
+    #   coverage.
+    def method_coverage_measurable?
+      method_coverage_supported? && Engine.measures?(:methods)
+    end
+
+    # @return [Boolean] Whether the installed SimpleCov (>= 1.1) scrubs invalid UTF-8 bytes from
+    #   a source instead of raising on them.
+    def invalid_bytes_scrubbed?
+      Gem::Version.new(SimpleCov::VERSION) >= Gem::Version.new('1.1')
+    end
   end
+  include Capabilities
+  extend Capabilities
 
   # Writes the source byte for byte. SimpleCov reads sources back in binary mode, so a text-mode
   # write would make a fixture's lines differ from what SimpleCov loads on Windows, where text
   # mode turns every "\n" into "\r\n".
   #
   # @return [String] The absolute path of the written source file.
+  #
+  # A source holding a nocov toggle is a deprecated input on SimpleCov >= 1.0, which prints a
+  # deprecation notice for it the first time it reads the file. The suite feeds SimpleCov such
+  # sources on purpose — auditing them is a feature of the gem — so the notice is asserted here,
+  # as the file is first read, instead of being left to reach STDERR (where the suite's warning
+  # check would fail on it); every later read of the file is silent in SimpleCov itself.
   def write_source(directory, basename, code)
     path = File.join(directory, basename)
     File.binwrite(path, code)
-    silence_nocov_deprecation(path)
+    expect_nocov_deprecation(path, code) if code.lines.any? { |line| line.strip.start_with?(NOCOV_MARKER) }
     path
   end
 
-  # SimpleCov >= 1.0 warns once per file about `# :nocov:`; registering the temp file in its
-  # own dedupe set keeps the suite's output readable without touching SimpleCov's behaviour.
-  def silence_nocov_deprecation(path)
-    SimpleCov::SourceFile::SkipChunks.nocov_warned.add(path) if defined?(SimpleCov::SourceFile::SkipChunks)
+  # @return [Boolean] Whether the installed SimpleCov deprecates the nocov toggle.
+  def nocov_deprecated?
+    SimpleCov::SourceFile.const_defined?(:SkipChunks, false) &&
+      SimpleCov::SourceFile::SkipChunks.private_method_defined?(:warn_nocov_deprecation)
+  end
+
+  # Reads the source through SimpleCov once, expecting its nocov deprecation notice for the file
+  # (and nothing at all from a SimpleCov that does not deprecate the toggle).
+  def expect_nocov_deprecation(path, code)
+    notice = nocov_deprecated? ? /\A#{Regexp.escape(path)}:\d+: \[DEPRECATION\] `# :nocov:` is deprecated/ : ''
+    expect { source_file(path, { 'lines' => Array.new(code.lines.size) }).skipped_lines }.to output(notice).to_stderr
   end
 
   # Line-coverage array for a file of `line_count` lines: 1 for covered lines, 0 for missed

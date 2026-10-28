@@ -43,7 +43,7 @@ module SimpleCov
         # @return [Boolean] Whether `outer` encloses `inner` and spans more lines than it does.
         sig { params(outer: T::Range[Integer], inner: T::Range[Integer]).returns(T::Boolean) }
         def self.strictly_encloses?(outer, inner)
-          encloses?(outer, inner) && outer != inner
+          encloses?(outer, inner) && !encloses?(inner, outer)
         end
 
         # Labels a range the way deficits are tagged: `12` for one line, `12-15` for a span.

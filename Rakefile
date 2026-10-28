@@ -4,45 +4,108 @@
 require 'open3'
 require 'tmpdir'
 require 'rspec/core/rake_task'
-require 'rubocop/rake_task'
+require 'sorbet-runtime'
 
-# One-command local verification: `bundle exec rake` runs every gate CI enforces (see
-# CONTRIBUTING.md). Advisory tooling lives behind `rake quality`; RBI regeneration behind `rake rbi`.
+# `bundle exec rake` runs every gate CI enforces (see CONTRIBUTING.md); each one is also a task
+# of its own. Mutation testing (`rake mutant`) and the dependency freshness check
+# (`rake outdated`) are enforced in CI as well but kept out of the default task: the first takes
+# minutes, the second needs the network.
 
-# sorbet-static ships MRI binaries for Linux and macOS only (see Gemfile).
-SORBET_SUPPORTED = RUBY_ENGINE == 'ruby' && !Gem.win_platform?
-# flay reports duplicated code with at least this mass (roughly, AST node count).
-FLAY_MASS_THRESHOLD = 40
-# flog scores above this on a single method mean it should be split up.
-FLOG_METHOD_THRESHOLD = 35
+# Flay mass threshold. Below it Flay only reports Sorbet `sig` declarations that two methods
+# share (mass 32 at most in lib/); from it up every duplicated piece of logic is reported.
+FLAY_MASS = 33
+# Flog score above which a single method counts as too complex and must be split up.
+FLOG_METHOD_THRESHOLD = 30
+# Output of `yard stats` when every API object is documented.
+FULLY_DOCUMENTED = '100.00% documented'
+# Methods debride cannot see a caller for, each with the caller it cannot see.
+DEBRIDE_ALLOWED = {
+  'configure' => 'public API: called from the test helper of the project being measured',
+  'reset_configuration!' => 'public API: called by test suites between examples',
+  'report_path_configured?' => 'public API of Configuration',
+  'string_value' => 'called by the parser builder LenientLiterals is extended onto'
+}.freeze
 # Docker images the `check:*` tasks run the suite in through bin/check-ruby. The official jruby
-# image ships no C compiler, which prism (pulled in through rubocop-ast) needs to build, so the
-# JRuby task installs one before `bundle install`.
-JRUBY_IMAGE = 'jruby:9.4'
+# image ships no C compiler, which prism (pulled in through parser's dependents) needs to build,
+# so the JRuby task installs one before `bundle install`.
+JRUBY_IMAGE = 'jruby:10.0'
 JRUBY_SETUP = 'apt-get update -qq && apt-get install -y -qq build-essential'
 TRUFFLERUBY_IMAGE = 'ghcr.io/graalvm/truffleruby-community:latest'
 
-# `-w` turns on Ruby's verbose warnings; spec/support/warnings.rb fails the suite on any warning
-# raised by the gem's own files (dependencies may warn freely), exactly as the CI test jobs run.
-RSpec::Core::RakeTask.new(:spec) { |task| task.ruby_opts = '-w' }
-RuboCop::RakeTask.new(:rubocop)
+# Runs the tools whose report, not exit status, says whether they found anything.
+module Report
+  extend T::Sig
 
-desc 'Type-check lib/ with Sorbet at the strong level (`srb tc --typed strong`)'
-task :typecheck do
-  if SORBET_SUPPORTED
-    sh 'bundle', 'exec', 'srb', 'tc', '--typed', 'strong'
-  else
-    warn 'Skipping Sorbet: sorbet-static is not available for this Ruby engine or platform.'
+  # Prints a tool's report and fails unless it contains the line that means "no findings".
+  #
+  # @param command [Array<String>] The tool's command line.
+  # @param clean [String] The text the report holds when there is nothing to fix.
+  # @param failure [String] The message to abort with otherwise.
+  # @return [void]
+  sig { params(command: T::Array[String], clean: String, failure: String).void }
+  def self.require_clean(command, clean, failure)
+    output, status = Open3.capture2e(*command)
+    puts output
+    abort failure unless status.success? && output.include?(clean)
   end
 end
 
+# `-w` turns on Ruby's verbose warnings; spec/support/warnings.rb fails the suite on any warning
+# raised by the gem's own files or the specs, exactly as the CI test jobs run.
+RSpec::Core::RakeTask.new(:spec) { |task| task.ruby_opts = '-w' }
+
+desc 'Run RuboCop with its plugins (no todo file, no inline directives)'
+task :rubocop do
+  sh 'bundle', 'exec', 'rubocop'
+end
+
+desc 'Fail on inline suppressions of any linter, scanner, type checker, warning or test'
+task :suppressions do
+  sh 'script/forbidden_suppressions.sh'
+end
+
+desc 'Generate the gem RBIs with Tapioca, then type-check with Sorbet (lib/ is typed: strong)'
+task :typecheck do
+  sh 'bundle', 'exec', 'tapioca', 'gem', 'ast', 'parser', 'prism', 'racc', 'simplecov'
+  sh 'bundle', 'exec', 'srb', 'tc'
+end
+
 desc 'Build the YARD documentation (warnings are fatal) and require 100% documentation coverage'
-task :docs do
+task :yard do
   sh 'bundle', 'exec', 'yardoc', '--fail-on-warning'
-  stats, status = Open3.capture2('bundle', 'exec', 'yard', 'stats', '--list-undoc')
-  puts stats
-  abort 'yard stats failed' unless status.success?
-  abort 'Documentation coverage is below 100% (see the list above)' unless stats.include?('100.00% documented')
+  Report.require_clean(%w[bundle exec yard stats --list-undoc], FULLY_DOCUMENTED,
+                       'YARD: undocumented API objects found')
+end
+
+desc 'Fail on any code smell (reek, default configuration; see .reek.yml)'
+task :reek do
+  sh 'bundle', 'exec', 'reek', 'lib'
+end
+
+desc 'Fail on any structural duplication (flay)'
+task :flay do
+  Report.require_clean(['bundle', 'exec', 'flay', '--mass', FLAY_MASS.to_s, 'lib'], 'Total score (lower is better) = 0',
+                       'Flay: duplicated code found')
+end
+
+desc "Fail on any method with a flog score above #{FLOG_METHOD_THRESHOLD}"
+task :flog do
+  report, status = Open3.capture2e('bundle', 'exec', 'flog', '--all', '--methods-only', 'lib')
+  puts report
+  abort 'flog failed' unless status.success?
+  scores = report.scan(%r{^\s*(\d+\.\d+): (\S+)\s+lib/})
+  complex = scores.filter_map { |score, name| name if Float(score) > FLOG_METHOD_THRESHOLD }
+  abort "flog: methods scoring above #{FLOG_METHOD_THRESHOLD}: #{complex.join(', ')}" unless complex.empty?
+end
+
+desc 'Fail on any method nothing calls (debride; see DEBRIDE_ALLOWED in the Rakefile)'
+task :debride do
+  Dir.mktmpdir('debride') do |dir|
+    allowed = File.join(dir, 'allowed.txt')
+    File.write(allowed, DEBRIDE_ALLOWED.keys.join("\n"))
+    Report.require_clean(['bundle', 'exec', 'debride', '--whitelist', allowed, 'lib'], 'Total suspect LOC: 0',
+                         'debride: methods without a caller found')
+  end
 end
 
 desc 'Audit the locked dependency set against the Ruby Advisory Database'
@@ -61,13 +124,9 @@ task :build do
     clean_env = { 'GEM_HOME' => gem_home, 'GEM_PATH' => gem_home, 'RUBYOPT' => nil, 'RUBYLIB' => nil,
                   'BUNDLE_GEMFILE' => nil, 'BUNDLE_BIN_PATH' => nil, 'BUNDLER_SETUP' => nil }
     sh clean_env, 'gem', 'install', '--no-document', gem_file
-    sh clean_env, 'ruby', '-e', 'require "simplecov-ai"; puts "Loaded simplecov-ai " + SimpleCov::Formatter::AIFormatter::VERSION'
+    sh clean_env, 'ruby', '-w', '-e',
+       'require "simplecov-ai"; puts "Loaded simplecov-ai " + SimpleCov::Formatter::AIFormatter::VERSION'
   end
-end
-
-desc 'Regenerate the gem RBIs in sorbet/rbi/gems with tapioca (after changing dependencies)'
-task :rbi do
-  sh 'bundle', 'exec', 'bin/tapioca', 'gem'
 end
 
 desc 'Mutation testing of lib/ with mutant (see .mutant.yml); MUTANT_SINCE=<revision> limits it to touched subjects'
@@ -77,23 +136,9 @@ task :mutant do
   sh(*command)
 end
 
-desc 'Advisory code-quality report: reek, flay, flog and debride (mirrors the CI quality job)'
-task :quality do
-  sh 'bundle', 'exec', 'reek', '--config', '.reek.yml', 'lib'
-
-  flay_report, = Open3.capture2('bundle', 'exec', 'flay', '--mass', FLAY_MASS_THRESHOLD.to_s, 'lib')
-  puts flay_report
-  abort "flay: duplicated code with mass >= #{FLAY_MASS_THRESHOLD} found" unless flay_report.include?('= 0')
-
-  flog_report, = Open3.capture2('bundle', 'exec', 'flog', '--all', '--methods-only', 'lib')
-  puts flog_report
-  hot_methods = flog_report.scan(%r{^\s*(\d+\.\d+): (\S+)\s+lib/})
-                           .select { |score, _name| score.to_f > FLOG_METHOD_THRESHOLD }
-                           .map(&:last)
-  abort "flog: methods scoring above #{FLOG_METHOD_THRESHOLD}: #{hot_methods.join(', ')}" if hot_methods.any?
-
-  # Informational only: the formatter's public API is invoked by SimpleCov, not from lib/.
-  sh 'bundle', 'exec', 'debride', 'lib'
+desc 'Fail on any outdated Ruby, gem or GitHub Action not on the documented hold list (script/outdated_holds.yml)'
+task :outdated do
+  ruby 'script/outdated.rb'
 end
 
 # `rake check:jruby`, `rake check:truffleruby` and `rake 'check:ruby[2.7]'` run the suite on another
@@ -101,12 +146,12 @@ end
 # argument replaces the command, e.g. `rake 'check:ruby[3.4,bundle exec rspec spec/quality]'`;
 # BUNDLE_GEMFILE is inherited, so a SimpleCov gemfile can be selected the same way as for rspec.
 namespace :check do
-  desc 'Run the suite on JRuby 9.4 in Docker (bin/check-ruby jruby:9.4, C compiler installed first)'
+  desc "Run the suite on JRuby in Docker (bin/check-ruby #{JRUBY_IMAGE}, C compiler installed first)"
   task :jruby, [:command] do |_task, args|
     sh({ 'CHECK_RUBY_SETUP' => JRUBY_SETUP }, 'bin/check-ruby', JRUBY_IMAGE, *[args[:command]].compact)
   end
 
-  desc 'Run the suite on TruffleRuby in Docker (bin/check-ruby ghcr.io/graalvm/truffleruby-community:latest)'
+  desc "Run the suite on TruffleRuby in Docker (bin/check-ruby #{TRUFFLERUBY_IMAGE})"
   task :truffleruby, [:command] do |_task, args|
     sh('bin/check-ruby', TRUFFLERUBY_IMAGE, *[args[:command]].compact)
   end
@@ -119,4 +164,4 @@ namespace :check do
   end
 end
 
-task default: %i[spec rubocop typecheck docs audit build]
+task default: %i[spec rubocop suppressions typecheck yard reek flay flog debride audit build]

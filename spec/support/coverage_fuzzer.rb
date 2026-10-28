@@ -24,6 +24,8 @@ class CoverageFuzzer
     [1.5, 1, 0, nil], [-1, 1, 0, nil], [nil, 1, 0, nil]
   ].freeze
   NOT_A_COLLECTION = [nil, 42, 'x', true, []].freeze
+  # The longest line array, which the fuzzed files are padded to.
+  MAX_LINES = LINE_ARRAYS.map(&:size).max
 
   def initialize(seed)
     @random = Random.new(seed)
@@ -52,14 +54,19 @@ class CoverageFuzzer
   def descriptor_map(nested:)
     return pick(NOT_A_COLLECTION) if @random.rand(6).zero?
 
-    @random.rand(4).times.to_h do
-      [pick(DESCRIPTORS), nested ? arms : pick(HIT_COUNTS)]
-    end
+    json_keyed(Array.new(@random.rand(4)) { [pick(DESCRIPTORS), nested ? arms : pick(HIT_COUNTS)] })
   end
 
   def arms
     return pick(NOT_A_COLLECTION) if @random.rand(6).zero?
 
-    @random.rand(4).times.to_h { [pick(DESCRIPTORS), pick(HIT_COUNTS)] }
+    json_keyed(Array.new(@random.rand(4)) { [pick(DESCRIPTORS), pick(HIT_COUNTS)] })
+  end
+
+  # A resultset is JSON, whose object keys are the descriptors' string forms: a native descriptor
+  # and its stringified twin would be one duplicated key there, which no real resultset holds
+  # (and which the JSON parser warns about). The first of such twins is kept.
+  def json_keyed(pairs)
+    pairs.uniq { |descriptor, _value| descriptor.to_s }.to_h
   end
 end

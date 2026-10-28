@@ -43,6 +43,13 @@ module SimpleCov
     def select(&blk); end
 
     sig do
+      type_parameters(:Result)
+        .params(blk: T.proc.params(file: SimpleCov::SourceFile).returns(T.nilable(T.type_parameter(:Result))))
+        .returns(T::Array[T.type_parameter(:Result)])
+    end
+    def filter_map(&blk); end
+
+    sig do
       params(arg: T.untyped, arg1: T.untyped, arg2: T.proc.params(file: SimpleCov::SourceFile).void)
         .returns(SimpleCov::FileList)
     end
