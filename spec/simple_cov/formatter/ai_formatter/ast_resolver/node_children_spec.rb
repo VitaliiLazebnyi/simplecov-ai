@@ -65,6 +65,10 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver::NodeChildren do
         .to eq(%w[run stop])
     end
 
+    it 'reads the first child of the literal' do
+      expect(described_class.literal_value(node(:str, 'first', 'second'))).to eq('first')
+    end
+
     it 'raises TypeError for a literal node without a value' do
       expect { described_class.literal_value(node(:sym)) }
         .to raise_error(TypeError, 'child 0 of a :sym node is not a Symbol or String')

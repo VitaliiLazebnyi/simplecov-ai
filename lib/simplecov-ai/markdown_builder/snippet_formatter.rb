@@ -46,7 +46,7 @@ module SimpleCov
           sig { params(positions: T::Array[Integer], line_number: Integer).returns(String) }
           def self.occurrence_label(positions, line_number)
             count = positions.size
-            count > 1 ? Kernel.format(OCCURRENCE_TEMPLATE, positions.count { |line| line <= line_number }, count) : ''
+            count > 1 ? format(OCCURRENCE_TEMPLATE, positions.count { |line| line <= line_number }, count) : ''
           end
 
           # @param source_lines [Array<String>] The raw text lines of a file.

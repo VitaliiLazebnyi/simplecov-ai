@@ -1,0 +1,65 @@
+name: Mutation testing
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+# Nothing is writable by default; every job re-declares the (read-only) permissions it needs.
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUBYOPT: -W:deprecated
+  LANG: C.UTF-8
+  LC_ALL: C.UTF-8
+
+jobs:
+  mutant:
+    name: Mutant
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+
+    # Held at Ruby 3.3.13 (script/outdated_holds.yml): mutant requires `parser/current`, and the
+    # newest parser gem only has a grammar for Ruby 3.3, warning on every Ruby but 3.3.13. The
+    # mutation bundle is resolved for that Ruby, so the lockfile is deleted first.
+    - name: Resolve the bundle for the mutation Ruby
+      run: rm -f Gemfile.lock
+    - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
+      with:
+        ruby-version: "3.3.13"
+        bundler-cache: true
+    - name: Check the Ruby version
+      run: script/check_ruby.sh 3.3.13
+    # Every subject, every time: a full run takes minutes. Any alive mutation fails the build.
+    - run: bundle exec rake mutant
+
+  warning-gate:
+    name: Warning gate
+    if: ${{ !cancelled() }}
+    needs: [mutant]
+    runs-on: ubuntu-26.04
+    permissions:
+      actions: read # reads the logs of the other jobs of this run
+      contents: read
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Fail on any warning or deprecation in the logs of this run
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GATE_JOB_NAME: Warning gate
+      run: script/warning_gate.sh

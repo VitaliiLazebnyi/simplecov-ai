@@ -32,14 +32,15 @@ module Outdated
     end
 
     # The newest release tag of a GitHub repository and the commit it points to: an annotated
-    # tag lists its commit under `tag^{}`, a lightweight tag only under `tag`.
+    # tag lists its commit under `tag^{}` (after the tag object, so it wins), a lightweight tag
+    # only under `tag`.
     sig { params(repository: String).returns([String, String]) }
     def self.tag(repository)
       refs, status = Open3.capture2('git', 'ls-remote', '--tags', "https://github.com/#{repository}")
       abort "git ls-remote #{repository} failed" unless status.success?
       tags = refs.lines.filter_map { |line| tag_entry(line) }
       newest = tags.map(&:first).max_by { |tag| version(tag) }.to_s
-      [newest, tags.reverse.to_h.fetch(newest)]
+      [newest, tags.to_h.fetch(newest)]
     end
 
     sig { params(line: String).returns(T.nilable([String, String])) }

@@ -120,12 +120,19 @@ module SimpleCov
               when Array
                 return nil if raw.size < DESCRIPTOR_LENGTH
 
-                positions = raw.drop(2).first(4).grep(Integer)
-                raise TypeError, 'branch descriptor positions must be Integers' unless positions.size == 4
-
-                key = branch_key(raw.fetch(0), positions.fetch(0), positions.fetch(2))
-                [key, [positions.fetch(1), positions.fetch(3)]]
+                start_line, start_col, end_line, end_col = positions(raw)
+                [branch_key(raw.fetch(0), start_line, end_line), [start_col, end_col]]
               end
+            end
+
+            # The start line, start column, end line and end column of a descriptor (its third to
+            # sixth entries).
+            sig { params(raw: T::Array[BasicObject]).returns([Integer, Integer, Integer, Integer]) }
+            def positions(raw)
+              found = raw.drop(2).first(4).grep(Integer)
+              raise TypeError, 'branch descriptor positions must be Integers' unless found.size == 4
+
+              [found.fetch(0), found.fetch(1), found.fetch(2), found.fetch(3)]
             end
 
             sig { params(type: Object, start_line: Integer, end_line: Integer).returns(String) }

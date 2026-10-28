@@ -122,7 +122,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::SnippetFormat
     end
 
     it 'labels nothing for a line outside the node, whatever its text' do
-      expect(snippets.occurrence(3, semantic_node('Foo#bar', 1, 2))).to eq('')
+      expect(snippets.occurrence(4, semantic_node('Foo#bar', 1, 2))).to eq('')
     end
 
     it 'indexes each node on its own' do

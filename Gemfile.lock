@@ -173,10 +173,10 @@ GEM
       rubocop (~> 1.89)
       rubocop-ast (>= 1.44.0, < 2.0)
     ruby-progressbar (1.13.0)
-    rubydex (0.4.3-aarch64-linux)
-    rubydex (0.4.3-arm64-darwin)
-    rubydex (0.4.3-x86_64-darwin)
-    rubydex (0.4.3-x86_64-linux)
+    rubydex (0.4.4-aarch64-linux)
+    rubydex (0.4.4-arm64-darwin)
+    rubydex (0.4.4-x86_64-darwin)
+    rubydex (0.4.4-x86_64-linux)
     securerandom (0.4.1)
     sexp_processor (4.17.6)
     simplecov (1.3.2)
@@ -321,10 +321,10 @@ CHECKSUMS
   rubocop-sorbet (0.17.2) sha256=0d34ae2f268c7d36d39102bdafdbbec4bc9a65bedac6cc3732a20692dbe96558
   rubocop-thread_safety (0.8.0) sha256=71fe5e7894fb9acfbd4c2dcd394feabc35bd690f75b0bc846e1504d9e31f9034
   ruby-progressbar (1.13.0) sha256=80fc9c47a9b640d6834e0dc7b3c94c9df37f08cb072b7761e4a71e22cff29b33
-  rubydex (0.4.3-aarch64-linux) sha256=e7f7368546c8ed034c12829988b17fb570d9ac4991c802c0d9f75a123b965fc9
-  rubydex (0.4.3-arm64-darwin) sha256=6d9735367e2c9e4caece42da2732fa7492c68507aa97a58afc41f58296013cdb
-  rubydex (0.4.3-x86_64-darwin) sha256=f70c6ee8988e20dbc29a69e2b283ebbd6483ea89bf10a806dd8696c3710af71b
-  rubydex (0.4.3-x86_64-linux) sha256=550138ee5a5c005066560321cfe003130a111468821d8ef7cf30826742b1c2f5
+  rubydex (0.4.4-aarch64-linux) sha256=3638b08b7d683f264eb3215e86974c0f2458c7d63e4aab0c772d625e9e0392ea
+  rubydex (0.4.4-arm64-darwin) sha256=e593b7a2b820e3d91ba3d6b7371916efe7c742b75d44f6eaa39cd04546211c09
+  rubydex (0.4.4-x86_64-darwin) sha256=596c0820bc12c475321550dbb3320d8fe7f08f2f068565884ba3a02ca39acb50
+  rubydex (0.4.4-x86_64-linux) sha256=6c9144ac21ec4455850bc3b087f0bdce350af9358429675610c9d61fb8bfccfd
   securerandom (0.4.1) sha256=cc5193d414a4341b6e225f0cb4446aceca8e50d5e1888743fac16987638ea0b1
   sexp_processor (4.17.6) sha256=3c5d0e9db06377abde06db51dbacb14ce239ed0bd038ae515bc42c81602c6c1f
   simplecov (1.3.2) sha256=2a22ec1759f1b8db60881a2e038758956fc69ef93ed669be0bde0678de6d0e85

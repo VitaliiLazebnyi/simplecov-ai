@@ -117,6 +117,11 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::BranchEnriche
     expect(columns_by_type(sign_file({ condition => arms }))).to eq(then: [21, 25], else: [28, 32])
   end
 
+  it 'reads the positions from entries three to six, whatever numbers follow them' do
+    arms = { then_arm + [7, 8] => 1, else_arm + [99] => 0 }
+    expect(columns_by_type(sign_file({ condition => arms }))).to eq(then: [21, 25], else: [28, 32])
+  end
+
   it 'never modifies the SimpleCov branch objects' do
     file = source_file(path, live_coverage)
     described_class.enrich(file)

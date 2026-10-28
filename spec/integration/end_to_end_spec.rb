@@ -134,21 +134,25 @@ module EndToEnd
     File.write(File.join(project_dir, 'run.rb'), RUNNER)
   end
 
-  # Runs the project in a child Ruby that inherits this process's environment (Bundler's
+  # A run of the project in a child Ruby that inherits this process's environment (Bundler's
   # RUBYOPT and BUNDLE_GEMFILE included, so it sees the same gems) plus `env`, from the project
   # directory like a real test run: SimpleCov 0.18 fixes its root filter from the working
-  # directory when it is required, before `SimpleCov.root` can be set.
+  # directory when it is required, before `SimpleCov.root` can be set. The command line is fixed:
+  # this interpreter, the gem's lib directory and the runner the spec wrote.
+  Child = Struct.new(:project_dir, :env) do
+    def run
+      stdout, stderr, status = Open3.capture3(env, RbConfig.ruby, '-I', LIB_DIR, 'run.rb', chdir: project_dir)
+      Run.new(stdout, stderr, status, read('ai_report.md'), read('descriptor_classes.txt'))
+    end
+
+    def read(name)
+      path = File.join(project_dir, 'coverage', name)
+      File.exist?(path) ? File.read(path, encoding: Encoding::UTF_8) : nil
+    end
+  end
+
   def run(project_dir, env = {})
-    # Justification: every argument is static — this interpreter, the gem's lib directory and a
-    # fixture path written by this spec; no external input can reach the child command line.
-    # nosemgrep: ruby.lang.security.dangerous-exec.dangerous-exec
-    stdout, stderr, status = Open3.capture3(env, RbConfig.ruby, '-I', LIB_DIR, File.join(project_dir, 'run.rb'),
-                                            chdir: project_dir)
-    coverage_dir = File.join(project_dir, 'coverage')
-    report = File.join(coverage_dir, 'ai_report.md')
-    probe = File.join(coverage_dir, 'descriptor_classes.txt')
-    Run.new(stdout, stderr, status, File.exist?(report) ? File.read(report, encoding: Encoding::UTF_8) : nil,
-            File.exist?(probe) ? File.read(probe, encoding: Encoding::UTF_8) : nil)
+    Child.new(project_dir, env).run
   end
 
   # The child writes the report at SimpleCov.root, which Ruby resolves through symlinks.

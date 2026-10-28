@@ -134,7 +134,7 @@ module SimpleCov
           # "3.3" is below "3.3.7.2".
           sig { params(version: String, floor: String).returns(T::Boolean) }
           def self.below?(version, floor)
-            Gem::Version.new(floor) > Gem::Version.new(version)
+            Gem::Version.new(floor) > version
           end
 
           sig { params(ruby_version: String).returns(String) }

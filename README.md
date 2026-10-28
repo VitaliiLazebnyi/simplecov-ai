@@ -231,10 +231,11 @@ everything fits.
 
 Sources are parsed with Prism's `parser`-compatible translation on Ruby >= 3.3 when Prism >= 1.2
 and `parser` >= 3.3.7.2 are installed (the exact grammar of the running Ruby, about twice as fast
-as the `parser` gem); otherwise the `parser` gem's grammar for the running Ruby is used, with
-`parser/current` as a muted last resort. Ruby 2.7 to 3.2 always use the `parser` gem. The
-selection happens once at load time, and no parser diagnostic — including the
-`parser/current is loading …` version warning — is ever written to STDERR.
+as the `parser` gem); otherwise the `parser` gem's own grammar for the running Ruby is used —
+its exact `parser/rubyXY` grammar, or for a Ruby newer than any it ships the newest one (what
+`parser/current` would load, without its version warning). Ruby 2.7 to 3.2 always use the
+`parser` gem. The selection happens once at load time, and no parser diagnostic is ever written
+to STDERR.
 
 ## Error handling
 
@@ -254,6 +255,15 @@ SimpleCov's `at_exit` hook.
 One limitation: nodes are resolved by line, so two definitions on one line
 (`def a; 1; end; def b; 2; end`) both resolve to the line's last node; a method deficit keeps the
 name SimpleCov derived unless that node carries the method's own name.
+
+## Development
+
+The repository holds itself to "zero warnings, zero suppressions, everything checked": 100% line,
+branch and method coverage, every mutant killed, Sorbet `typed: strong`, 100% YARD
+documentation, RuboCop, Reek, Flay, Flog and Debride without findings, no inline suppression of
+any tool, no warning in any CI log, and every dependency at its newest release unless a
+documented hold says why not. [CONTRIBUTING.md](CONTRIBUTING.md) lists every gate and how to run
+it (`bundle exec rake` runs the local ones).
 
 ## License
 

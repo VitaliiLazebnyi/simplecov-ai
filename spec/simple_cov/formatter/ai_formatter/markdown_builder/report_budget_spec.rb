@@ -50,6 +50,11 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::ReportBudget 
     expect(buffer.string).to eq(notice(0, 1) + notice(1, 0))
   end
 
+  it 'writes the notice when as many deficit as bypass files were left out' do
+    budget.write_notice(1, 1)
+    expect(buffer.string).to eq(notice(1, 1))
+  end
+
   it 'writes no notice when nothing was left out' do
     budget.write_notice(0, 0)
     expect(buffer.string).to eq('')

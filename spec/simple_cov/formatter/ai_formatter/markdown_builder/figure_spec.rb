@@ -40,6 +40,11 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::Figure do
     it 'floors to one decimal' do
       expect([described_class.new(99.96).label, described_class.new(0.0).label]).to eq(['99.9%', '0.0%'])
     end
+
+    it 'is nil for an unmeasured figure and the undecodable label for NaN' do
+      expect([described_class.new(nil).label, described_class.new(Float::NAN).label])
+        .to eq([nil, described_class::UNDECODABLE_LABEL])
+    end
   end
 
   describe '#line' do

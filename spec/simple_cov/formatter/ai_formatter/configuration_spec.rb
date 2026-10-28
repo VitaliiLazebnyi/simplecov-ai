@@ -33,6 +33,21 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::Configuration do
       expect { config.report_path = '   ' }.to raise_error(ArgumentError, /report_path/)
     end
 
+    it 'rejects an empty path and one made of any ASCII whitespace' do
+      rejected = ['', " \t", "\n", "\v", "\f", "\r"].count do |blank|
+        config.report_path = blank
+        false
+      rescue ArgumentError
+        true
+      end
+      expect(rejected).to eq(6)
+    end
+
+    it 'accepts a path that only starts or ends with whitespace, or is made of non-ASCII spaces' do
+      [" a\n", "\u00a0"].each { |path| config.report_path = path }
+      expect(config.report_path).to eq("\u00a0")
+    end
+
     it 'rejects a path containing a NUL byte' do
       expect { config.report_path = "report\0.md" }.to raise_error(ArgumentError, /NUL/)
     end

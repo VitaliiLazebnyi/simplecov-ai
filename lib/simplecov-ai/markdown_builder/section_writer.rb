@@ -35,8 +35,9 @@ module SimpleCov
           def initialize(budget, heading)
             @budget = budget
             @pending_headings = T.let([heading], Headings)
-            @open = T.let(true, T::Boolean)
+            # Blocks written in full, and blocks attempted: both start at zero.
             @written_blocks = T.let(0, Integer)
+            @attempted_blocks = T.let(@written_blocks, Integer)
           end
 
           # Writes a block per file, lowest-coverage first, rendering each file only while the
@@ -52,7 +53,7 @@ module SimpleCov
           end
           def write_files(files, &blk)
             files.each do |file|
-              break unless @open
+              break if closed?
 
               write_file_block(SectionWriter.file_heading(file), yield(file))
             end
@@ -71,6 +72,13 @@ module SimpleCov
 
           private
 
+          # A section closes at the first block the budget stops: every block attempted before
+          # it was written in full.
+          sig { returns(T::Boolean) }
+          def closed?
+            @attempted_blocks > @written_blocks
+          end
+
           # Writes a file block: the heading together with the first node fragment, then each
           # further fragment while the budget admits it. A block the budget stops is not counted
           # as written, and closes the section.
@@ -80,12 +88,12 @@ module SimpleCov
           # @return [void]
           sig { params(file_heading: String, node_fragments: T::Array[String]).void }
           def write_file_block(file_heading, node_fragments)
-            return unless @open
+            return if closed?
 
+            @attempted_blocks += 1
             first_fragment, *further_fragments = node_fragments
             complete = @budget.admit("#{@pending_headings.join}#{file_heading}\n#{first_fragment}") &&
                        write_further(further_fragments)
-            @open = complete
             @written_blocks += 1 if complete
           end
 

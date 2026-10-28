@@ -20,6 +20,12 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver::ParserBackend do
       expect(described_class.select_grammar(ruby_version: '9.9.9')).to eq(Prism::Translation::Parser)
     end
 
+    it 'compares versions numerically, not as text' do
+      expect([described_class.select_grammar(ruby_version: '10.0.0'),
+              described_class.select_grammar(ruby_version: '3.4.10', parser_version: '10.0')])
+        .to eq([Prism::Translation::Parser, Prism::Translation::Parser34])
+    end
+
     it 'falls back to the base Prism grammar when an older Prism lacks the version class' do
       hide_const('Prism::Translation::Parser40')
       hide_const('Prism::Translation::Parser41')
