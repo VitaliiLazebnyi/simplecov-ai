@@ -15,7 +15,8 @@ require 'yaml'
 # - the Ruby of .ruby-version (the newest stable release), every exact Ruby of the CI workflows
 #   (the newest patch release of its series) and the mutation Ruby hold;
 # - every GitHub Action, pinned to the commit of its newest release tag;
-# - the tools the workflows download (actionlint, gitleaks) and the Semgrep image.
+# - the tools the workflows download (actionlint, gitleaks), the Semgrep image and the digest
+#   every image is pinned to.
 module Outdated
   ROOT = T.let(File.expand_path('..', __dir__), String)
 
@@ -57,6 +58,18 @@ module Outdated
       index.scan(/^ruby-(\d+\.\d+\.\d+)\s/).flatten.map { |release| version(release) }
     end
 
+    # What is wrong with an image pin: a digest its tag no longer points to (an official image
+    # lives under `library/` on Docker Hub), or a Semgrep release that is not the newest.
+    sig { params(repository: String, tag: String, digest: String).returns(T::Array[String]) }
+    def self.image_problems(repository, tag, digest)
+      path = repository.include?('/') ? repository : "library/#{repository}"
+      current = JSON.parse(Net::HTTP.get(URI("https://hub.docker.com/v2/repositories/#{path}/tags/#{tag}")).to_s)
+                    .fetch('digest')
+      newest = repository == 'semgrep/semgrep' ? semgrep : tag
+      [("image #{repository}:#{tag} is pinned to #{digest}, not #{current}" if digest != current),
+       ("image #{repository}:#{tag} is not the newest release #{newest}" if tag != newest)].compact
+    end
+
     sig { returns(String) }
     def self.semgrep
       tags = JSON.parse(Net::HTTP.get(URI('https://hub.docker.com/v2/repositories/semgrep/semgrep/tags?page_size=100')).to_s)
@@ -72,11 +85,19 @@ module Outdated
     # One line of `bundle outdated --parseable`.
     OUTDATED_LINE = /\A(\S+) \(newest ([^,\s]+), installed ([^,)\s]+)/.freeze
 
+    # `bundle outdated` refuses to run in deployment mode, which `ruby/setup-ruby`'s bundler cache
+    # turns on; it exits 1 when it reports an outdated gem, and with any other failure status
+    # when it could not check at all.
+    ENV_OVERRIDES = T.let(
+      { 'BUNDLE_DEPLOYMENT' => 'false', 'BUNDLE_FROZEN' => 'false' }.freeze, T::Hash[String, String]
+    )
+
     # @return [Array<Array(String, String, String)>] Name, newest and installed version of every
     #   outdated gem.
     sig { returns(T::Array[[String, String, String]]) }
     def self.outdated
-      output, = Open3.capture2e('bundle', 'outdated', '--parseable', chdir: ROOT)
+      output, status = Open3.capture2e(ENV_OVERRIDES, 'bundle', 'outdated', '--parseable', chdir: ROOT)
+      abort "bundle outdated failed:\n#{output}" unless [0, 1].include?(status.exitstatus)
       output.lines.filter_map do |line|
         match = OUTDATED_LINE.match(line)
         [match[1].to_s, match[2].to_s, match[3].to_s] if match
@@ -128,6 +149,7 @@ module Outdated
       mutation_ruby
       actions
       tools
+      images
       return true if @problems.empty?
 
       warn "#{@problems.size} problem(s)"
@@ -207,22 +229,24 @@ module Outdated
       end
     end
 
-    sig { params(name: String, tool: String, pinned: String).void }
-    def tool(name, tool, pinned)
-      newest, = Upstream.tag(TOOLS.fetch(tool))
-      problem("#{name}: #{tool} #{pinned} is not the newest #{newest}") if "v#{pinned}" != newest
-    end
-
-    # Downloaded tools (`<NAME>_VERSION: x.y.z`) and the Semgrep image are at their newest release.
+    # Downloaded tools (`<NAME>_VERSION: x.y.z`) are at their newest release.
     sig { void }
     def tools
       @workflows.each do |name, text|
         text.scan(/(ACTIONLINT|GITLEAKS)_VERSION: (\S+)/).uniq.each do |tool, pinned|
-          tool(name, tool.to_s, pinned.to_s)
+          newest, = Upstream.tag(TOOLS.fetch(tool.to_s))
+          problem("#{name}: #{tool} #{pinned} is not the newest #{newest}") if "v#{pinned}" != newest
         end
-        text.scan(%r{image: semgrep/semgrep:(\S+)@}).flatten.uniq.each do |pinned|
-          newest = Upstream.semgrep
-          problem("#{name}: semgrep image #{pinned} is not the newest #{newest}") if pinned != newest
+      end
+    end
+
+    # Every container image is pinned to the digest its tag points to now; the Semgrep image is
+    # also its newest release.
+    sig { void }
+    def images
+      @workflows.each do |name, text|
+        text.scan(%r{image: ([\w./-]+):([\w.-]+)@(sha256:\h+)}).uniq.each do |repository, tag, digest|
+          Upstream.image_problems(repository.to_s, tag.to_s, digest.to_s).each { |text| problem("#{name}: #{text}") }
         end
       end
     end
