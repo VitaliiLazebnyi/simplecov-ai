@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -17,7 +17,7 @@ module SimpleCov
                            T::Hash[String, Symbol])
           # Every AST node type that attaches a block to a call: `do … end` / `{ … }` blocks,
           # numbered-parameter blocks (`{ _1 }`) and Ruby 3.4 `it` blocks.
-          BLOCK_TYPES = T.let(%i[block numblock itblock].freeze, T::Array[Symbol])
+          BLOCK_TYPES = %i[block numblock itblock].freeze
 
           # @param node [Parser::AST::Node] A `:casgn` constant-assignment node.
           # @return [String, nil] The builder label ("Struct"/"Class"/"Module"/"Data"), or nil

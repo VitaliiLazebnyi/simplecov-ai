@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -12,7 +12,7 @@ module SimpleCov
           extend T::Sig
 
           # Separator used to denote namespace nesting (e.g., Module::Class)
-          NAMESPACE_SEPARATOR = T.let('::', String)
+          NAMESPACE_SEPARATOR = '::'
 
           # Reconstructs a fully-qualified constant path (e.g. `Foo::Bar`) from a const node so
           # compact class definitions do not lose their namespace prefix.
@@ -37,7 +37,7 @@ module SimpleCov
           sig { params(receiver: Parser::AST::Node).returns(T.nilable(String)) }
           def self.singleton_class_name(receiver)
             case receiver.type
-            when :lvar, :ivar then NodeChildren.variable_name(receiver).to_s
+            when :lvar, :ivar then NodeChildren.symbol_at(receiver, 0).to_s
             when :const then const_name(receiver)
             end
           end

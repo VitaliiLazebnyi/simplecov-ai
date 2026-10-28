@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -15,16 +15,9 @@ module SimpleCov
 
           # Positional label for a single-line deficit no resolved node spans; a missed line and
           # a single-line branch at the same line share it.
-          FALLBACK_LINE_NAME = T.let('Line %d', String)
+          FALLBACK_LINE_NAME = 'Line %d'
           # Positional label for a multi-line deficit no resolved node spans.
-          FALLBACK_RANGE_NAME = T.let('Lines %d-%d', String)
-
-          sig { params(nodes: T::Array[ASTResolver::SemanticNode]).void }
-          def initialize(nodes)
-            @nodes = nodes
-            @node_deficits = T.let({}, T::Hash[String, DeficitGroup])
-            @sort_keys = T.let({}, T::Hash[String, [Integer, Integer]])
-          end
+          FALLBACK_RANGE_NAME = 'Lines %d-%d'
 
           # Groups every deficit of the file under its innermost node.
           #
@@ -53,6 +46,13 @@ module SimpleCov
           sig { params(file: SimpleCov::SourceFile, method_deficits: T::Array[MethodDeficit]).returns(DeficitGroup) }
           def self.raw_group(file, method_deficits)
             DeficitGroup.new(lines: file.missed_lines, branches: file.missed_branches, method_deficits: method_deficits)
+          end
+
+          sig { params(nodes: T::Array[ASTResolver::SemanticNode]).void }
+          def initialize(nodes)
+            @nodes = nodes
+            @node_deficits = T.let({}, T::Hash[String, DeficitGroup])
+            @sort_keys = T.let({}, T::Hash[String, [Integer, Integer]])
           end
 
           # Orders groups by start line, then wider spans first so an enclosing node precedes the

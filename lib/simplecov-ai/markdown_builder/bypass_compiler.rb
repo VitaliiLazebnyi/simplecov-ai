@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -11,11 +11,11 @@ module SimpleCov
           extend T::Sig
 
           # Section heading for bypassed coverage
-          HEADING = T.let("## Ignored Coverage Bypasses\n\n", String)
+          HEADING = "## Ignored Coverage Bypasses\n\n"
           # Template for a bypassed node heading
-          NODE_HEADING_TEMPLATE = T.let('- %s', String)
+          NODE_HEADING_TEMPLATE = '- %s'
           # Template detailing the specific directive that ignored coverage for a node
-          REASON_TEMPLATE = T.let('  - **Bypass Present:** Coverage explicitly ignored via %s.', String)
+          REASON_TEMPLATE = '  - **Bypass Present:** Coverage explicitly ignored via %s.'
 
           sig { params(coverage_metrics: SimpleCov::Result, builder: MarkdownBuilder).void }
           def initialize(coverage_metrics, builder)
@@ -58,8 +58,10 @@ module SimpleCov
 
             regions = SkipRegions.of(file, SourceLines.of(file))
             reasons_by_node = ASTResolver::BypassScanner.attribute(nodes, regions)
-            nodes.select { |node| reasons_by_node.key?(node) }
-                 .map { |node| render_node(node, reasons_by_node.fetch(node)) }
+            nodes.filter_map do |node|
+              reasons = reasons_by_node[node]
+              render_node(node, reasons) if reasons
+            end
           end
 
           sig { params(node: ASTResolver::SemanticNode, reasons: T::Array[String]).returns(String) }

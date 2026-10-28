@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -14,16 +14,16 @@ module SimpleCov
           # Separator used to denote namespace nesting (e.g., Module::Class)
           NAMESPACE_SEPARATOR = T.let(ReceiverResolver::NAMESPACE_SEPARATOR, String)
           # Separator used to denote instance methods (e.g., Class#method)
-          INSTANCE_SEPARATOR = T.let('#', String)
+          INSTANCE_SEPARATOR = '#'
           # Separator used to denote singleton/class methods (e.g., Class.method)
-          SINGLETON_SEPARATOR = T.let('.', String)
+          SINGLETON_SEPARATOR = '.'
           # Label applied to nodes representing instance methods
-          TYPE_INSTANCE_METHOD = T.let('Instance Method', String)
+          TYPE_INSTANCE_METHOD = 'Instance Method'
           # Label applied to nodes representing singleton methods
-          TYPE_SINGLETON_METHOD = T.let('Singleton Method', String)
+          TYPE_SINGLETON_METHOD = 'Singleton Method'
           # Owner of a method defined at the top level of a file with a plain `def`: Ruby adds it
           # to Object (as a private method), and SimpleCov's method coverage names it that way too
-          TOP_LEVEL_INSTANCE_OWNER = T.let('Object', String)
+          TOP_LEVEL_INSTANCE_OWNER = 'Object'
 
           # @return [[String, SemanticNode, nil, Boolean]] The child context, the node's own
           #   SemanticNode (or nil), and whether children are in singleton scope.

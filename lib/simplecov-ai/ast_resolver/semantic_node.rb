@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -11,9 +11,9 @@ module SimpleCov
           extend T::Sig
 
           # The name Ruby itself gives the top-level execution context of a script.
-          ROOT_NAME = T.let('main', String)
+          ROOT_NAME = 'main'
           # Type label of the synthetic node that spans a whole file.
-          ROOT_TYPE = T.let('Root Script Scope', String)
+          ROOT_TYPE = 'Root Script Scope'
 
           sig { returns(String) }
           attr_reader :name, :type
@@ -25,18 +25,6 @@ module SimpleCov
           #   `Sample::Calc#sign`); nil for every other kind of node.
           sig { returns(T.nilable(String)) }
           attr_reader :method_name
-
-          sig do
-            params(name: String, type: String, start_line: Integer, end_line: Integer,
-                   method_name: T.nilable(String)).void
-          end
-          def initialize(name:, type:, start_line:, end_line:, method_name: nil)
-            @name = name
-            @type = type
-            @start_line = start_line
-            @end_line = end_line
-            @method_name = method_name
-          end
 
           # Builds the synthetic root node covering a whole file, so code outside any class or
           # method (and skip regions wrapping only such code) has a scope to attribute to.
@@ -61,9 +49,21 @@ module SimpleCov
               .returns(SemanticNode)
           end
           def self.spanning(ast_node, name:, type:, method_name: nil)
-            location = T.cast(ast_node.loc, Parser::Source::Map)
-            new(name: name, type: type, start_line: T.cast(location.line, Integer),
-                end_line: T.cast(location.last_line, Integer), method_name: method_name)
+            location = ast_node.loc
+            new(name: name, type: type, start_line: location.line, end_line: location.last_line,
+                method_name: method_name)
+          end
+
+          sig do
+            params(name: String, type: String, start_line: Integer, end_line: Integer,
+                   method_name: T.nilable(String)).void
+          end
+          def initialize(name:, type:, start_line:, end_line:, method_name: nil)
+            @name = name
+            @type = type
+            @start_line = start_line
+            @end_line = end_line
+            @method_name = method_name
           end
 
           # @return [Range<Integer>] The inclusive line range this node spans.

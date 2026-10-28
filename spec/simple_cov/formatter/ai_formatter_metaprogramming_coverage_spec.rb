@@ -61,6 +61,6 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
   end
 
   it 'lists each construct as its own node with the missed arm, in source order' do
-    expect(File.read(report_path)).to match(Regexp.new(expected_lines.join('.*'), Regexp::MULTILINE))
+    expect(File.read(report_path, encoding: Encoding::UTF_8)).to match(Regexp.new(expected_lines.join('.*'), Regexp::MULTILINE))
   end
 end

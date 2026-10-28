@@ -147,8 +147,8 @@ module EndToEnd
     coverage_dir = File.join(project_dir, 'coverage')
     report = File.join(coverage_dir, 'ai_report.md')
     probe = File.join(coverage_dir, 'descriptor_classes.txt')
-    Run.new(stdout, stderr, status, File.exist?(report) ? File.read(report) : nil,
-            File.exist?(probe) ? File.read(probe) : nil)
+    Run.new(stdout, stderr, status, File.exist?(report) ? File.read(report, encoding: Encoding::UTF_8) : nil,
+            File.exist?(probe) ? File.read(probe, encoding: Encoding::UTF_8) : nil)
   end
 
   # The child writes the report at SimpleCov.root, which Ruby resolves through symlinks.

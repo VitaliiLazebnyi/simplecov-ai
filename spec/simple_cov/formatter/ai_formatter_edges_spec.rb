@@ -28,7 +28,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
 
   def report_for(result)
     capture_stdout { described_class.new.format(result) }
-    File.read(report_path)
+    File.read(report_path, encoding: Encoding::UTF_8)
   end
 
   describe 'ASTResolver edge cases' do

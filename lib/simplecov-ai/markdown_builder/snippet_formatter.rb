@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -10,11 +10,11 @@ module SimpleCov
           extend T::Sig
 
           # Approximate maximum characters per line for truncation calculation
-          ESTIMATED_CHARS_PER_LINE = T.let(80, Integer)
+          ESTIMATED_CHARS_PER_LINE = 80
           # Suffix added to truncated snippets
-          TRUNCATION_ELLIPSIS = T.let('...', String)
+          TRUNCATION_ELLIPSIS = '...'
           # Template for identical snippet occurrences indicator
-          OCCURRENCE_TEMPLATE = T.let('(Occurrence %d of %d).', String)
+          OCCURRENCE_TEMPLATE = '(Occurrence %d of %d).'
 
           # Extracts and normalizes exact string literals from the source file arrays.
           #
@@ -23,10 +23,19 @@ module SimpleCov
           # @return [String] Joined snippet text.
           sig { params(line_nums: T::Array[Integer], source_lines: T::Array[String]).returns(String) }
           def fetch_snippet_text(line_nums, source_lines)
-            line_nums.select(&:positive?)
-                     .filter_map { |line_number| source_lines.at(line_number - 1)&.strip }
-                     .reject(&:empty?)
-                     .join(' ')
+            line_nums.filter_map { |line_number| snippet_line(line_number, source_lines) }.join(' ')
+          end
+
+          # @param line_number [Integer] A 1-based line coordinate.
+          # @param source_lines [Array<String>] The raw text lines of the file.
+          # @return [String, nil] The stripped text of the line; nil for a line outside the file
+          #   or one with no text.
+          sig { params(line_number: Integer, source_lines: T::Array[String]).returns(T.nilable(String)) }
+          def snippet_line(line_number, source_lines)
+            return nil unless line_number.positive?
+
+            text = source_lines.fetch(line_number - 1, '').strip
+            text unless text.empty?
           end
 
           # Extracts a byte range from a source line. SimpleCov reports branch columns as
@@ -41,7 +50,7 @@ module SimpleCov
           sig { params(line_text: String, start_col: Integer, end_col: Integer).returns(T.nilable(String)) }
           def byte_slice(line_text, start_col, end_col)
             bytes = line_text.b
-            return nil unless bytes.length >= end_col
+            return nil if bytes.length < end_col
 
             slice = bytes[start_col...end_col]
             return '' unless slice
@@ -143,9 +152,9 @@ module SimpleCov
 
             snippet = source_lines.at(line_num - 1).to_s.strip
             positions = occurrence_index(node, source_lines).fetch(snippet, [])
-            return '' unless positions.size > 1
+            return '' if positions.size <= 1
 
-            ordinal = T.must(positions.index(line_num)) + 1
+            ordinal = positions.count { |position| position <= line_num }
             Kernel.format(OCCURRENCE_TEMPLATE, ordinal, positions.size)
           end
 

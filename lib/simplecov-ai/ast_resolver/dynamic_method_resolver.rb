@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -18,7 +18,7 @@ module SimpleCov
           DEFINERS = T.let({ define_method: false, define_singleton_method: true }.freeze,
                            T::Hash[Symbol, T::Boolean])
           # Node types accepted as a literal method name.
-          LITERAL_NAME_TYPES = T.let(%i[sym str].freeze, T::Array[Symbol])
+          LITERAL_NAME_TYPES = %i[sym str].freeze
 
           # @param node [Parser::AST::Node] A node whose type is one of
           #   {MetaclassResolver::BLOCK_TYPES}.

@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -12,7 +12,7 @@ module SimpleCov
           extend T::Sig
 
           # The class name Ruby reports for the owner of a singleton method.
-          SINGLETON_OWNER_PATTERN = T.let(/\A#<Class:(.+)>\z/.freeze, Regexp)
+          SINGLETON_OWNER_PATTERN = /\A#<Class:(.+)>\z/.freeze
 
           # @return [String] The method's semantic name (`Klass#name` or `Klass.name`).
           const :name, String

@@ -45,7 +45,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::BranchEnriche
 
   it 'picks the decoder of the installed SimpleCov' do
     ruby_data_parser = defined?(SimpleCov::SourceFile::RubyDataParser) ? true : false
-    expected = ruby_data_parser ? described_class::RUBY_DATA_PARSER_DECODER : described_class::LEGACY_DECODER
+    expected = ruby_data_parser ? described_class::RubyDataParserDecoder : described_class::LegacyDecoder
     expect(described_class::DECODER).to equal(expected)
   end
 
@@ -60,15 +60,15 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::BranchEnriche
     stub_const('SimpleCov::SourceFile::RubyDataParser',
                Module.new { define_singleton_method(:call) { |descriptor| lookup.fetch(descriptor) } })
     file = source_file(path, live_coverage)
-    expect(described_class::RUBY_DATA_PARSER_DECODER.call(file, then_arm.to_s)).to eq(then_arm)
+    expect(described_class::RubyDataParserDecoder.call(file, then_arm.to_s)).to eq(then_arm)
   end
 
   it 'decodes through the private restore_ruby_data_structure of SimpleCov < 1.0' do
     file = source_file(path, live_coverage)
     lookup = { then_arm.to_s => then_arm }
     file.define_singleton_method(:restore_ruby_data_structure) { |descriptor| lookup.fetch(descriptor) }
-    file.singleton_class.send(:private, :restore_ruby_data_structure)
-    expect(described_class::LEGACY_DECODER.call(file, then_arm.to_s)).to eq(then_arm)
+    file.singleton_class.__send__(:private, :restore_ruby_data_structure)
+    expect(described_class::LegacyDecoder.call(file, then_arm.to_s)).to eq(then_arm)
   end
 
   it 'hands every arm descriptor, with its file, to the decoder' do
@@ -139,10 +139,27 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::BranchEnriche
     expect { described_class.enrich(source_file(path, [])) }.to raise_error(TypeError)
   end
 
-  # SimpleCov >= 1.0's parser rejects a descriptor that is not an array literal; the eval of
-  # older releases rejects a non-String just as SimpleCov's own branch building does.
+  # The error class differs between SimpleCov releases (the eval of SimpleCov < 1.0 and the
+  # RubyDataParser of 1.3 raise TypeError, the parser of 1.0-1.2 ArgumentError), so the
+  # expectation is taken from SimpleCov's own branch building on the same data.
   it 'raises like SimpleCov for a descriptor that is not an array' do
-    error = defined?(SimpleCov::SourceFile::RubyDataParser) ? ArgumentError : TypeError
-    expect { described_class.enrich(sign_file({ condition => { 42 => 0 } })) }.to raise_error(error)
+    simplecov_error = begin
+      sign_file({ condition => { 42 => 0 } }).branches
+    rescue StandardError => error
+      error.class
+    end
+    expect { described_class.enrich(sign_file({ condition => { 42 => 0 } })) }.to raise_error(simplecov_error)
+  end
+
+  it 'raises TypeError for a descriptor whose line or column is not an Integer, leaving the file to the decode guard' do
+    [2, 3, 4, 5].each do |position|
+      descriptor = then_arm.dup.tap { |arm| arm[position] = 2.5 }
+      expect { described_class.enrich(sign_file({ condition => { descriptor => 0 } })) }
+        .to raise_error(TypeError, 'branch descriptor positions must be Integers')
+    end
+  end
+
+  it 'ignores a descriptor with fewer than six elements' do
+    expect(described_class.enrich(sign_file({ condition => { then_arm.first(5) => 0 } }))).to eq({})
   end
 end

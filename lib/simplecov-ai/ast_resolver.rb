@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 require 'parser'
@@ -70,7 +70,7 @@ module SimpleCov
           return [] unless node
 
           current_context, semantic_node, child_singleton = NodeClassifier.classify(node, context, singleton)
-          nested = node.children.grep(Parser::AST::Node).flat_map do |child|
+          nested = NodeChildren.nodes(node).flat_map do |child|
             traverse(child, current_context, singleton: child_singleton)
           end
           semantic_node ? [semantic_node] + nested : nested

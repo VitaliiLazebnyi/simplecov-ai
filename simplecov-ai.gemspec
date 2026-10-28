@@ -4,7 +4,7 @@
 require 'openssl'
 
 version_content = File.read(File.expand_path('lib/simplecov-ai/version.rb', __dir__))
-version_match = version_content.match(/VERSION\s*=\s*T\.let\(['"]([^'"]+)['"],\s*String\)/)
+version_match = version_content.match(/VERSION\s*=\s*['"]([^'"]+)['"]/)
 version = version_match&.captures&.first or
   raise 'Unable to parse VERSION from lib/simplecov-ai/version.rb; the constant definition may have changed'
 
@@ -40,7 +40,7 @@ Gem::Specification.new do |spec|
     signing_disabled = File.expand_path('certs/signing-disabled', __dir__)
     %i[default_key_path default_cert_path].each do |lookup|
       # Removed before being redefined so `ruby -w` does not report a method redefinition.
-      Gem.singleton_class.send(:remove_method, lookup) if Gem.singleton_class.method_defined?(lookup)
+      Gem.singleton_class.__send__(:remove_method, lookup) if Gem.singleton_class.method_defined?(lookup)
       Gem.define_singleton_method(lookup) { signing_disabled }
     end
   else
@@ -67,31 +67,23 @@ Gem::Specification.new do |spec|
   # `simplecov < 2.0` ceiling below: the grammar table in lib/simplecov-ai/ast_resolver/parser_backend.rb
   # and the overlay in sorbet/rbi/parser.rbi only know the 3.x line.
   spec.add_dependency 'parser', '>= 3.1.0', '< 4'
-  spec.add_dependency 'sorbet-runtime', '~> 0.5'
+  spec.add_dependency 'sorbet-runtime', '>= 0.5', '< 0.7'
 
   # SimpleCov floor per SCAI-REQ-016; upper-bounded below 2.0 because branch enrichment depends
   # on the internal branch-descriptor layout, which is only verified across the 0.18–1.x line.
   spec.add_dependency 'simplecov', '>= 0.18', '< 2.0'
 
-  # Development & testing dependencies that install on every supported Ruby and platform. The
-  # Sorbet toolchain (sorbet, tapioca, rubocop-sorbet, standard-sorbet, yard-sorbet) lives in the
-  # Gemfile because sorbet-static has no Windows, JRuby or TruffleRuby builds. Floors track the
-  # newest release lines that still resolve on Ruby 2.7.
-  spec.add_development_dependency 'base64'
-  spec.add_development_dependency 'benchmark'
-  spec.add_development_dependency 'bundler-audit', '~> 0.9.3'
-  spec.add_development_dependency 'logger'
-  spec.add_development_dependency 'ostruct'
-  spec.add_development_dependency 'rake', '~> 13.0'
+  # The test bundle, which installs on every supported Ruby, engine and platform and is shared
+  # by the SimpleCov compatibility gemfiles (gemfiles/*.gemfile). The default gems listed here
+  # left Ruby's default set in 3.4 / 4.0 and are required by the suite's dependencies. The
+  # development tooling lives in the Gemfile (see there).
+  spec.add_development_dependency 'base64', '~> 0.3'
+  spec.add_development_dependency 'benchmark', '~> 0.5'
+  spec.add_development_dependency 'logger', '~> 1.7'
+  spec.add_development_dependency 'ostruct', '~> 0.6'
+  spec.add_development_dependency 'rake', '~> 13.4'
   spec.add_development_dependency 'rspec', '~> 3.13'
-  spec.add_development_dependency 'rubocop', '~> 1.90'
-  spec.add_development_dependency 'rubocop-packaging', '~> 0.6'
-  spec.add_development_dependency 'rubocop-performance', '~> 1.27'
-  spec.add_development_dependency 'rubocop-rake', '~> 0.7'
-  spec.add_development_dependency 'rubocop-rspec', '~> 3.10'
-  spec.add_development_dependency 'rubocop-thread_safety', '~> 0.7'
-  spec.add_development_dependency 'tsort'
-  spec.add_development_dependency 'yard', '~> 0.9.45'
+  spec.add_development_dependency 'tsort', '~> 0.2'
 
   # Gem files: glob relative to the gemspec directory (not the process CWD) and include only
   # regular files so directory entries are never packaged.

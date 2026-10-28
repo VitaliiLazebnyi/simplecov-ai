@@ -93,7 +93,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
       'Missing coverage for `else` branch: `:case_else`',
       'Missing coverage for `then` branch: `obj&.name`'
     )
-    expect(File.read(report_path)).to match(pattern)
+    expect(File.read(report_path, encoding: Encoding::UTF_8)).to match(pattern)
   end
 
   it 'lists the loop and pattern-matching deficits in source order' do
@@ -103,7 +103,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
       'Missing coverage for `in` branch: `:pattern_two`',
       'Missing coverage for `else` branch: `:pattern_else`'
     )
-    expect(File.read(report_path)).to match(pattern)
+    expect(File.read(report_path, encoding: Encoding::UTF_8)).to match(pattern)
   end
 
   it 'lists the edge-case deficits in source order' do
@@ -113,10 +113,11 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
       'Missing coverage for `then` branch: `obj&.a`',
       'Missing coverage for `then` branch: `obj&.a&.b`'
     )
-    expect(File.read(report_path)).to match(pattern)
+    expect(File.read(report_path, encoding: Encoding::UTF_8)).to match(pattern)
   end
 
   it 'attributes every deficit to a method of the fixture module, in source order' do
-    expect(File.read(report_path).scan(/^- `(ExhaustiveBranching\.\w+)`$/).flatten).to eq(expected_headings)
+    headings = File.read(report_path, encoding: Encoding::UTF_8).scan(/^- `(ExhaustiveBranching\.\w+)`$/).flatten
+    expect(headings).to eq(expected_headings)
   end
 end

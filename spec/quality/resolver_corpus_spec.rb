@@ -26,7 +26,7 @@ module ResolverCorpus
     eligible = eligible_files
     return eligible if MAX_FILES.zero? || eligible.size <= MAX_FILES
 
-    eligible.each_slice((eligible.size.to_f / MAX_FILES).ceil).map(&:first)
+    eligible.each_slice(eligible.size.fdiv(MAX_FILES).ceil).map(&:first)
   end
 
   def eligible_files

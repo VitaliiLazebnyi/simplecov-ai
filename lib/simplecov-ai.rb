@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 require 'sorbet-runtime'
@@ -24,9 +24,9 @@ module SimpleCov
       extend T::Sig
 
       # STDOUT notice printed after the report is written, unless the digest itself is echoed
-      WRITTEN_MESSAGE = T.let('AI coverage digest written to %s', String)
+      WRITTEN_MESSAGE = 'AI coverage digest written to %s'
       # STDERR notice printed when the report cannot be written, naming the path and the error
-      WRITE_FAILED_MESSAGE = T.let('AI coverage digest could not be written to %s (%s)', String)
+      WRITE_FAILED_MESSAGE = 'AI coverage digest could not be written to %s (%s)'
 
       # Retrieves the global configuration for the AI formatter.
       # The instantiation pattern ensures that defaults are securely lazily loaded
@@ -118,7 +118,7 @@ module SimpleCov
       def absolute_report_path(report_path)
         return report_path if Pathname.new(report_path).absolute?
 
-        File.join(T.cast(SimpleCov.root, String), report_path)
+        File.join(SimpleCov.root, report_path)
       end
     end
   end

@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -16,11 +16,20 @@ module SimpleCov
           extend T::Sig
 
           # Template for file-level headings in both sections
-          FILE_HEADING_TEMPLATE = T.let('### %s', String)
+          FILE_HEADING_TEMPLATE = '### %s'
 
           # @return [Integer] The number of file blocks written in full.
           sig { returns(Integer) }
           attr_reader :written_blocks
+
+          # Renders the heading line of a file block from the file's project-relative path.
+          #
+          # @param file [SimpleCov::SourceFile] The file the block describes.
+          # @return [String] The `### ` heading with the path inside a code span.
+          sig { params(file: SimpleCov::SourceFile).returns(String) }
+          def self.file_heading(file)
+            format(FILE_HEADING_TEMPLATE, InlineCode.span(file.project_filename.delete_prefix('/')))
+          end
 
           # @param budget [ReportBudget] The budget every fragment is admitted through.
           # @param heading [String] The section heading, emitted with the first file block.
@@ -31,15 +40,6 @@ module SimpleCov
             @heading_pending = T.let(true, T::Boolean)
             @closed = T.let(false, T::Boolean)
             @written_blocks = T.let(0, Integer)
-          end
-
-          # Renders the heading line of a file block from the file's project-relative path.
-          #
-          # @param file [SimpleCov::SourceFile] The file the block describes.
-          # @return [String] The `### ` heading with the path inside a code span.
-          sig { params(file: SimpleCov::SourceFile).returns(String) }
-          def self.file_heading(file)
-            format(FILE_HEADING_TEMPLATE, InlineCode.span(file.project_filename.delete_prefix('/')))
           end
 
           # @return [Boolean] Whether the budget has stopped this section.

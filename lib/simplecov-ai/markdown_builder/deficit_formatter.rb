@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -11,17 +11,17 @@ module SimpleCov
           include SnippetFormatter
 
           # Error message for AST parsing failures
-          ERROR_AST_FAILED = T.let('  - **ERROR:** AST Parsing Failed. Showing raw line numbers instead.', String)
+          ERROR_AST_FAILED = '  - **ERROR:** AST Parsing Failed. Showing raw line numbers instead.'
           # Template for node-level deficit headings
-          NODE_HEADING_TEMPLATE = T.let('- %s', String)
+          NODE_HEADING_TEMPLATE = '- %s'
           # Coarse-grained deficit summary message
-          DEFICIT_COARSE = T.let('  - **Deficit:** Contains unexecuted lines or branches.', String)
+          DEFICIT_COARSE = '  - **Deficit:** Contains unexecuted lines or branches.'
           # Template for a specific line deficit
-          LINE_DEFICIT_TMPL = T.let('  - **Line Deficit:** [L%d] %s %s', String)
+          LINE_DEFICIT_TMPL = '  - **Line Deficit:** [L%d] %s %s'
           # Template for a specific branch deficit
-          BRANCH_DEFICIT_TMPL = T.let('  - **Branch Deficit:** [L%s] Missing coverage for %s branch: %s', String)
+          BRANCH_DEFICIT_TMPL = '  - **Branch Deficit:** [L%s] Missing coverage for %s branch: %s'
           # Template for a method SimpleCov's method coverage reported as never invoked
-          METHOD_DEFICIT_TMPL = T.let('  - **Method Deficit:** [L%s] %s never invoked', String)
+          METHOD_DEFICIT_TMPL = '  - **Method Deficit:** [L%s] %s never invoked'
 
           # @param config [Configuration] The runtime toggles (granularity, snippet limits).
           # @param source_lines [Array<String>] The file's source, for snippets.

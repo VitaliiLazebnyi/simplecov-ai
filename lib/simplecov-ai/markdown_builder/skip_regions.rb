@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -20,10 +20,7 @@ module SimpleCov
           extend T::Sig
 
           # Reason reported when the directive that produced a region cannot be located.
-          FALLBACK_REASON = T.let('coverage skipped by SimpleCov', String)
-          # Readers of the configured nocov token, newest SimpleCov first: the public
-          # `nocov_token` reader warns about its own deprecation on SimpleCov >= 1.0.
-          NOCOV_TOKEN_READERS = T.let(%i[current_nocov_token nocov_token].freeze, T::Array[Symbol])
+          FALLBACK_REASON = 'coverage skipped by SimpleCov'
 
           # Cheap pre-check (no AST parse) for whether SimpleCov skipped anything in the file.
           #
@@ -55,7 +52,8 @@ module SimpleCov
           # `SourceFile#branches` (SimpleCov >= 0.18) is empty when branch coverage is off.
           sig { params(file: SimpleCov::SourceFile).returns(T::Array[T::Range[Integer]]) }
           def self.skipped_branch_ranges(file)
-            file.branches.select(&:skipped?).map { |branch| branch.start_line..branch.end_line }.uniq
+            ranges = file.branches.filter_map { |branch| branch.start_line..branch.end_line if branch.skipped? }
+            ranges.uniq
           end
 
           # A region holding nothing SimpleCov would count — comments and blank lines only, such as
@@ -63,8 +61,9 @@ module SimpleCov
           # dropped; a region with at least one relevant line is a bypass, whatever else it wraps.
           sig { params(file: SimpleCov::SourceFile).returns(T::Array[T::Range[Integer]]) }
           def self.skipped_line_ranges(file)
-            contiguous_runs(file.skipped_lines).select { |run| run.any? { |line| relevant?(line) } }
-                                               .map { |run| run.fetch(0).line_number..run.fetch(-1).line_number }
+            contiguous_runs(file.skipped_lines).filter_map do |run|
+              run.fetch(0).line_number..run.fetch(-1).line_number if run.any? { |line| relevant?(line) }
+            end
           end
 
           # SimpleCov lists skipped lines in line order, so a run closes at the first gap.
@@ -113,10 +112,11 @@ module SimpleCov
             /#\s*(?:simplecov\s*:\s*disable\b|:#{Regexp.escape(nocov_token)}:).*/
           end
 
+          # The configured nocov token, through `current_nocov_token` where SimpleCov (>= 1.0) has
+          # it: the public `nocov_token` reader warns about its own deprecation there.
           sig { returns(String) }
           def self.nocov_token
-            reader = NOCOV_TOKEN_READERS.find { |candidate| SimpleCov.respond_to?(candidate) }
-            T.cast(SimpleCov.public_send(T.must(reader)), String)
+            SimpleCov.respond_to?(:current_nocov_token) ? SimpleCov.current_nocov_token : SimpleCov.nocov_token
           end
 
           private_class_method :skipped_branch_ranges, :skipped_line_ranges, :contiguous_runs, :relevant?, :reason_for,

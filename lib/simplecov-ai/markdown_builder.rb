@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 require_relative 'ast_resolver'
@@ -28,35 +28,32 @@ module SimpleCov
         extend T::Sig
 
         # Text representation for a passed coverage check
-        STATUS_PASSED = T.let('PASSED', String)
+        STATUS_PASSED = 'PASSED'
         # Text representation for a failed coverage check
-        STATUS_FAILED = T.let('FAILED', String)
+        STATUS_FAILED = 'FAILED'
         # Line-coverage label shown when line coverage was not enabled for the run (SimpleCov
         # >= 1.0 allows a branch- or method-only run)
-        LINE_DISABLED_LABEL = T.let('N/A (line coverage not enabled)', String)
+        LINE_DISABLED_LABEL = 'N/A (line coverage not enabled)'
         # Branch-coverage label shown when branch coverage was not enabled for the run
-        BRANCH_DISABLED_LABEL = T.let('N/A (branch coverage not enabled)', String)
+        BRANCH_DISABLED_LABEL = 'N/A (branch coverage not enabled)'
         # Label shown for a figure SimpleCov could not compute from a corrupt resultset
-        UNDECODABLE_LABEL = T.let('N/A (coverage data could not be decoded)', String)
+        UNDECODABLE_LABEL = 'N/A (coverage data could not be decoded)'
         # Stands in for a figure SimpleCov raised on while decoding: not a number, so it never
         # compares as perfect and the status reads FAILED
         UNDECODABLE_PERCENT = T.let(Float::NAN, Float)
         # Percentages are printed with one decimal, floored (see #figure_label)
-        PERCENT_TEMPLATE = T.let('%.1f%%', String)
+        PERCENT_TEMPLATE = '%.1f%%'
 
         # Template for the report header; the method line is empty unless SimpleCov measured
         # method coverage, keeping the header byte-identical for every other run.
-        HEADER_TEMPLATE = T.let(
-          "# AI Coverage Digest\n" \
-          "**Status:** %<status>s\n" \
-          "**Global Line Coverage:** %<line>s\n" \
-          "**Global Branch Coverage:** %<branch>s\n" \
-          '%<method_line>s' \
-          "**Generated At:** %<time>s (Local Timezone)\n",
-          String
-        )
+        HEADER_TEMPLATE = "# AI Coverage Digest\n" \
+                          "**Status:** %<status>s\n" \
+                          "**Global Line Coverage:** %<line>s\n" \
+                          "**Global Branch Coverage:** %<branch>s\n" \
+                          '%<method_line>s' \
+                          "**Generated At:** %<time>s (Local Timezone)\n"
         # Header line for SimpleCov >= 1.0 method coverage (`enable_coverage :method`)
-        METHOD_COVERAGE_LINE = T.let("**Global Method Coverage:** %<method>s\n", String)
+        METHOD_COVERAGE_LINE = "**Global Method Coverage:** %<method>s\n"
 
         # Initializes the Markdown sequence compilation.
         #
@@ -64,8 +61,8 @@ module SimpleCov
         # @param config [Configuration] Pre-registered runtime toggles
         sig { params(coverage_metrics: SimpleCov::Result, config: Configuration).void }
         def initialize(coverage_metrics, config)
-          @coverage_metrics = T.let(coverage_metrics, SimpleCov::Result)
-          @config = T.let(config, Configuration)
+          @coverage_metrics = coverage_metrics
+          @config = config
           @buffer = T.let(StringIO.new, StringIO)
           @ast_cache = T.let({}, T::Hash[String, T.nilable(T::Array[ASTResolver::SemanticNode])])
         end
@@ -169,7 +166,7 @@ module SimpleCov
           return nil if total.nil?
           return Constants::PERFECT_COVERAGE_PERCENT if total.zero?
 
-          covered.to_f / total * Constants::PERFECT_COVERAGE_PERCENT
+          (covered || 0).fdiv(total) * Constants::PERFECT_COVERAGE_PERCENT
         end
       end
     end

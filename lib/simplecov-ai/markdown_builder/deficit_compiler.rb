@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -13,10 +13,10 @@ module SimpleCov
           extend T::Sig
 
           # Header for the coverage deficits section
-          HEADING = T.let("## Coverage Deficits\n\n", String)
+          HEADING = "## Coverage Deficits\n\n"
           # Sort figure of a file whose coverage SimpleCov cannot decode: below any real
           # percentage, so the file precedes every decodable deficit file.
-          UNDECODABLE_COVERAGE = T.let(-1.0, Float)
+          UNDECODABLE_COVERAGE = -1.0
 
           sig { params(coverage_metrics: SimpleCov::Result, config: Configuration, builder: MarkdownBuilder).void }
           def initialize(coverage_metrics, config, builder)

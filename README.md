@@ -58,7 +58,7 @@ require 'simplecov-ai'
 
 SimpleCov.start do
   enable_coverage :branch
-  skip '/spec/'         # SimpleCov >= 1.0; use `add_filter '/spec/'` on 0.x (1.x deprecates it)
+  skip '/spec/' # SimpleCov >= 1.0; use `add_filter '/spec/'` on 0.x (1.x deprecates it)
 end
 
 SimpleCov.formatter = SimpleCov::Formatter::AIFormatter

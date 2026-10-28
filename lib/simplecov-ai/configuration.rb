@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -12,22 +12,22 @@ module SimpleCov
         extend T::Sig
 
         # File name of the report inside SimpleCov's coverage directory when no report_path is set
-        DEFAULT_REPORT_FILENAME = T.let('ai_report.md', String)
+        DEFAULT_REPORT_FILENAME = 'ai_report.md'
         # Default output path of the report: {DEFAULT_REPORT_FILENAME} under SimpleCov's default
         # `coverage_dir` (a custom `coverage_dir` is honoured at format time)
-        DEFAULT_REPORT_PATH = T.let("coverage/#{DEFAULT_REPORT_FILENAME}", String)
+        DEFAULT_REPORT_PATH = "coverage/#{DEFAULT_REPORT_FILENAME}"
         # Default maximum size of the output file in kilobytes
-        DEFAULT_MAX_FILE_SIZE_KB = T.let(50, Integer)
+        DEFAULT_MAX_FILE_SIZE_KB = 50
         # Default maximum number of lines for a single snippet
-        DEFAULT_MAX_SNIPPET_LINES = T.let(5, Integer)
+        DEFAULT_MAX_SNIPPET_LINES = 5
         # Default flag for outputting to console
         DEFAULT_OUTPUT_TO_CONSOLE = T.let(false, T::Boolean)
         # Default granularity level of the report
-        DEFAULT_GRANULARITY = T.let(:fine, Symbol)
+        DEFAULT_GRANULARITY = :fine
         # Default flag for including bypassed regions in the report
         DEFAULT_INCLUDE_BYPASSES = T.let(true, T::Boolean)
         # The set of granularity levels the report generator understands.
-        VALID_GRANULARITIES = T.let(%i[fine coarse].freeze, T::Array[Symbol])
+        VALID_GRANULARITIES = %i[fine coarse].freeze
 
         # The maximum allowed size, in kilobytes, of the generated report; both the deficit and
         # the bypass section stop at this ceiling so the written file never exceeds it.
