@@ -76,11 +76,14 @@ Gem::Specification.new do |spec|
   # The test bundle, which installs on every supported Ruby, engine and platform and is shared
   # by the SimpleCov compatibility gemfiles (gemfiles/*.gemfile). The default gems listed here
   # left Ruby's default set in 3.4 / 4.0 and are required by the suite's dependencies. The
-  # development tooling lives in the Gemfile (see there).
+  # development tooling lives in the Gemfile (see there). Prism is the parser backend the
+  # formatter prefers when it is installed; the suite drives that backend with the newest
+  # Prism every SimpleCov gemfile resolves, not with whatever Prism a Ruby bundles.
   spec.add_development_dependency 'base64', '~> 0.3'
   spec.add_development_dependency 'benchmark', '~> 0.5'
   spec.add_development_dependency 'logger', '~> 1.7'
   spec.add_development_dependency 'ostruct', '~> 0.6'
+  spec.add_development_dependency 'prism', '~> 1.9'
   spec.add_development_dependency 'rake', '~> 13.4'
   spec.add_development_dependency 'rspec', '~> 3.13'
   spec.add_development_dependency 'tsort', '~> 0.2'

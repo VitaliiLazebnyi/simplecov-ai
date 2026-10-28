@@ -2,7 +2,7 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-# The development bundle always provides Prism >= 1.2 (rubocop-ast depends on it), so the
+# The test bundle always provides Prism >= 1.9 (a development dependency in the gemspec), so the
 # translation layer is loaded eagerly here and the examples can drive both backends on every
 # Ruby, stubbing versions and constants to reach each fallback.
 require 'prism'
