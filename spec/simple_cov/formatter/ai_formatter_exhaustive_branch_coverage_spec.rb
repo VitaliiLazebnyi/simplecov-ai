@@ -30,8 +30,18 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
     headings.insert(headings.index('ExhaustiveBranching.test_chained_safe_nav'), one_line_pattern)
   end
 
+  # Ruby 2.7 flags the fixture's pattern matching as experimental while it compiles the file, so
+  # that notice is asserted as the fixture is first loaded instead of being left to reach STDERR;
+  # every later Ruby loads it silently.
+  def load_fixture
+    return if defined?(ExhaustiveBranching)
+
+    notice = Gem::Version.new(RUBY_VERSION) < Gem::Version.new('3.0') ? /Pattern matching is experimental/ : ''
+    expect { require_relative '../../fixtures/exhaustive_branching' }.to output(notice).to_stderr
+  end
+
   before do
-    require_relative '../../fixtures/exhaustive_branching'
+    load_fixture
 
     # Execute specific paths to ensure at least one missed branch per construct
     ExhaustiveBranching.test_if_else(true)

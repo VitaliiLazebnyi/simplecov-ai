@@ -131,10 +131,11 @@ module SimpleCov
           end
 
           # Compares dotted version strings as RubyGems does: "3.3" and "3.3.0" are equal, and
-          # "3.3" is below "3.3.7.2".
+          # "3.3" is below "3.3.7.2". (A requirement, not `Gem::Version#<=>`: RubyGems < 3.2,
+          # shipped with Ruby 2.7, cannot compare a version with a String.)
           sig { params(version: String, floor: String).returns(T::Boolean) }
           def self.below?(version, floor)
-            Gem::Version.new(floor) > version
+            Gem::Requirement.new("< #{floor}").satisfied_by?(Gem::Version.new(version))
           end
 
           sig { params(ruby_version: String).returns(String) }

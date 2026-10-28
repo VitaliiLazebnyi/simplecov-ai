@@ -54,11 +54,13 @@ bundle exec rake outdated   # every gem, Ruby, Action and tool at its newest rel
 - **Dependency freshness** (`script/outdated.rb`): `bundle outdated`, `.ruby-version` against the
   newest Ruby release, every exact Ruby in the workflows against the newest release of its series,
   every Action against the commit of its newest release tag, and the downloaded tools and the
-  Semgrep image against their newest releases. The only exceptions are the holds in
+  Semgrep image against their newest releases, and every container image against the digest its
+  tag points to. The only exceptions are the holds in
   `script/outdated_holds.yml`, each with the upstream constraint that blocks it.
 - **Test matrix**: MRI 2.7, 3.2, 3.3, 3.4 and 4.0 (newest patch release each, each resolving its
-  own test bundle), the lockfile bundle, Windows, JRuby and TruffleRuby, and every SimpleCov line
-  from 0.18 to 1.3 (`gemfiles/`).
+  own test bundle; Ruby 2.7 in its official Docker image, as `ruby/setup-ruby` has no 2.7 build
+  for the current runner image), the lockfile bundle, Windows, JRuby and TruffleRuby, and every
+  SimpleCov line from 0.18 to 1.3 (`gemfiles/`).
 - **Linters and scanners**: actionlint (with ShellCheck on every `run:` script), ShellCheck on
   `script/`, `bin/` and the hook, zizmor (pedantic), markdownlint (`.markdownlint.yml`), typos
   (`_typos.toml`), Semgrep (`p/ruby`, `p/secrets`, `p/security-audit`, `p/github-actions`),
@@ -89,7 +91,7 @@ Locally, `actionlint`, `shellcheck`, `zizmor --offline --persona pedantic .githu
 - **Behaviour is specified.** Every behavioural fix needs a regression spec, and every surviving
   mutant needs a test that kills it.
 - **Types.** Keep `lib/` at `typed: strong`. Gem methods `lib/` calls are typed in the overlays
-  `sorbet/rbi/parser.rbi`, `prism.rbi` and `simplecov.rbi` (keep their arity identical to the
+  `sorbet/rbi/parser.rbi`, `prism.rbi`, `simplecov.rbi` and `rubygems.rbi` (keep their arity identical to the
   generated definitions); type-checker-only declarations live in `sorbet/rbi/shims.rbi`.
 - **Public API needs YARD docs.** Documentation coverage must stay at 100%.
 - **Fixtures with asserted line numbers.** `spec/fixtures/resolver_constructs.rb` is parsed, not

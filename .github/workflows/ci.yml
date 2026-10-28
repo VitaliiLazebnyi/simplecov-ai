@@ -143,7 +143,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ruby: ["2.7.8", "3.2.11", "3.3.13", "3.4.12", "4.0.9"]
+        ruby: ["3.2.11", "3.3.13", "3.4.12", "4.0.9"]
     env:
       RUBYOPT: -w -W:deprecated
     steps:
@@ -162,6 +162,37 @@ jobs:
         EXPECTED_RUBY: ${{ matrix.ruby }}
       run: script/check_ruby.sh "$EXPECTED_RUBY"
     - run: bundle exec rspec
+
+  # The supported floor, Ruby 2.7, runs in its official image: ruby/setup-ruby has no Ruby 2.7
+  # build for ubuntu-26.04 (2.7 reached its end of life before that image existed). It runs the
+  # default bundle and the oldest supported SimpleCov. Only the suite runs with `-w`: the Bundler
+  # that ships with Ruby 2.7 trips Ruby's own verbose-mode diagnostics while it installs.
+  test-ruby27:
+    name: RSpec (Ruby 2.7.8, ${{ matrix.gemfile }})
+    runs-on: ubuntu-26.04
+    container:
+      image: ruby:2.7.8-bullseye@sha256:2347de892e419c7160fc21dec721d5952736909f8c3fbb7f84cb4a07aaf9ce7d
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        gemfile: [Gemfile, gemfiles/simplecov_0.18.gemfile]
+    env:
+      BUNDLE_GEMFILE: ${{ matrix.gemfile }}
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Resolve the test bundle for this Ruby (see the note at the top of this file)
+      run: rm -f Gemfile.lock
+    - name: Check the Ruby version
+      run: script/check_ruby.sh "2.7.8"
+    - run: bundle install --jobs 4
+    - run: bundle exec rspec
+      env:
+        RUBYOPT: -w -W:deprecated
 
   # The lockfile Ruby once more, against the committed Gemfile.lock: the exact bundle the other
   # gates use.
@@ -244,7 +275,7 @@ jobs:
     - run: bundle exec rspec
 
   # Every SimpleCov release line inside the gemspec's `>= 0.18, < 2.0` range, each from its own
-  # gemfile (gemfiles/simplecov_<line>.gemfile); Ruby 2.7 additionally covers the floor.
+  # gemfile (gemfiles/simplecov_<line>.gemfile); test-ruby27 additionally covers the floor.
   simplecov-compat:
     name: RSpec (SimpleCov ${{ matrix.simplecov }}, Ruby ${{ matrix.ruby }})
     runs-on: ubuntu-26.04
@@ -255,9 +286,6 @@ jobs:
       matrix:
         ruby: ["3.4.12"]
         simplecov: ["0.18", "0.21", "0.22", "1.0", "1.1", "1.2", "1.3"]
-        include:
-        - ruby: "2.7.8"
-          simplecov: "0.18"
     env:
       BUNDLE_GEMFILE: gemfiles/simplecov_${{ matrix.simplecov }}.gemfile
       RUBYOPT: -w -W:deprecated
@@ -303,7 +331,7 @@ jobs:
   warning-gate:
     name: Warning gate
     if: ${{ !cancelled() }}
-    needs: [lint, typecheck, docs, smells, build, outdated, test, test-lockfile, test-windows, test-engines, simplecov-compat, markdownlint, typos]
+    needs: [lint, typecheck, docs, smells, build, outdated, test, test-ruby27, test-lockfile, test-windows, test-engines, simplecov-compat, markdownlint, typos]
     runs-on: ubuntu-26.04
     permissions:
       actions: read # reads the logs of the other jobs of this run
