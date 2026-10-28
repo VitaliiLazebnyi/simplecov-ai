@@ -29,16 +29,8 @@ module SimpleCov
           # @return [Integer] The number of files with bypasses that were omitted or cut short.
           sig { params(budget: ReportBudget).returns(Integer) }
           def write_bypasses(budget)
-            writer = SectionWriter.new(budget, HEADING)
-            bypassed_file_count = 0
-            @coverage_metrics.files.each do |file|
-              node_fragments = render_file(file)
-              next if node_fragments.empty?
-
-              bypassed_file_count += 1
-              writer.write_file_block(SectionWriter.file_heading(file), node_fragments)
-            end
-            bypassed_file_count - writer.written_blocks
+            blocks = @coverage_metrics.files.to_a.filter_map { |file| file_block(file) }
+            SectionWriter.new(budget, HEADING).write_blocks(blocks)
           end
 
           private
@@ -46,6 +38,13 @@ module SimpleCov
           # The expensive AST resolution only runs for files SimpleCov actually skipped
           # something in; a file whose AST cannot be resolved reports no bypasses, and a file
           # whose coverage data SimpleCov cannot decode reports the decode guard's error entry.
+          # The heading and node fragments of a file with bypasses; nil for a file without any.
+          sig { params(file: SimpleCov::SourceFile).returns(T.nilable([String, T::Array[String]])) }
+          def file_block(file)
+            node_fragments = render_file(file)
+            [SectionWriter.file_heading(file), node_fragments] unless node_fragments.empty?
+          end
+
           sig { params(file: SimpleCov::SourceFile).returns(T::Array[String]) }
           def render_file(file)
             DecodeGuard.render { SkipRegions.any?(file) ? render_skip_regions(file) : [] }
@@ -56,8 +55,14 @@ module SimpleCov
             nodes = @builder.try_resolve_ast(file.filename)
             return [] unless nodes
 
-            regions = SkipRegions.of(file, SourceLines.of(file))
-            reasons_by_node = ASTResolver::BypassScanner.attribute(nodes, regions)
+            render_nodes(nodes, ASTResolver::BypassScanner.attribute(nodes, SkipRegions.of(file, SourceLines.of(file))))
+          end
+
+          sig do
+            params(nodes: T::Array[ASTResolver::SemanticNode], reasons_by_node: ASTResolver::BypassScanner::ReasonsByNode)
+              .returns(T::Array[String])
+          end
+          def render_nodes(nodes, reasons_by_node)
             nodes.filter_map do |node|
               reasons = reasons_by_node[node]
               render_node(node, reasons) if reasons

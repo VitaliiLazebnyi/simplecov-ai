@@ -62,13 +62,16 @@ module SimpleCov
             @buffer.write(fragment)
           end
 
-          # Appends the truncation notice naming what the budget left out.
+          # Appends the truncation notice naming what the budget left out, when it left out
+          # anything; a report that fit carries no notice.
           #
           # @param omitted_deficit_files [Integer] Deficit files omitted or cut short.
           # @param omitted_bypass_files [Integer] Bypass files omitted or cut short.
           # @return [void]
           sig { params(omitted_deficit_files: Integer, omitted_bypass_files: Integer).void }
           def write_notice(omitted_deficit_files, omitted_bypass_files)
+            return if (omitted_deficit_files + omitted_bypass_files).zero?
+
             write(notice(omitted_deficit_files, omitted_bypass_files))
           end
 

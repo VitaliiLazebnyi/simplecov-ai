@@ -37,6 +37,14 @@ module Parser
     end
   end
 
+  module Builders
+    class Default
+      # The value of a `[value, location]` token.
+      sig { params(token: T::Array[BasicObject]).returns(BasicObject) }
+      def value(token); end
+    end
+  end
+
   class Diagnostic
     class Engine
       sig { params(_arg0: T::Boolean).returns(T::Boolean) }

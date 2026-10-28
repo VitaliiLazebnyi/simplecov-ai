@@ -18,6 +18,32 @@ module SimpleCov
           # percentage, so the file precedes every decodable deficit file.
           UNDECODABLE_COVERAGE = -1.0
 
+          # Orders deficit files lowest-coverage first, by path among equals; a file whose
+          # coverage SimpleCov cannot decode sorts as {UNDECODABLE_COVERAGE}, first of all.
+          #
+          # @api private
+          # @param file [SimpleCov::SourceFile] A deficit file.
+          # @return [Array(Float, String)] The sort key.
+          sig { params(file: SimpleCov::SourceFile).returns([Float, String]) }
+          def self.sort_key(file)
+            [DecodeGuard.attempt(UNDECODABLE_COVERAGE) { file.covered_percent }, file.filename]
+          end
+
+          # A file only counts as fully covered when every criterion SimpleCov measured for it
+          # is perfect, by SimpleCov's own verdicts: no missed line, no missed branch (there are
+          # none when branch coverage is off, and skipped ones do not count) and no missed
+          # method (SimpleCov >= 1.0 with `enable_coverage :method`; otherwise there are no
+          # methods to miss).
+          #
+          # @api private
+          # @param file [SimpleCov::SourceFile] The file to judge.
+          # @param method_deficits [Array<MethodDeficit>] Its never-invoked methods, when counted.
+          # @return [Boolean] Whether nothing in the file is missed.
+          sig { params(file: SimpleCov::SourceFile, method_deficits: T::Array[MethodDeficit]).returns(T::Boolean) }
+          def self.fully_covered?(file, method_deficits)
+            file.missed_lines.empty? && file.missed_branches.empty? && method_deficits.empty?
+          end
+
           sig { params(coverage_metrics: SimpleCov::Result, config: Configuration, builder: MarkdownBuilder).void }
           def initialize(coverage_metrics, config, builder)
             @coverage_metrics = coverage_metrics
@@ -37,14 +63,7 @@ module SimpleCov
           # @return [Integer] The number of deficit files omitted or cut short.
           sig { params(budget: ReportBudget).returns(Integer) }
           def write_deficits(budget)
-            writer = SectionWriter.new(budget, HEADING)
-            deficit_files = find_deficit_files
-            deficit_files.each do |file|
-              break if writer.closed?
-
-              writer.write_file_block(SectionWriter.file_heading(file), render_file(file))
-            end
-            deficit_files.size - writer.written_blocks
+            SectionWriter.new(budget, HEADING).write_files(find_deficit_files) { |file| render_file(file) }
           end
 
           private
@@ -52,29 +71,14 @@ module SimpleCov
           sig { returns(T::Array[SimpleCov::SourceFile]) }
           def find_deficit_files
             deficit_files = @coverage_metrics.files.select { |file| deficit?(file) }
-            deficit_files.sort_by { |file| [sort_coverage(file), file.filename] }
+            deficit_files.sort_by { |file| DeficitCompiler.sort_key(file) }
           end
 
           # A file with a missed line, branch or method — or one whose data SimpleCov cannot
           # decode, whose entry is the error line {#render_file} produces.
           sig { params(file: SimpleCov::SourceFile).returns(T::Boolean) }
           def deficit?(file)
-            DecodeGuard.attempt(true) { !fully_covered?(file) }
-          end
-
-          sig { params(file: SimpleCov::SourceFile).returns(Float) }
-          def sort_coverage(file)
-            DecodeGuard.attempt(UNDECODABLE_COVERAGE) { file.covered_percent }
-          end
-
-          # A file only counts as fully covered when every criterion SimpleCov measured for it
-          # is perfect, by SimpleCov's own verdicts: no missed line, no missed branch (there are
-          # none when branch coverage is off, and skipped ones do not count) and no missed
-          # method (SimpleCov >= 1.0 with `enable_coverage :method`; otherwise there are no
-          # methods to miss).
-          sig { params(file: SimpleCov::SourceFile).returns(T::Boolean) }
-          def fully_covered?(file)
-            file.missed_lines.empty? && file.missed_branches.empty? && method_deficits_of(file).empty?
+            DecodeGuard.attempt(true) { !DeficitCompiler.fully_covered?(file, method_deficits_of(file)) }
           end
 
           # Method deficits count only when SimpleCov measured methods in this run (the header
@@ -89,14 +93,8 @@ module SimpleCov
           sig { params(file: SimpleCov::SourceFile).returns(T::Array[String]) }
           def render_file(file)
             DecodeGuard.render do
-              formatter = DeficitFormatter.new(@config, SourceLines.of(file), BranchEnricher.enrich(file))
-              nodes = @builder.try_resolve_ast(file.filename)
-              method_deficits = method_deficits_of(file)
-              if nodes
-                formatter.render_node_fragments(file, nodes, method_deficits)
-              else
-                formatter.render_raw_fragments(file, method_deficits)
-              end
+              DeficitFormatter.new(@config, SourceLines.of(file), BranchEnricher.enrich(file))
+                              .render(file, @builder.try_resolve_ast(file.filename), method_deficits_of(file))
             end
           end
         end

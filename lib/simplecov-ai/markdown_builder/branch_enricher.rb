@@ -90,10 +90,14 @@ module SimpleCov
             sig { params(file: SimpleCov::SourceFile).returns(T::Array[BasicObject]) }
             def raw_descriptors(file)
               conditions = Hash.try_convert(file.coverage_data['branches'])
-              return [] unless conditions
+              conditions ? conditions.values.flat_map { |arms| decoded_arms(file, arms) } : []
+            end
 
-              arm_maps = conditions.values.filter_map { |arms| Hash.try_convert(arms) }
-              arm_maps.flat_map { |arms| arms.keys.map { |descriptor| DECODER.call(file, descriptor) } }
+            # The decoded descriptors of one condition's arm map.
+            sig { params(file: SimpleCov::SourceFile, arms: BasicObject).returns(T::Array[BasicObject]) }
+            def decoded_arms(file, arms)
+              arm_map = Hash.try_convert(arms)
+              arm_map ? arm_map.keys.map { |descriptor| DECODER.call(file, descriptor) } : []
             end
 
             # Groups the raw column offsets by their (type, start_line, end_line) identity so
@@ -103,14 +107,8 @@ module SimpleCov
               params(raw_descriptors: T::Array[BasicObject]).returns(T::Hash[String, T::Array[[Integer, Integer]]])
             end
             def index_columns_by_key(raw_descriptors)
-              index = T.let({}, T::Hash[String, T::Array[[Integer, Integer]]])
-              raw_descriptors.each do |raw|
-                entry = column_entry(raw)
-                next unless entry
-
-                (index[entry.first] ||= []) << entry.last
-              end
-              index
+              entries = raw_descriptors.filter_map { |raw| column_entry(raw) }
+              entries.group_by(&:first).transform_values { |keyed_entries| keyed_entries.map(&:last) }
             end
 
             # Converts a raw descriptor [type, id, start_line, start_col, end_line, end_col]

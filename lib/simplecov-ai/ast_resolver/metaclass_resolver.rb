@@ -25,13 +25,7 @@ module SimpleCov
           sig { params(node: Parser::AST::Node).returns(T.nilable(String)) }
           def self.builder_kind(node)
             send_node = builder_send(node)
-            return nil unless send_node
-
-            receiver = NodeChildren.node_at(send_node, 0)
-            return nil unless receiver && receiver.type == :const
-
-            kind = NodeChildren.symbol_at(receiver, 1).to_s
-            kind if BUILDERS[kind] == NodeChildren.symbol_at(send_node, 1)
+            send_node && constructor_kind(send_node)
           end
 
           # @param node [Parser::AST::Node] Any AST node.
@@ -63,7 +57,17 @@ module SimpleCov
             block_call(value)
           end
 
-          private_class_method :builder_send
+          # The builder a `Struct.new` / `Class.new` / `Module.new` / `Data.define` call names.
+          sig { params(send_node: Parser::AST::Node).returns(T.nilable(String)) }
+          def self.constructor_kind(send_node)
+            receiver = NodeChildren.node_at(send_node, 0)
+            return nil unless receiver && receiver.type == :const
+
+            kind = NodeChildren.symbol_at(receiver, 1).to_s
+            kind if BUILDERS[kind] == NodeChildren.symbol_at(send_node, 1)
+          end
+
+          private_class_method :builder_send, :constructor_kind
         end
       end
     end

@@ -9,15 +9,17 @@ module SimpleCov
         # produce bytes that are invalid in the source encoding (e.g. `"\xf0-\xff"`). MRI and
         # Prism accept such literals, but the `parser` builder rejects them with "literal
         # contains escape sequences incompatible with UTF-8", which would discard the structure
-        # of an otherwise valid file.
+        # of an otherwise valid file. (sorbet/rbi/shims.rbi declares the builder as the module's
+        # required ancestor for the type checker.)
         module LenientLiterals
           extend T::Sig
 
           # @param token [Array] The `[value, location]` pair the lexer emits for a literal.
-          # @return [String] The literal value, skipping the encoding validity check.
+          # @return [String] The literal value, read as the builder reads every token value but
+          #   without the encoding validity check.
           sig { params(token: T::Array[BasicObject]).returns(BasicObject) }
           def string_value(token)
-            token.fetch(0)
+            value(token)
           end
         end
       end

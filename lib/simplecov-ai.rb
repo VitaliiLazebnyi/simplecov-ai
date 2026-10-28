@@ -70,55 +70,44 @@ module SimpleCov
       sig { params(coverage_metrics: SimpleCov::Result).void }
       def format(coverage_metrics)
         config = self.class.configuration
-        digest = MarkdownBuilder.new(coverage_metrics, config).build
-
-        path = report_destination(config)
-        write_report(path, digest) { puts Kernel.format(WRITTEN_MESSAGE, path) unless config.output_to_console }
-        puts digest if config.output_to_console
+        deliver(MarkdownBuilder.new(coverage_metrics, config).build, config)
       end
 
       private
 
-      # Creates the report's directory, writes the digest and yields once it is written. A
-      # filesystem error — a parent path that is a regular file, a read-only or full disk, a
-      # permission denial — is reported on STDERR with {WRITE_FAILED_MESSAGE} instead, and the
-      # block is not run: SimpleCov runs its formatters from an at_exit hook, where an exception
-      # would turn a passing test run into a failed one, so nothing is raised.
+      # Writes the digest to its destination, then echoes it (`output_to_console`) or, once it
+      # is written, announces where it went.
       #
-      # @param path [String] The absolute destination of the report.
-      # @param digest [String] The report to write.
-      # @yield After the report has been written.
-      # @return [void]
-      sig { params(path: String, digest: String, blk: T.proc.void).void }
-      def write_report(path, digest, &blk)
-        FileUtils.mkdir_p(File.dirname(path))
-        File.write(path, digest)
-        yield
-      rescue SystemCallError, IOError => error
-        warn Kernel.format(WRITE_FAILED_MESSAGE, path, error.message)
-      end
-
-      # The report's destination: an explicit report_path (absolute as-is, relative against
-      # SimpleCov.root, so the artifact is stable regardless of the working directory at exit)
-      # or, by default, {Configuration::DEFAULT_REPORT_FILENAME} inside SimpleCov's coverage
-      # directory so a custom `coverage_dir` is honoured.
-      #
+      # @param digest [String] The finished report.
       # @param config [Configuration] The active configuration.
-      # @return [String] An absolute filesystem path.
-      sig { params(config: Configuration).returns(String) }
-      def report_destination(config)
-        if config.report_path_configured?
-          absolute_report_path(config.report_path)
-        else
-          File.join(SimpleCov.coverage_path, Configuration::DEFAULT_REPORT_FILENAME)
+      # @return [void]
+      sig { params(digest: String, config: Configuration).void }
+      def deliver(digest, config)
+        path = config.report_destination
+        written = write_report(path, digest)
+        if config.output_to_console
+          puts digest
+        elsif written
+          puts Kernel.format(WRITTEN_MESSAGE, path)
         end
       end
 
-      sig { params(report_path: String).returns(String) }
-      def absolute_report_path(report_path)
-        return report_path if Pathname.new(report_path).absolute?
-
-        File.join(SimpleCov.root, report_path)
+      # Creates the report's directory and writes the digest. A filesystem error — a parent
+      # path that is a regular file, a read-only or full disk, a permission denial — is reported
+      # on STDERR with {WRITE_FAILED_MESSAGE} instead: SimpleCov runs its formatters from an
+      # at_exit hook, where an exception would turn a passing test run into a failed one, so
+      # nothing is raised.
+      #
+      # @param path [String] The absolute destination of the report.
+      # @param digest [String] The report to write.
+      # @return [Integer, nil] The number of bytes written, or nil when the report could not be
+      #   written.
+      sig { params(path: String, digest: String).returns(T.nilable(Integer)) }
+      def write_report(path, digest)
+        FileUtils.mkdir_p(File.dirname(path))
+        File.write(path, digest)
+      rescue SystemCallError, IOError => error
+        warn Kernel.format(WRITE_FAILED_MESSAGE, path, error.message)
       end
     end
   end

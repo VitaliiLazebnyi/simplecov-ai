@@ -11,9 +11,10 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::Configuration do
       expect([config.report_path, config.report_path_configured?]).to eq(['coverage/ai_report.md', false])
     end
 
-    it 'declares every setting up front, the report path as unset' do
-      expect(config.instance_variables).to eq(%i[@report_path @max_file_size_kb @max_snippet_lines @output_to_console
-                                                 @granularity @include_bypasses])
+    it 'starts every configuration from fresh default settings, the report path unset' do
+      other = described_class.new
+      other.max_file_size_kb = 1
+      expect([config.max_file_size_kb, config.max_snippet_lines, config.report_path_configured?]).to eq([50, 5, false])
     end
 
     it 'defaults to fine granularity, bypasses on, console off' do

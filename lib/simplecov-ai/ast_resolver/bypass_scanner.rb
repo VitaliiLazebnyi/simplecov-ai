@@ -28,14 +28,10 @@ module SimpleCov
           #   keyed by node identity; nodes without a bypass are absent.
           sig { params(nodes: T::Array[SemanticNode], regions: T::Array[Region]).returns(ReasonsByNode) }
           def self.attribute(nodes, regions)
-            reasons_by_node = T.let({}.compare_by_identity, ReasonsByNode)
-            regions.each do |range, reason|
-              targets_of(nodes, range).each do |node|
-                node_reasons = (reasons_by_node[node] ||= [])
-                node_reasons << reason unless node_reasons.include?(reason)
-              end
+            attributions = regions.flat_map { |range, reason| targets_of(nodes, range).product([reason]) }
+            attributions.each_with_object(T.let({}.compare_by_identity, ReasonsByNode)) do |(node, reason), reasons|
+              reasons[node] = reasons.fetch(node, []) | [reason]
             end
-            reasons_by_node
           end
 
           sig { params(nodes: T::Array[SemanticNode], range: T::Range[Integer]).returns(T::Array[SemanticNode]) }
@@ -48,9 +44,12 @@ module SimpleCov
 
           sig { params(contained: T::Array[SemanticNode]).returns(T::Array[SemanticNode]) }
           def self.outermost(contained)
-            contained.reject do |node|
-              contained.any? { |other| LineSpan.strictly_encloses?(other.line_range, node.line_range) }
-            end
+            contained.reject { |node| enclosed?(node, contained) }
+          end
+
+          sig { params(node: SemanticNode, candidates: T::Array[SemanticNode]).returns(T::Boolean) }
+          def self.enclosed?(node, candidates)
+            candidates.any? { |other| LineSpan.strictly_encloses?(other.line_range, node.line_range) }
           end
 
           # Nodes are in pre-order, so among the (nested) nodes enclosing a region the last one
@@ -61,7 +60,7 @@ module SimpleCov
             nodes.reverse.find { |node| LineSpan.encloses?(node.line_range, range) }
           end
 
-          private_class_method :targets_of, :outermost, :innermost_enclosing
+          private_class_method :targets_of, :outermost, :enclosed?, :innermost_enclosing
         end
       end
     end

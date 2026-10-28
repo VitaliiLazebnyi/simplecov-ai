@@ -27,12 +27,11 @@ module SimpleCov
           # Prism's translation layer refuses to load alongside older `parser` gems, so it is
           # only attempted when the installed gem satisfies that floor.
           PARSER_MINIMUM_FOR_PRISM = '3.3.7.2'
-          # The oldest Ruby grammar Prism implements; older Rubies are parsed by the `parser`
-          # gem, which ships an exact grammar for each of them.
-          PRISM_OLDEST_GRAMMAR = '3.3'
 
-          # Prism's version-specific translation grammars keyed by Ruby major.minor, resolved
-          # lazily because the newer classes only exist in newer Prism releases.
+          # Prism's version-specific translation grammars keyed by Ruby major.minor, oldest first,
+          # resolved lazily because the newer classes only exist in newer Prism releases. Rubies
+          # older than the first are parsed by the `parser` gem, which ships an exact grammar for
+          # each of them.
           PRISM_GRAMMARS = T.let(
             {
               '3.3' => -> { Prism::Translation::Parser33 },
@@ -92,7 +91,7 @@ module SimpleCov
             params(ruby_version: String, parser_version: String).returns(T.nilable(T.class_of(Parser::Base)))
           end
           def self.prism_grammar(ruby_version, parser_version)
-            return nil if below?(ruby_version, PRISM_OLDEST_GRAMMAR)
+            return nil if below?(ruby_version, PRISM_GRAMMARS.keys.fetch(0))
             return nil if below?(parser_version, PARSER_MINIMUM_FOR_PRISM)
             return nil unless prism_translation_loaded?
 

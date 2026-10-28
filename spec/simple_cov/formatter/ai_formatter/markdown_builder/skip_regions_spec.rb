@@ -146,11 +146,13 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::SkipRegions d
 
   it 'reads the token through nocov_token on a SimpleCov without current_nocov_token (< 1.0)' do
     file = file_for("def a\n  #{nocov_marker}\n  1\n  #{nocov_marker}\nend\n")
-    # SimpleCov's own skip verdicts are settled before its token reader is taken away.
-    file.skipped_lines
-    without_method(SimpleCov, :current_nocov_token)
+    stub_const("#{described_class}::CURRENT_TOKEN_READER", false)
     allow(SimpleCov).to receive(:nocov_token).and_return('nocov')
     expect(described_class.of(file, file.src)).to eq([[2..4, nocov_marker]])
+  end
+
+  it 'knows at load time whether the installed SimpleCov has current_nocov_token' do
+    expect(described_class::CURRENT_TOKEN_READER).to eq(SimpleCov.respond_to?(:current_nocov_token))
   end
 
   it 'reads the token without triggering the deprecation of nocov_token on SimpleCov >= 1.0' do

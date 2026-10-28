@@ -231,3 +231,8 @@ Sorbet/ForbidTMust:
 Sorbet/BlockMethodDefinition:
   Exclude:
     - "spec/**/*"
+
+# Reek's NilCheck (run with its default configuration, see Rakefile) rejects `&.`, which this cop
+# asks for; the two cannot both hold, and the code keeps explicit truthiness checks.
+Style/SafeNavigation:
+  Enabled: false

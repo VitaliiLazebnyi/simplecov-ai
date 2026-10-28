@@ -12,3 +12,4 @@ spec/
 .git/
 --ignore
 .claude/
+--enable-experimental-requires-ancestor

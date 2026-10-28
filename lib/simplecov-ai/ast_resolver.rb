@@ -4,6 +4,7 @@
 require 'parser'
 require_relative 'line_span'
 require_relative 'ast_resolver/semantic_node'
+require_relative 'ast_resolver/method_kind'
 require_relative 'ast_resolver/node_children'
 require_relative 'ast_resolver/parser_backend'
 require_relative 'ast_resolver/bypass_scanner'
@@ -41,6 +42,19 @@ module SimpleCov
           [SemanticNode.root(source.lines.size)] + new.traverse(ParserBackend.parse(buffer))
         end
 
+        # {resolve} for the formatter, which degrades a file it cannot resolve to its raw line
+        # numbers instead of failing the report.
+        #
+        # @param file_path [String] The absolute path to the Ruby script to parse.
+        # @return [Array<SemanticNode>, nil] The nodes, or nil when the file cannot be read or
+        #   parsed.
+        sig { params(file_path: String).returns(T.nilable(T::Array[SemanticNode])) }
+        def self.try_resolve(file_path)
+          resolve(file_path)
+        rescue StandardError
+          nil
+        end
+
         # Reads the file as bytes, tagged UTF-8 (Ruby's default source encoding) when they form
         # valid UTF-8 and left binary otherwise so the parser can still recover the structure
         # of a file with stray bytes. A `# encoding:` magic comment or byte-order mark is
@@ -59,21 +73,19 @@ module SimpleCov
         #
         # @param node [Parser::AST::Node] The root AST node from which traversal executes.
         # @param context [String] An accumulated identifier linking namespaces to inner entities.
-        # @param singleton [Boolean] Whether the current lexical scope is a singleton class
-        #   (`class << self`), in which case plain `def`s are singleton methods.
+        # @param kind [MethodKind] The kind of method a plain `def` defines in the current
+        #   lexical scope: {MethodKind::SINGLETON} inside a singleton class (`class << self`).
         # @return [Array<SemanticNode>] Accumulation of all sub-tree defined endpoints.
         sig do
-          params(node: T.nilable(Parser::AST::Node), context: String, singleton: T::Boolean)
+          params(node: T.nilable(Parser::AST::Node), context: String, kind: MethodKind)
             .returns(T::Array[SemanticNode])
         end
-        def traverse(node, context = '', singleton: false)
+        def traverse(node, context = '', kind: MethodKind::INSTANCE)
           return [] unless node
 
-          current_context, semantic_node, child_singleton = NodeClassifier.classify(node, context, singleton)
-          nested = NodeChildren.nodes(node).flat_map do |child|
-            traverse(child, current_context, singleton: child_singleton)
-          end
-          semantic_node ? [semantic_node] + nested : nested
+          child_context, semantic_node, child_kind = NodeClassifier.classify(node, context, kind)
+          nested = NodeChildren.nodes(node).flat_map { |child| traverse(child, child_context, kind: child_kind) }
+          [semantic_node].compact + nested
         end
       end
     end

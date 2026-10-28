@@ -48,6 +48,19 @@ module SimpleCov
             DeficitGroup.new(lines: file.missed_lines, branches: file.missed_branches, method_deficits: method_deficits)
           end
 
+          # @param node [ASTResolver::SemanticNode, nil] The innermost node covering the deficit.
+          # @param range [Range<Integer>] The lines of the deficit.
+          # @return [String] `Name@start_line` for a node; for a deficit no node spans `Line N` for
+          #   one line, `Lines N-M` for a span.
+          sig { params(node: T.nilable(ASTResolver::SemanticNode), range: T::Range[Integer]).returns(String) }
+          def self.group_key(node, range)
+            return "#{node.name}@#{node.start_line}" if node
+
+            first = range.begin
+            last = range.end
+            first == last ? format(FALLBACK_LINE_NAME, first) : format(FALLBACK_RANGE_NAME, first, last)
+          end
+
           sig { params(nodes: T::Array[ASTResolver::SemanticNode]).void }
           def initialize(nodes)
             @nodes = nodes
@@ -60,72 +73,46 @@ module SimpleCov
           # lands on the innermost node covering it.
           sig { returns(T::Hash[String, DeficitGroup]) }
           def sort_deficits
-            sorted = @node_deficits.sort_by { |group_key, _group| @sort_keys.fetch(group_key) }
-            T.let(sorted.to_h, T::Hash[String, DeficitGroup])
+            @node_deficits.sort_by { |group_key, _group| @sort_keys.fetch(group_key) }.to_h
           end
 
           sig { params(file: SimpleCov::SourceFile).void }
           def group_missed_lines(file)
-            file.missed_lines.each do |line|
-              line_number = line.line_number
-              group_for(innermost_node_for(line_number, line_number), line_number, line_number).lines << line
-            end
+            file.missed_lines.each { |line| group_for(LineSpan.line(line.line_number)).lines << line }
           end
 
           sig { params(file: SimpleCov::SourceFile).void }
           def group_missed_branches(file)
-            file.missed_branches.each do |branch|
-              matched_node = innermost_node_for(branch.start_line, branch.end_line)
-              group_for(matched_node, branch.start_line, branch.end_line).branches << branch
-            end
+            file.missed_branches.each { |branch| group_for(LineSpan.of(branch)).branches << branch }
           end
 
           sig { params(method_deficits: T::Array[MethodDeficit]).void }
           def group_missed_methods(method_deficits)
             method_deficits.each do |method_deficit|
-              start_line = method_deficit.start_line
-              end_line = method_deficit.end_line
-              deficit_group = group_for(innermost_node_for(start_line, end_line), start_line, end_line)
-              deficit_group.method_deficits << method_deficit
+              group_for(LineSpan.of(method_deficit)).method_deficits << method_deficit
             end
           end
 
           private
 
-          # Nodes are in pre-order, so the last node spanning a range is the innermost one.
-          sig { params(start_line: Integer, end_line: Integer).returns(T.nilable(ASTResolver::SemanticNode)) }
-          def innermost_node_for(start_line, end_line)
-            @nodes.reverse.find { |node| start_line >= node.start_line && end_line <= node.end_line }
+          # Finds or creates the group of the deficit spanning `range`: the group of the innermost
+          # node covering it (nodes are in pre-order, so that is the last one), keyed by name
+          # plus start line so two same-named methods redefined in one file do not merge — the
+          # key's suffix never reaches the report. A range no node covers gets a node-less group
+          # keyed by its positional label, which doubles as the display name.
+          sig { params(range: T::Range[Integer]).returns(DeficitGroup) }
+          def group_for(range)
+            node = innermost_node(range)
+            group_key = DeficitGrouper.group_key(node, range)
+            @sort_keys[group_key] ||= LineSpan.sort_key(node ? node.line_range : range)
+            @node_deficits[group_key] ||= DeficitGroup.new(semantic_node: node, lines: [], branches: [],
+                                                           method_deficits: [])
           end
 
-          # Finds or creates the group a deficit belongs to. Node-backed groups are keyed by name
-          # plus start line so two same-named methods redefined in one file do not merge, and
-          # the key's suffix never reaches the report; node-less groups are keyed by their
-          # positional label, which doubles as the display name.
-          sig do
-            params(node: T.nilable(ASTResolver::SemanticNode), start_line: Integer, end_line: Integer)
-              .returns(DeficitGroup)
-          end
-          def group_for(node, start_line, end_line)
-            group_key, sort_key = node ? node_identity(node) : positional_identity(start_line, end_line)
-            @sort_keys[group_key] ||= sort_key
-            @node_deficits[group_key] ||=
-              DeficitGroup.new(semantic_node: node, lines: [], branches: [], method_deficits: [])
-          end
-
-          sig { params(node: ASTResolver::SemanticNode).returns([String, [Integer, Integer]]) }
-          def node_identity(node)
-            ["#{node.name}@#{node.start_line}", [node.start_line, -node.end_line]]
-          end
-
-          sig { params(start_line: Integer, end_line: Integer).returns([String, [Integer, Integer]]) }
-          def positional_identity(start_line, end_line)
-            label = if start_line == end_line
-                      format(FALLBACK_LINE_NAME, start_line)
-                    else
-                      format(FALLBACK_RANGE_NAME, start_line, end_line)
-                    end
-            [label, [start_line, -end_line]]
+          # Nodes are in pre-order, so the last node covering a range is the innermost one.
+          sig { params(range: T::Range[Integer]).returns(T.nilable(ASTResolver::SemanticNode)) }
+          def innermost_node(range)
+            @nodes.reverse.find { |node| LineSpan.encloses?(node.line_range, range) }
           end
         end
       end
