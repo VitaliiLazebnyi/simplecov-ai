@@ -1,7 +1,12 @@
+# Maximum-strictness configuration: every cop runs in "fail the build" mode, there is no todo
+# file, and inline RuboCop directives are forbidden (Style/DisableCopsWithinSourceCodeDirective,
+# script/forbidden_suppressions.sh). A cop that cannot apply to a file is configured narrowly
+# below, with the reason next to it.
 AllCops:
+  # The gem supports Ruby >= 2.7 (gemspec), so the code must stay valid 2.7 syntax.
   TargetRubyVersion: 2.7
   NewCops: enable
-  SuggestExtensions: true
+  SuggestExtensions: false
   # Setting Exclude replaces RuboCop's defaults, so they are restated here. The generated gem
   # RBIs (`bin/tapioca gem`) are machine-written and never hand-edited, hence not linted.
   Exclude:
@@ -16,16 +21,13 @@ AllCops:
 
 # The `plugins:` key requires rubocop >= 1.72, which the gemspec's rubocop floor matches.
 plugins:
-  - standard-sorbet
+  - rubocop-md
   - rubocop-packaging
   - rubocop-performance
   - rubocop-rake
   - rubocop-rspec
   - rubocop-thread_safety
   - rubocop-sorbet
-
-inherit_gem:
-  standard-sorbet: config/base.yml
 
 Style/FrozenStringLiteralComment:
   Enabled: true
@@ -36,6 +38,9 @@ Style/FrozenStringLiteralComment:
 Naming/FileName:
   Exclude:
     - "lib/simplecov-ai.rb"
+    # rubocop-md lints the Ruby snippets of the Markdown files; their names (README.md,
+    # CHANGELOG.md, ...) are conventional, not Ruby source file names.
+    - "**/*.md"
 
 # Justification: RSpec example groups and the gemspec declaration are naturally long blocks.
 Metrics/BlockLength:
@@ -107,8 +112,6 @@ Style/BisectedAttrAccessor:
   Enabled: false
 Layout/LineLength:
   Enabled: true
-  AllowedPatterns:
-    - "> The report reached the maximum token constraint"
 
 Sorbet/ForbidTUntyped:
   Enabled: true
@@ -181,3 +184,55 @@ Lint/OrAssignmentToConstant:
 # are named `error` rather than RuboCop's default `e`.
 Naming/RescuedExceptionsVariableName:
   PreferredName: error
+
+# --- Optional (disabled-by-default) cops that make sense for this codebase ---
+# Not enabled: Style/StringHashKeys (SimpleCov's coverage data is keyed by Strings by contract),
+# Style/RequireOrder (lib/ requires its files in dependency order, which load-time constants
+# rely on) and Style/ConstantVisibility (every constant is part of the documented API).
+Layout/ClassStructure:
+  Enabled: true
+Layout/EmptyLineAfterMultilineCondition:
+  Enabled: true
+Lint/NumberConversion:
+  Enabled: true
+Lint/RedundantCopDisableDirective:
+  Enabled: true
+Naming/InclusiveLanguage:
+  Enabled: true
+# Library code only: the specs build expectations and fixtures, where an extra intermediate
+# Array costs nothing and an in-place `map!` would only obscure the expected value.
+Performance/ChainArrayAllocation:
+  Enabled: true
+  Include:
+    - "lib/**/*.rb"
+Style/InvertibleUnlessCondition:
+  Enabled: true
+Style/MethodCalledOnDoEndBlock:
+  Enabled: true
+Style/Send:
+  Enabled: true
+Style/SingleLineBlockParams:
+  Enabled: true
+
+# --- Sorbet: no escape hatches in the library ---
+Sorbet/ForbidTCast:
+  Enabled: true
+  Include:
+    - "lib/**/*.rb"
+Sorbet/ForbidTBind:
+  Enabled: true
+Sorbet/ForbidTMust:
+  Enabled: true
+  Include:
+    - "lib/**/*.rb"
+
+# Sorbet does not check the specs (sorbet/config ignores spec/), and a `def` inside an example
+# group is how RSpec scopes a helper method to that group.
+Sorbet/BlockMethodDefinition:
+  Exclude:
+    - "spec/**/*"
+
+# Reek's NilCheck (run with its default configuration, see Rakefile) rejects `&.`, which this cop
+# asks for; the two cannot both hold, and the code keeps explicit truthiness checks.
+Style/SafeNavigation:
+  Enabled: false

@@ -9,8 +9,6 @@ extend-exclude = [
   "sorbet/rbi/",
   "Gemfile.lock",
   "gemfiles/*.lock",
-  # Historical audit transcript kept for reference; not maintained as documentation.
-  "docs/CODE_REVIEW_REPORT.md",
   # Certificates are not prose.
   "certs/",
 ]

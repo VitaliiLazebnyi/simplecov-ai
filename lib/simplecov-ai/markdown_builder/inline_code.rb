@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -14,7 +14,7 @@ module SimpleCov
 
           # The span standing in for empty text: two bare backticks are not a code span in
           # CommonMark and would render literally, while a span holding one space is.
-          EMPTY_SPAN = T.let('` `', String)
+          EMPTY_SPAN = '` `'
 
           # @param text [String] The literal text to show verbatim; empty text renders as {EMPTY_SPAN}.
           # @return [String] The text wrapped in a code span that is safe for any content.

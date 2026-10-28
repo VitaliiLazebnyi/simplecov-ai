@@ -50,9 +50,6 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
       config.output_to_console = false
     end
     capture_stdout { described_class.new.format(session_result(fixture_path)) }
-    # Formatting proves that what this engine's Coverage recorded builds a Result and renders; the
-    # example asserts branch deficits, which only an engine recording branches can produce.
-    skip 'this engine records no branch coverage' unless branch_coverage_measurable?
   end
 
   after do
@@ -60,7 +57,15 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
     FileUtils.rm_f(report_path)
   end
 
-  it 'lists each construct as its own node with the missed arm, in source order' do
-    expect(File.read(report_path)).to match(Regexp.new(expected_lines.join('.*'), Regexp::MULTILINE))
+  # Formatting proves that what this engine's Coverage recorded builds a Result and renders; the
+  # examples below assert branch deficits, which only an engine recording branches produces.
+  it 'writes the report from what this engine recorded' do
+    expect(File.size?(report_path)).to be_positive
+  end
+
+  if SimpleCovFixtures.branch_coverage_measurable?
+    it 'lists each construct as its own node with the missed arm, in source order' do
+      expect(File.read(report_path, encoding: Encoding::UTF_8)).to match(Regexp.new(expected_lines.join('.*'), Regexp::MULTILINE))
+    end
   end
 end

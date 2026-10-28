@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -6,37 +6,28 @@ module SimpleCov
     class AIFormatter
       class ASTResolver
         # An immutable value object housing the bounds and identity of one structural entity
-        # (root scope, module, class or method) derived from traversing the AST.
-        class SemanticNode
+        # (root scope, module, class or method) derived from traversing the AST. Nodes are
+        # compared by identity.
+        class SemanticNode < T::Struct
           extend T::Sig
 
           # The name Ruby itself gives the top-level execution context of a script.
-          ROOT_NAME = T.let('main', String)
+          ROOT_NAME = 'main'
           # Type label of the synthetic node that spans a whole file.
-          ROOT_TYPE = T.let('Root Script Scope', String)
+          ROOT_TYPE = 'Root Script Scope'
 
-          sig { returns(String) }
-          attr_reader :name, :type
-
-          sig { returns(Integer) }
-          attr_reader :start_line, :end_line
-
+          # @return [String] The fully qualified semantic name (`Sample::Calc#sign`).
+          const :name, String
+          # @return [String] The type label (`Class`, `Instance Method`, ...).
+          const :type, String
+          # @return [Integer] The first source line the node spans.
+          const :start_line, Integer
+          # @return [Integer] The last source line the node spans.
+          const :end_line, Integer
           # @return [String, nil] The bare method name of a method node (`sign` of
-          #   `Sample::Calc#sign`); nil for every other kind of node.
-          sig { returns(T.nilable(String)) }
-          attr_reader :method_name
-
-          sig do
-            params(name: String, type: String, start_line: Integer, end_line: Integer,
-                   method_name: T.nilable(String)).void
-          end
-          def initialize(name:, type:, start_line:, end_line:, method_name: nil)
-            @name = name
-            @type = type
-            @start_line = start_line
-            @end_line = end_line
-            @method_name = method_name
-          end
+          #   `Sample::Calc#sign`); nil for every other kind of node. (Left out rather than given a
+          #   `default:`, whose sorbet-runtime machinery fails on JRuby.)
+          const :method_name, T.nilable(String)
 
           # Builds the synthetic root node covering a whole file, so code outside any class or
           # method (and skip regions wrapping only such code) has a scope to attribute to.
@@ -54,16 +45,22 @@ module SimpleCov
           # @param ast_node [Parser::AST::Node] The AST node supplying the location.
           # @param name [String] The fully qualified semantic name.
           # @param type [String] The type label.
-          # @param method_name [String, nil] The bare method name, for a method node.
           # @return [SemanticNode] A node bounded by the AST node's first and last lines.
-          sig do
-            params(ast_node: Parser::AST::Node, name: String, type: String, method_name: T.nilable(String))
-              .returns(SemanticNode)
+          sig { params(ast_node: Parser::AST::Node, name: String, type: String).returns(SemanticNode) }
+          def self.spanning(ast_node, name:, type:)
+            location = ast_node.loc
+            new(name: name, type: type, start_line: location.line, end_line: location.last_line)
           end
-          def self.spanning(ast_node, name:, type:, method_name: nil)
-            location = T.cast(ast_node.loc, Parser::Source::Map)
-            new(name: name, type: type, start_line: T.cast(location.line, Integer),
-                end_line: T.cast(location.last_line, Integer), method_name: method_name)
+
+          # Whether this is the node of the method SimpleCov reported starting on `line` under
+          # the bare name `name`.
+          #
+          # @param line [Integer] The method's first line.
+          # @param name [String] The method's bare name.
+          # @return [Boolean] Whether the node opens on that line and carries that method name.
+          sig { params(line: Integer, name: String).returns(T::Boolean) }
+          def defines?(line, name)
+            [start_line, method_name] == [line, name]
           end
 
           # @return [Range<Integer>] The inclusive line range this node spans.

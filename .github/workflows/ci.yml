@@ -2,299 +2,348 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
+  workflow_dispatch:
 
-# Every job runs with a read-only token; jobs that need more declare it themselves.
-permissions:
-  contents: read
+# Nothing is writable by default; every job re-declares the (read-only) permissions it needs.
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# The single-version quality gates (lint, typecheck, docs, audit, build, quality) run on Ruby 4.0
-# against the committed Gemfile.lock, so they always see the exact dependency set that was
-# verified locally. The multi-Ruby test matrix deletes the lockfile first: it was resolved on
-# Ruby 4.0 and older Rubies cannot install that set (simplecov 1.x needs Ruby >= 3.2, sorbet and
-# tapioca need >= 3.1), so each Ruby resolves its own dependencies exactly like a user's bundle.
+env:
+  RUBYOPT: -W:deprecated
+
+# The single-version gates run on the Ruby of .ruby-version against the committed Gemfile.lock.
+# The test matrix deletes the lockfile first: it was resolved on that Ruby, and older Rubies
+# (and the other engines) cannot install that set, so each one resolves its own test bundle
+# exactly like a user's bundle (the Gemfile limits the development tooling to MRI >= 3.3).
 jobs:
   lint:
-    name: RuboCop, actionlint, zizmor, markdownlint, typos
-    runs-on: ubuntu-latest
+    name: RuboCop and inline suppressions
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
-        with:
-          ruby-version: "4.0"
-          bundler-cache: true
-      - name: RuboCop
-        run: bundle exec rubocop
-      - name: actionlint (workflow syntax, shellcheck)
-        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
-      - name: zizmor (workflow security)
-        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
-        with:
-          # Print findings in the log instead of uploading SARIF (no Advanced Security required).
-          advanced-security: false
-          annotations: true
-      - name: markdownlint
-        run: npx --yes markdownlint-cli2 "**/*.md"
-      - name: typos (spelling in docs and comments)
-        uses: crate-ci/typos@a8168dc2984a9e2352f183ffe788f0f23a300389 # v1.49.1
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
+      with:
+        ruby-version: .ruby-version
+        bundler-cache: true
+    - name: Check the Ruby version
+      run: script/check_ruby.sh
+    - run: bundle exec rake rubocop suppressions
 
   typecheck:
-    name: Sorbet (srb tc --typed strong)
-    runs-on: ubuntu-latest
+    name: "Sorbet (lib/ typed: strong)"
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
-        with:
-          ruby-version: "4.0"
-          bundler-cache: true
-      - name: Run Sorbet
-        run: bundle exec srb tc --typed strong
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
+      with:
+        ruby-version: .ruby-version
+        bundler-cache: true
+    - name: Check the Ruby version
+      run: script/check_ruby.sh
+    - run: bundle exec rake typecheck
 
   docs:
-    name: YARD (builds without warnings, 100% documented)
-    runs-on: ubuntu-latest
+    name: YARD (no warnings, 100% documented)
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
-        with:
-          ruby-version: "4.0"
-          bundler-cache: true
-      - name: Verify documentation generation
-        run: bundle exec yardoc --fail-on-warning
-      - name: Ensure complete documentation
-        run: |
-          output=$(bundle exec yard stats --list-undoc)
-          echo "$output"
-          if ! echo "$output" | grep -q "100.00% documented"; then
-            echo "::error::Documentation coverage is less than 100%. Missing YARD docs detected."
-            exit 1
-          fi
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
-  audit:
-    name: bundler-audit
-    runs-on: ubuntu-latest
+    - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
+      with:
+        ruby-version: .ruby-version
+        bundler-cache: true
+    - name: Check the Ruby version
+      run: script/check_ruby.sh
+    - run: bundle exec rake yard
+
+  smells:
+    name: Reek, Flay, Flog, Debride
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
-        with:
-          ruby-version: "4.0"
-          bundler-cache: true
-      - name: Check the locked dependencies against the Ruby Advisory Database
-        run: bundle exec bundler-audit check --update
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
+      with:
+        ruby-version: .ruby-version
+        bundler-cache: true
+    - name: Check the Ruby version
+      run: script/check_ruby.sh
+    - run: bundle exec rake reek flay flog debride
 
   build:
-    name: Gem build, spec validation and install smoke test
-    runs-on: ubuntu-latest
+    name: Gem build and install smoke test
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
-        with:
-          ruby-version: "4.0"
-      - name: Build the gem with --strict (specification warnings are fatal)
-        run: gem build simplecov-ai.gemspec --strict
-      - name: Validate the packaged specification
-        run: gem specification ./simplecov-ai-*.gem
-      - name: Install into a clean GEM_HOME and require the gem
-        run: |
-          gem_home=$(mktemp -d)
-          export GEM_HOME="$gem_home" GEM_PATH="$gem_home"
-          gem install --no-document ./simplecov-ai-*.gem
-          ruby -e 'require "simplecov-ai"; puts "Loaded simplecov-ai #{SimpleCov::Formatter::AIFormatter::VERSION}"'
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
-  # RUBYOPT=-w on every test job: spec/support/warnings.rb fails the suite on any warning the
-  # gem's own files raise under Ruby's verbose warnings (dependencies may warn freely).
+    - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
+      with:
+        ruby-version: .ruby-version
+        bundler-cache: true
+    - name: Check the Ruby version
+      run: script/check_ruby.sh
+    - run: bundle exec rake build
+
+  # Every gem, Ruby, Action and tool at its newest release, except the documented holds
+  # (script/outdated_holds.yml), which name the upstream constraint that blocks each one.
+  outdated:
+    name: Outdated dependencies
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
+      with:
+        ruby-version: .ruby-version
+        bundler-cache: true
+    - name: Check the Ruby version
+      run: script/check_ruby.sh
+    - run: bundle exec rake outdated
+
+  # RUBYOPT=-w on every suite run, and only there (RubyGems and Bundler trip Ruby's verbose-mode
+  # diagnostics while they install): spec/support/warnings.rb fails the suite on any warning that
+  # reaches STDERR. On MRI with the lockfile Ruby SimpleCov enforces 100% line, branch and method
+  # coverage (spec/spec_helper.rb).
   test:
     name: RSpec (Ruby ${{ matrix.ruby }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
-        ruby: ["2.7", "3.2", "3.3", "3.4", "4.0"]
-    env:
-      RUBYOPT: -w
+        ruby: ["3.2.11", "3.3.13", "3.4.12", "4.0.9"]
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Resolve dependencies for this Ruby (see the note at the top of this file)
-        run: rm -f Gemfile.lock
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
-        with:
-          ruby-version: ${{ matrix.ruby }}
-          bundler-cache: true
-      - name: Run tests
-        run: bundle exec rspec
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
-  # Blocking. sorbet-static has no Windows build, so the Windows bundle skips the Sorbet toolchain
-  # (see Gemfile) and only the test suite runs. Windows cannot be reproduced with bin/check-ruby;
-  # what sets it apart — text-mode writes turning "\n" into "\r\n" — is exercised on every
-  # platform by the suite's CRLF examples, and fixtures are written byte for byte.
+    - name: Resolve the test bundle for this Ruby (see the note at the top of this file)
+      run: rm -f Gemfile.lock
+    - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
+      with:
+        ruby-version: ${{ matrix.ruby }}
+        bundler-cache: true
+    - name: Check the Ruby version
+      env:
+        EXPECTED_RUBY: ${{ matrix.ruby }}
+      run: script/check_ruby.sh "$EXPECTED_RUBY"
+    - run: bundle exec rspec
+      env:
+        RUBYOPT: -w -W:deprecated
+
+  # The supported floor, Ruby 2.7, runs in its official image: ruby/setup-ruby has no Ruby 2.7
+  # build for ubuntu-26.04 (2.7 reached its end of life before that image existed). It runs the
+  # default bundle and the oldest supported SimpleCov.
+  test-ruby27:
+    name: RSpec (Ruby 2.7.8, ${{ matrix.gemfile }})
+    runs-on: ubuntu-26.04
+    container:
+      image: ruby:2.7.8-bullseye@sha256:2347de892e419c7160fc21dec721d5952736909f8c3fbb7f84cb4a07aaf9ce7d
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        gemfile: [Gemfile, gemfiles/simplecov_0.18.gemfile]
+    env:
+      BUNDLE_GEMFILE: ${{ matrix.gemfile }}
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Resolve the test bundle for this Ruby (see the note at the top of this file)
+      run: rm -f Gemfile.lock
+    - name: Check the Ruby version
+      run: script/check_ruby.sh "2.7.8"
+    - run: bundle install --jobs 4
+    - run: bundle exec rspec
+      env:
+        RUBYOPT: -w -W:deprecated
+
+  # The lockfile Ruby once more, against the committed Gemfile.lock: the exact bundle the other
+  # gates use.
+  test-lockfile:
+    name: RSpec (Gemfile.lock)
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
+      with:
+        ruby-version: .ruby-version
+        bundler-cache: true
+    - name: Check the Ruby version
+      run: script/check_ruby.sh
+    - run: bundle exec rake spec
+      env:
+        RUBYOPT: -w -W:deprecated
+
+  # sorbet-static has no Windows build, so the Windows bundle is the test bundle only. What sets
+  # Windows apart (text-mode writes turning "\n" into "\r\n") is also exercised everywhere by
+  # the suite's CRLF examples.
   test-windows:
-    name: RSpec (Windows, Ruby 3.4)
-    runs-on: windows-latest
+    name: RSpec (Windows, Ruby 4.0.9)
+    runs-on: windows-2025
     timeout-minutes: 30
-    env:
-      RUBYOPT: -w
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Resolve dependencies for this platform (see the note at the top of this file)
-        run: rm -f Gemfile.lock
-        shell: bash
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
-        with:
-          ruby-version: "3.4"
-          bundler-cache: true
-      - name: Run tests
-        run: bundle exec rspec
-        shell: bash
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
-  # Blocking. JRuby and TruffleRuby record no branch or method coverage: the suite exercises the
-  # formatter's branch and method rendering with hand-built SimpleCov data (spec/spec_helper.rb
-  # lifts SimpleCov's engine gate for the examples) and proves end to end what a real run on such
-  # an engine produces (an N/A branch line, line deficits only). The suite's own 100% coverage
-  # mandate is MRI's gate: both engines attribute some executed lines differently from MRI (see
-  # spec/spec_helper.rb), so here coverage is measured but not enforced. sorbet-static has no
-  # builds for either engine, so the Sorbet toolchain is skipped by the Gemfile and only the test
-  # suite runs. Reproduce locally with `rake check:jruby` and `rake check:truffleruby`
-  # (bin/check-ruby in the engine's Docker image).
+    - name: Resolve the test bundle for this platform (see the note at the top of this file)
+      run: rm -f Gemfile.lock
+      shell: bash
+    - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
+      with:
+        ruby-version: "4.0.9"
+        bundler-cache: true
+    - name: Check the Ruby version
+      run: script/check_ruby.sh 4.0.9
+      shell: bash
+    - run: bundle exec rspec
+      env:
+        RUBYOPT: -w -W:deprecated
+      shell: bash
+
+  # JRuby and TruffleRuby record no branch or method coverage: the suite drives the formatter's
+  # branch and method rendering with hand-built SimpleCov data there (spec/spec_helper.rb), and
+  # the 100% coverage mandate is MRI's gate (both engines attribute some executed lines
+  # differently). Reproduce locally with `rake check:jruby` and `rake check:truffleruby`.
   test-engines:
     name: RSpec (${{ matrix.ruby }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
-        ruby: [jruby-9.4, truffleruby]
-    env:
-      RUBYOPT: -w
+        ruby: [jruby-10.1.2.0, truffleruby-40.0.0]
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Resolve dependencies for this engine (see the note at the top of this file)
-        run: rm -f Gemfile.lock
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
-        with:
-          ruby-version: ${{ matrix.ruby }}
-          bundler-cache: true
-      - name: Run tests
-        run: bundle exec rspec
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
-  # Every SimpleCov release line inside the gemspec's `>= 0.18, < 2.0` range, each resolved from
-  # its own gemfile (gemfiles/simplecov_<line>.gemfile); Ruby 2.7 additionally covers the floor.
+    - name: Resolve the test bundle for this engine (see the note at the top of this file)
+      run: rm -f Gemfile.lock
+    - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
+      with:
+        ruby-version: ${{ matrix.ruby }}
+        bundler-cache: true
+    - run: bundle exec rspec
+      env:
+        RUBYOPT: -w
+
+  # Every SimpleCov release line inside the gemspec's `>= 0.18, < 2.0` range, each from its own
+  # gemfile (gemfiles/simplecov_<line>.gemfile); test-ruby27 additionally covers the floor.
   simplecov-compat:
     name: RSpec (SimpleCov ${{ matrix.simplecov }}, Ruby ${{ matrix.ruby }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
-        ruby: ["3.4"]
-        simplecov: ["0.18", "0.21", "0.22", "1.0", "1.1"]
-        include:
-          - ruby: "2.7"
-            simplecov: "0.18"
+        ruby: ["3.4.12"]
+        simplecov: ["0.18", "0.21", "0.22", "1.0", "1.1", "1.2", "1.3"]
     env:
       BUNDLE_GEMFILE: gemfiles/simplecov_${{ matrix.simplecov }}.gemfile
-      RUBYOPT: -w
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
-        with:
-          ruby-version: ${{ matrix.ruby }}
-          bundler-cache: true
-      - name: Run tests
-        run: bundle exec rspec
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
-  sast:
-    name: Semgrep
-    runs-on: ubuntu-latest
-    container:
-      image: semgrep/semgrep:1.174.0@sha256:f1f7b71861c7b28b6e0f661225a2c4f58a484f5d0f182465c6d6b3b22f972ade
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Scan with the Ruby, secrets, security-audit and GitHub Actions rule packs
-        run: >-
-          semgrep scan --config p/ruby --config p/secrets --config p/security-audit
-          --config p/github-actions --error --metrics=off
-          --exclude doc .
+    - uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
+      with:
+        ruby-version: ${{ matrix.ruby }}
+        bundler-cache: true
+    - name: Check the Ruby version
+      env:
+        EXPECTED_RUBY: ${{ matrix.ruby }}
+      run: script/check_ruby.sh "$EXPECTED_RUBY"
+    - run: bundle exec rspec
+      env:
+        RUBYOPT: -w -W:deprecated
 
-  secrets:
-    name: Gitleaks
-    runs-on: ubuntu-latest
+  markdownlint:
+    name: markdownlint
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # Full history so leaks in earlier commits are found too.
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Scan the repository history for secrets
-        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # A GITLEAKS_LICENSE secret is only required for organisation-owned repositories.
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
-  # Mutation testing of every subject in lib/ (see .mutant.yml) on the lockfile Ruby. A full run
-  # over the gem finishes in a few minutes on a 4-core runner, so it is a blocking gate on pushes
-  # and pull requests alike rather than an incremental `--since` run.
-  mutation:
-    name: mutant (mutation testing)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
-        with:
-          ruby-version: "4.0"
-          bundler-cache: true
-      - name: Run mutant over every subject
-        run: bundle exec rake mutant
+    - run: npx --yes markdownlint-cli2@0.24.0 "**/*.md"
 
-  # Advisory: reek/flay/flog/debride findings are worth reading but do not block merges.
-  quality:
-    name: reek, flay, flog, debride (advisory)
-    runs-on: ubuntu-latest
-    continue-on-error: true
+  typos:
+    name: typos
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
-        with:
-          ruby-version: "4.0"
-          bundler-cache: true
-      - name: Run the quality report
-        run: bundle exec rake quality
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - uses: crate-ci/typos@7f9d0819ca1c008ade73f4b41fa9d258d48f605b # v1.51.1
+
+  warning-gate:
+    name: Warning gate
+    if: ${{ !cancelled() }}
+    needs: [lint, typecheck, docs, smells, build, outdated, test, test-ruby27, test-lockfile, test-windows, test-engines, simplecov-compat, markdownlint, typos]
+    runs-on: ubuntu-26.04
+    permissions:
+      actions: read # reads the logs of the other jobs of this run
+      contents: read
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Fail on any warning or deprecation in the logs of this run
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GATE_JOB_NAME: Warning gate
+      run: script/warning_gate.sh

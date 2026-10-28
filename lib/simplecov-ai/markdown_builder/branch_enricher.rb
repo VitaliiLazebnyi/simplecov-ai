@@ -1,6 +1,11 @@
 # typed: strict
 # frozen_string_literal: true
 
+# `strict` rather than the `strong` of every other lib/ file: the raw coverage data is SimpleCov's
+# untyped Hash, whose descriptors this file hands, as they are, to SimpleCov's own decoder.
+# Narrowing them for `strong` takes an identity conversion that no test can tell apart from its
+# removal, i.e. a mutant that cannot be killed (see CONTRIBUTING.md).
+
 module SimpleCov
   module Formatter
     class AIFormatter
@@ -19,23 +24,41 @@ module SimpleCov
           # (by identity; SimpleCov's Branch objects are never modified).
           ColumnMap = T.type_alias { T::Hash[SimpleCov::SourceFile::Branch, [Integer, Integer]] }
           # Length of a [type, id, start_line, start_col, end_line, end_col] descriptor.
-          DESCRIPTOR_LENGTH = T.let(6, Integer)
-          # A descriptor decoder: takes the file and one raw descriptor, returns the decoded value.
-          Decoder = T.type_alias { T.proc.params(file: SimpleCov::SourceFile, descriptor: BasicObject).returns(Object) }
+          DESCRIPTOR_LENGTH = 6
+
           # Decodes with the eval-free `RubyDataParser` of SimpleCov >= 1.0.
-          RUBY_DATA_PARSER_DECODER = T.let(
-            ->(_file, descriptor) { SimpleCov::SourceFile::RubyDataParser.call(descriptor) },
-            Decoder
-          )
-          # Decodes through the SourceFile's private `restore_ruby_data_structure` of SimpleCov < 1.0.
-          LEGACY_DECODER = T.let(
-            ->(file, descriptor) { T.cast(file.send(:restore_ruby_data_structure, descriptor), Object) },
-            Decoder
-          )
-          # The decoder of the installed SimpleCov, chosen once at load time. Both return a
-          # native Array as it is.
+          module RubyDataParserDecoder
+            extend T::Sig
+
+            # @param _file [SimpleCov::SourceFile] Unused: the parser needs the descriptor alone.
+            # @param descriptor [BasicObject] A native or stringified descriptor.
+            # @return [BasicObject] The decoded descriptor.
+            sig { params(_file: SimpleCov::SourceFile, descriptor: BasicObject).returns(BasicObject) }
+            def self.call(_file, descriptor)
+              SourceFile::RubyDataParser.call(descriptor)
+            end
+          end
+
+          # Decodes through the SourceFile's private `restore_ruby_data_structure` of SimpleCov
+          # < 1.0, which evaluates a stringified descriptor.
+          module LegacyDecoder
+            extend T::Sig
+
+            # @param file [SimpleCov::SourceFile] The file whose private decoder is used.
+            # @param descriptor [BasicObject] A native or stringified descriptor.
+            # @return [BasicObject] The decoded descriptor.
+            sig { params(file: SimpleCov::SourceFile, descriptor: BasicObject).returns(BasicObject) }
+            def self.call(file, descriptor)
+              file.__send__(:restore_ruby_data_structure, descriptor)
+            end
+          end
+
+          # A descriptor decoder: `call` takes the file and one raw descriptor and returns the
+          # decoded value (a native Array is returned as it is).
+          Decoder = T.type_alias { T.any(T.class_of(RubyDataParserDecoder), T.class_of(LegacyDecoder)) }
+          # The decoder of the installed SimpleCov, chosen once at load time.
           DECODER = T.let(
-            (defined?(SimpleCov::SourceFile::RubyDataParser) && RUBY_DATA_PARSER_DECODER) || LEGACY_DECODER, Decoder
+            (defined?(SimpleCov::SourceFile::RubyDataParser) && RubyDataParserDecoder) || LegacyDecoder, Decoder
           )
 
           # @param file [SimpleCov::SourceFile] The file whose branches need column data.
@@ -59,46 +82,57 @@ module SimpleCov
 
             sig { returns(ColumnMap) }
             def empty_column_map
-              T.let({}.compare_by_identity, ColumnMap)
+              T.let({}, ColumnMap)
             end
 
             # The decoded descriptor of every arm. A `branches` entry or an arm map that is not
             # a Hash (foreign or absent data) carries no columns.
-            sig { params(file: SimpleCov::SourceFile).returns(T::Array[Object]) }
+            sig { params(file: SimpleCov::SourceFile).returns(T::Array[BasicObject]) }
             def raw_descriptors(file)
               conditions = Hash.try_convert(file.coverage_data['branches'])
-              return [] unless conditions
+              conditions ? conditions.values.flat_map { |arms| decoded_arms(file, arms) } : []
+            end
 
-              arm_maps = conditions.values.filter_map { |arms| Hash.try_convert(T.cast(arms, BasicObject)) }
-              arm_maps.flat_map(&:keys).map { |descriptor| DECODER.call(file, T.cast(descriptor, BasicObject)) }
+            # The decoded descriptors of one condition's arm map.
+            sig { params(file: SimpleCov::SourceFile, arms: BasicObject).returns(T::Array[BasicObject]) }
+            def decoded_arms(file, arms)
+              (Hash.try_convert(arms) || {}).keys.map { |descriptor| DECODER.call(file, descriptor) }
             end
 
             # Groups the raw column offsets by their (type, start_line, end_line) identity so
             # each SourceFile::Branch can be matched to its descriptor without relying on the
             # two collections sharing an identical iteration order.
             sig do
-              params(raw_descriptors: T::Array[Object]).returns(T::Hash[String, T::Array[[Integer, Integer]]])
+              params(raw_descriptors: T::Array[BasicObject]).returns(T::Hash[String, T::Array[[Integer, Integer]]])
             end
             def index_columns_by_key(raw_descriptors)
-              index = T.let({}, T::Hash[String, T::Array[[Integer, Integer]]])
-              raw_descriptors.each do |raw|
-                entry = column_entry(raw)
-                next unless entry
-
-                (index[entry.first] ||= []) << entry.last
-              end
-              index
+              entries = raw_descriptors.filter_map { |raw| column_entry(raw) }
+              entries.group_by(&:first).transform_values { |keyed_entries| keyed_entries.map(&:last) }
             end
 
             # Converts a raw descriptor [type, id, start_line, start_col, end_line, end_col]
             # into a [key, [start_col, end_col]] pair, or nil if it is not a usable descriptor.
-            sig { params(raw: Object).returns(T.nilable([String, [Integer, Integer]])) }
+            # A descriptor whose positions are not all Integers raises TypeError, as SimpleCov's
+            # own use of it would fail.
+            sig { params(raw: BasicObject).returns(T.nilable([String, [Integer, Integer]])) }
             def column_entry(raw)
-              return nil unless raw.is_a?(Array) && raw.size >= DESCRIPTOR_LENGTH
+              case raw
+              when Array
+                return nil if raw.size < DESCRIPTOR_LENGTH
 
-              type, _id, start_line, start_col, end_line, end_col = raw
-              key = branch_key(T.cast(type, Object), T.cast(start_line, Integer), T.cast(end_line, Integer))
-              [key, [T.cast(start_col, Integer), T.cast(end_col, Integer)]]
+                start_line, start_col, end_line, end_col = positions(raw)
+                [branch_key(raw.fetch(0), start_line, end_line), [start_col, end_col]]
+              end
+            end
+
+            # The start line, start column, end line and end column of a descriptor (its third to
+            # sixth entries).
+            sig { params(raw: T::Array[BasicObject]).returns([Integer, Integer, Integer, Integer]) }
+            def positions(raw)
+              found = raw.drop(2).first(4).grep(Integer)
+              raise TypeError, 'branch descriptor positions must be Integers' unless found.size == 4
+
+              [found.fetch(0), found.fetch(1), found.fetch(2), found.fetch(3)]
             end
 
             sig { params(type: Object, start_line: Integer, end_line: Integer).returns(String) }

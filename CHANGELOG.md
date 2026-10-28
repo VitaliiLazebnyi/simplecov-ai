@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **sorbet-runtime 0.6.** The runtime dependency now accepts `sorbet-runtime >= 0.5, < 0.7`.
+- **Parser fallback without global state.** On a Ruby for which neither Prism nor the `parser` gem
+  has an exact grammar, the newest `parser/rubyXY` grammar not newer than the running Ruby is
+  loaded directly. Previously `parser/current` was required with `$VERBOSE` set to `nil` for the
+  whole process, which muted every other thread's warnings for that moment. On a Ruby older than
+  every grammar (none of which the gem supports) selection now raises `LoadError`.
+- **`Configuration#report_destination`.** The absolute path the report is written to is
+  available from the configuration.
+- **Verified against SimpleCov 1.2 and 1.3** in addition to 0.18–1.1.
+
+### Development
+
+- Every gate now runs with no exceptions: RuboCop with all plugins and no inline directives,
+  Sorbet `typed: strong` in `lib/` with no `T.cast` / `T.must` / `T.untyped`, Reek with its
+  default configuration, Flay, Flog, Debride, YARD at 100%, mutation testing with no ignore
+  patterns and every mutant killed, no skipped examples, no warning anywhere in a run or a CI log,
+  and every dependency at its newest release unless `script/outdated_holds.yml` documents why
+  (see CONTRIBUTING.md).
+
 ## [0.11.0] - 2026-08-29
 
 ### Fixed

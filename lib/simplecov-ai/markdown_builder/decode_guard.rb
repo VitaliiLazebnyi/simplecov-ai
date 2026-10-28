@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -20,9 +20,7 @@ module SimpleCov
 
           # Entry standing in for the deficits or bypasses of a file whose coverage data could
           # not be decoded; the placeholder names the error class SimpleCov raised.
-          ERROR_TEMPLATE = T.let(
-            "  - **ERROR:** SimpleCov could not decode this file's coverage data (%s); skipped.\n", String
-          )
+          ERROR_TEMPLATE = "  - **ERROR:** SimpleCov could not decode this file's coverage data (%s); skipped.\n"
 
           # Runs a computation over SimpleCov's coverage objects.
           #

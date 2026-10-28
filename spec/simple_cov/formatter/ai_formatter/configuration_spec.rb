@@ -11,9 +11,10 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::Configuration do
       expect([config.report_path, config.report_path_configured?]).to eq(['coverage/ai_report.md', false])
     end
 
-    it 'declares every setting up front, the report path as unset' do
-      expect(config.instance_variables).to eq(%i[@report_path @max_file_size_kb @max_snippet_lines @output_to_console
-                                                 @granularity @include_bypasses])
+    it 'starts every configuration from fresh default settings, the report path unset' do
+      other = described_class.new
+      other.max_file_size_kb = 1
+      expect([config.max_file_size_kb, config.max_snippet_lines, config.report_path_configured?]).to eq([50, 5, false])
     end
 
     it 'defaults to fine granularity, bypasses on, console off' do
@@ -30,6 +31,21 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::Configuration do
 
     it 'rejects a blank path' do
       expect { config.report_path = '   ' }.to raise_error(ArgumentError, /report_path/)
+    end
+
+    it 'rejects an empty path and one made of any ASCII whitespace' do
+      rejected = ['', " \t", "\n", "\v", "\f", "\r"].count do |blank|
+        config.report_path = blank
+        false
+      rescue ArgumentError
+        true
+      end
+      expect(rejected).to eq(6)
+    end
+
+    it 'accepts a path that only starts or ends with whitespace, or is made of non-ASCII spaces' do
+      [" a\n", "\u00a0"].each { |path| config.report_path = path }
+      expect(config.report_path).to eq("\u00a0")
     end
 
     it 'rejects a path containing a NUL byte' do

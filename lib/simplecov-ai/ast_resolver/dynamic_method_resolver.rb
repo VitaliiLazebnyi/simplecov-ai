@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -18,7 +18,7 @@ module SimpleCov
           DEFINERS = T.let({ define_method: false, define_singleton_method: true }.freeze,
                            T::Hash[Symbol, T::Boolean])
           # Node types accepted as a literal method name.
-          LITERAL_NAME_TYPES = T.let(%i[sym str].freeze, T::Array[Symbol])
+          LITERAL_NAME_TYPES = %i[sym str].freeze
 
           # @param node [Parser::AST::Node] A node whose type is one of
           #   {MetaclassResolver::BLOCK_TYPES}.
@@ -27,13 +27,14 @@ module SimpleCov
           sig { params(node: Parser::AST::Node).returns(T.nilable([String, T::Boolean])) }
           def self.definition(node)
             call = MetaclassResolver.block_call(node)
-            return nil unless call && implicit_receiver?(call)
+            literal_definition(call) if call && implicit_receiver?(call)
+          end
 
-            singleton_definer = DEFINERS[NodeChildren.symbol_at(call, 1)]
+          sig { params(call: Parser::AST::Node).returns(T.nilable([String, T::Boolean])) }
+          def self.literal_definition(call)
+            definer = NodeChildren.symbol_at(call, 1)
             name = literal_name(call)
-            return nil if singleton_definer.nil? || name.nil?
-
-            [name, singleton_definer]
+            [name, DEFINERS.fetch(definer)] if name && DEFINERS.key?(definer)
           end
 
           # True when the call has no receiver or `self` as its receiver, i.e. it defines the
@@ -41,7 +42,7 @@ module SimpleCov
           sig { params(call: Parser::AST::Node).returns(T::Boolean) }
           def self.implicit_receiver?(call)
             receiver = NodeChildren.node_at(call, 0)
-            receiver.nil? || receiver.type == :self
+            !receiver || receiver.type == :self
           end
 
           # The first argument of the call as a method name, when it is a symbol or string literal.
@@ -53,7 +54,7 @@ module SimpleCov
             NodeChildren.literal_value(argument)
           end
 
-          private_class_method :implicit_receiver?, :literal_name
+          private_class_method :implicit_receiver?, :literal_definition, :literal_name
         end
       end
     end

@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -19,11 +19,13 @@ module SimpleCov
         module SkipRegions
           extend T::Sig
 
+          # Runs of consecutive skipped lines.
+          Runs = T.type_alias { T::Array[T::Array[SimpleCov::SourceFile::Line]] }
           # Reason reported when the directive that produced a region cannot be located.
-          FALLBACK_REASON = T.let('coverage skipped by SimpleCov', String)
-          # Readers of the configured nocov token, newest SimpleCov first: the public
-          # `nocov_token` reader warns about its own deprecation on SimpleCov >= 1.0.
-          NOCOV_TOKEN_READERS = T.let(%i[current_nocov_token nocov_token].freeze, T::Array[Symbol])
+          FALLBACK_REASON = 'coverage skipped by SimpleCov'
+          # Whether the installed SimpleCov (>= 1.0) has the non-deprecated token reader,
+          # decided once at load time.
+          CURRENT_TOKEN_READER = T.let(SimpleCov.singleton_class.method_defined?(:current_nocov_token), T::Boolean)
 
           # Cheap pre-check (no AST parse) for whether SimpleCov skipped anything in the file.
           #
@@ -44,18 +46,20 @@ module SimpleCov
           end
           def self.of(file, source_lines)
             line_ranges = skipped_line_ranges(file)
-            branch_ranges = skipped_branch_ranges(file).reject do |branch_range|
-              line_ranges.any? { |line_range| LineSpan.encloses?(line_range, branch_range) }
-            end
-            pattern = directive_pattern
-            (line_ranges + branch_ranges).sort_by(&:begin)
-                                         .map { |range| [range, reason_for(range, source_lines, pattern)] }
+            ranges = line_ranges + skipped_branch_ranges(file).reject { |range| enclosed?(range, line_ranges) }
+            ranges.sort_by(&:begin).map { |range| [range, reason_for(range, source_lines)] }
+          end
+
+          sig { params(range: T::Range[Integer], outer_ranges: T::Array[T::Range[Integer]]).returns(T::Boolean) }
+          def self.enclosed?(range, outer_ranges)
+            outer_ranges.any? { |outer_range| LineSpan.encloses?(outer_range, range) }
           end
 
           # `SourceFile#branches` (SimpleCov >= 0.18) is empty when branch coverage is off.
           sig { params(file: SimpleCov::SourceFile).returns(T::Array[T::Range[Integer]]) }
           def self.skipped_branch_ranges(file)
-            file.branches.select(&:skipped?).map { |branch| branch.start_line..branch.end_line }.uniq
+            ranges = file.branches.filter_map { |branch| LineSpan.of(branch) if branch.skipped? }
+            ranges.uniq
           end
 
           # A region holding nothing SimpleCov would count — comments and blank lines only, such as
@@ -63,8 +67,14 @@ module SimpleCov
           # dropped; a region with at least one relevant line is a bypass, whatever else it wraps.
           sig { params(file: SimpleCov::SourceFile).returns(T::Array[T::Range[Integer]]) }
           def self.skipped_line_ranges(file)
-            contiguous_runs(file.skipped_lines).select { |run| run.any? { |line| relevant?(line) } }
-                                               .map { |run| run.fetch(0).line_number..run.fetch(-1).line_number }
+            contiguous_runs(file.skipped_lines).filter_map do |run|
+              run.fetch(0).line_number..run.fetch(-1).line_number if relevant_run?(run)
+            end
+          end
+
+          sig { params(run: T::Array[SimpleCov::SourceFile::Line]).returns(T::Boolean) }
+          def self.relevant_run?(run)
+            run.any? { |line| relevant?(line) }
           end
 
           # SimpleCov lists skipped lines in line order, so a run closes at the first gap.
@@ -72,7 +82,7 @@ module SimpleCov
             params(lines: T::Array[SimpleCov::SourceFile::Line]).returns(T::Array[T::Array[SimpleCov::SourceFile::Line]])
           end
           def self.contiguous_runs(lines)
-            lines.each_with_object(T.let([], T::Array[T::Array[SimpleCov::SourceFile::Line]])) do |line, runs|
+            lines.each_with_object(T.let([], Runs)) do |line, runs|
               open_run = runs.last
               if open_run && open_run.fetch(-1).line_number + 1 == line.line_number
                 open_run << line
@@ -95,10 +105,9 @@ module SimpleCov
           # region always starts on its directive (SimpleCov's skipped ranges include the marker
           # lines), while a branch-only region starts on the arm and finds its
           # `simplecov:disable branch` on the lines above.
-          sig do
-            params(range: T::Range[Integer], source_lines: T::Array[String], pattern: Regexp).returns(String)
-          end
-          def self.reason_for(range, source_lines, pattern)
+          sig { params(range: T::Range[Integer], source_lines: T::Array[String]).returns(String) }
+          def self.reason_for(range, source_lines)
+            pattern = directive_pattern
             range.begin.downto(1) do |line_number|
               comment = source_lines.fetch(line_number - 1, '')[pattern]
               return comment.rstrip if comment
@@ -113,14 +122,15 @@ module SimpleCov
             /#\s*(?:simplecov\s*:\s*disable\b|:#{Regexp.escape(nocov_token)}:).*/
           end
 
+          # The configured nocov token, through `current_nocov_token` where SimpleCov (>= 1.0) has
+          # it: the public `nocov_token` reader warns about its own deprecation there.
           sig { returns(String) }
           def self.nocov_token
-            reader = NOCOV_TOKEN_READERS.find { |candidate| SimpleCov.respond_to?(candidate) }
-            T.cast(SimpleCov.public_send(T.must(reader)), String)
+            (CURRENT_TOKEN_READER && SimpleCov.current_nocov_token) || SimpleCov.nocov_token
           end
 
-          private_class_method :skipped_branch_ranges, :skipped_line_ranges, :contiguous_runs, :relevant?, :reason_for,
-                               :directive_pattern, :nocov_token
+          private_class_method :enclosed?, :skipped_branch_ranges, :skipped_line_ranges, :relevant_run?,
+                               :contiguous_runs, :relevant?, :reason_for, :directive_pattern, :nocov_token
         end
       end
     end

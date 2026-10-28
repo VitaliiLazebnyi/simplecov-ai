@@ -28,7 +28,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
 
   def report_for(result)
     capture_stdout { described_class.new.format(result) }
-    File.read(report_path)
+    File.read(report_path, encoding: Encoding::UTF_8)
   end
 
   describe 'ASTResolver edge cases' do
@@ -85,12 +85,14 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
         .to match(/^  - \*\*Line Deficit:\*\* \[L3\] `'あ'`$/)
     end
 
-    it 'renders a file whose comments carry stray non-UTF-8 bytes without raising' do
-      path = File.join(tmpdir, 'latin.rb')
-      File.binwrite(path, "# Latin-1 \xe9\ndef read\n  1\nend\n".b)
-      result = result_for(path => { 'lines' => [nil, 1, 0, nil] })
-      skip 'SimpleCov < 1.1 raises on invalid UTF-8 bytes itself (1.1 scrubs them)' unless classifiable?(result)
-      expect(report_for(result)).to end_with("  - **Line Deficit:** [L3] `1`\n\n")
+    # SimpleCov < 1.1 raises on invalid UTF-8 bytes itself (1.1 scrubs them).
+    if SimpleCovFixtures.invalid_bytes_scrubbed?
+      it 'renders a file whose comments carry stray non-UTF-8 bytes without raising' do
+        path = File.join(tmpdir, 'latin.rb')
+        File.binwrite(path, "# Latin-1 \xe9\ndef read\n  1\nend\n".b)
+        result = result_for(path => { 'lines' => [nil, 1, 0, nil] })
+        expect(report_for(result)).to end_with("  - **Line Deficit:** [L3] `1`\n\n")
+      end
     end
   end
 
@@ -109,10 +111,4 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
   # SimpleCov releases before 1.1 raise ArgumentError from their own line classification when a
   # source line carries invalid UTF-8 bytes (1.1 scrubs the source first), so no formatter can
   # process such a project there; the example verifies the formatter's side where SimpleCov can.
-  def classifiable?(result)
-    result.covered_percent
-    true
-  rescue ArgumentError
-    false
-  end
 end

@@ -106,20 +106,26 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
 
     # SimpleCov < 1.0 has neither Result#total_methods nor SourceFile#missed_methods.
     it 'reports no method figures at all on a SimpleCov without the method coverage API' do
-      without_method(result, :total_methods)
+      stub_const("#{described_class}::MethodDeficit::API_AVAILABLE", false)
+      allow(result).to receive(:total_methods).and_raise(NoMethodError) if method_coverage_supported?
       expect(digest_for(result)).to eq(expected_header('PASSED', '100.0%', '100.0%'))
     end
 
     it 'derives no method deficit from a file without the method coverage API' do
+      stub_const("#{described_class}::MethodDeficit::API_AVAILABLE", false)
       file = result.files.first
-      without_method(file, :missed_methods)
+      allow(file).to receive(:missed_methods).and_raise(NoMethodError) if method_coverage_supported?
       expect(described_class::MethodDeficit.from_file(file)).to eq([])
     end
 
+    it 'knows at load time whether the installed SimpleCov implements method coverage' do
+      expect(described_class::MethodDeficit::API_AVAILABLE).to eq(SimpleCov::SourceFile.method_defined?(:missed_methods))
+    end
+
     it 'names a method whose owner SimpleCov reports as a Module, as a live result does' do
-      skip 'method coverage needs SimpleCov >= 1.0' unless method_coverage_supported?
       methods = { [described_class, :never_called, 7, 4, 9, 7] => 0 }
       live = source_file(calc_path, { 'lines' => perfect_lines, 'methods' => methods })
+      emulate_method_coverage!(live, methods) unless method_coverage_supported?
       expect(described_class::MethodDeficit.from_file(live).map(&:name)).to eq(["#{described_class}#never_called"])
     end
 
