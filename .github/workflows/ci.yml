@@ -676,7 +676,7 @@ jobs:
       - uses: crate-ci/typos@4c8b7f51ca60df14e3c5ca82770dfbbe6c3dae85  # v1.52.0
 
   warning-gate:
-    name: Warning gate
+    name: Warning gate (CI)
     if: ${{ !cancelled() }}
     needs:
       - lint
@@ -719,5 +719,5 @@ jobs:
       - name: Fail on any warning or deprecation in the logs of this run
         env:
           GH_TOKEN: ${{ github.token }}
-          GATE_JOB_NAME: Warning gate
+          GATE_JOB_NAME: Warning gate (CI)
         run: script/warning_gate.sh
