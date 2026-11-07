@@ -15,7 +15,7 @@ require 'tmpdir'
 # computes the statistics of every criterion at once, from the global percentages as well. The
 # report must contain the damage to that one file (SCAI-REQ-011).
 RSpec.describe(SimpleCov::Formatter::AIFormatter::MarkdownBuilder) do
-  let(:tmpdir) { Dir.mktmpdir('scai') }
+  let(:tmpdir) { Dir.mktmpdir('scai')                                 }
   let(:config) { SimpleCov::Formatter::AIFormatter::Configuration.new }
   # Named to sort after the healthy file by path, so the ordering of undecodable files is observable.
   let(:corrupt_path) { write_source(tmpdir, 'zzz_corrupt.rb', "def broken\n  1\nend\n") }

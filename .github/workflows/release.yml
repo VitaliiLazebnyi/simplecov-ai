@@ -31,6 +31,7 @@ jobs:
         uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
         with:
           egress-policy: block
+          disable-telemetry: true
           disable-sudo-and-containers: true
           allowed-endpoints: >-
             api.github.com:443
@@ -67,6 +68,7 @@ jobs:
         uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
         with:
           egress-policy: block
+          disable-telemetry: true
           disable-sudo-and-containers: true
           allowed-endpoints: >-
             *.actions.githubusercontent.com:443
@@ -94,13 +96,28 @@ jobs:
       contents: write  # create the GitHub release and attach the gem
       id-token: write  # RubyGems trusted publishing and the provenance attestation (OIDC)
     steps:
-      # Audit mode: the publishing endpoints (RubyGems trusted publishing, Sigstore, the GitHub
-      # release upload) are only reached by a tag push, so a block list could not be verified
-      # before the release it would break.
-      - name: Harden the runner (audit mode)
+      # The publishing endpoints: RubyGems (trusted publishing and the push), the public Sigstore
+      # instance of the provenance attestation, and the GitHub release upload.
+      - name: Harden the runner
         uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
         with:
-          egress-policy: audit
+          egress-policy: block
+          disable-telemetry: true
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+            api.github.com:443
+            fulcio.sigstore.dev:443
+            github.com:443
+            index.rubygems.org:443
+            objects.githubusercontent.com:443
+            rekor.sigstore.dev:443
+            release-assets.githubusercontent.com:443
+            rubygems.org:443
+            sigstore-tuf-root.storage.googleapis.com:443
+            tuf-repo-cdn.sigstore.dev:443
+            uploads.github.com:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
@@ -135,28 +152,29 @@ jobs:
           fi
           echo "VERSION=${version}" >> "${GITHUB_ENV}"
 
+      # Every release is signed: a missing key fails the release instead of publishing an unsigned
+      # gem.
       - name: Recover the private key for code signing
         env:
           GEM_PRIVATE_KEY: ${{ secrets.GEM_PRIVATE_KEY }}
         run: |
-          if [[ -n "${GEM_PRIVATE_KEY}" ]]; then
-            mkdir -p ~/.gem
-            printf '%s\n' "${GEM_PRIVATE_KEY}" > ~/.gem/gem-private_key.pem
-            chmod 0600 ~/.gem/gem-private_key.pem
-            # Opt in to signing; the gemspec verifies the key against certs/ and aborts on a mismatch.
-            echo "SIMPLECOV_AI_SIGN=1" >> "${GITHUB_ENV}"
-          else
-            echo "No GEM_PRIVATE_KEY secret found; the gem will be built unsigned."
+          if [[ -z "${GEM_PRIVATE_KEY}" ]]; then
+            echo "::error::The GEM_PRIVATE_KEY secret is empty; a release must be signed." >&2
+            exit 1
           fi
+          mkdir -p ~/.gem
+          printf '%s\n' "${GEM_PRIVATE_KEY}" > ~/.gem/gem-private_key.pem
+          chmod 0600 ~/.gem/gem-private_key.pem
+          # Opt in to signing; the gemspec verifies the key against certs/ and aborts on a mismatch.
+          echo "SIMPLECOV_AI_SIGN=1" >> "${GITHUB_ENV}"
 
       - run: gem build simplecov-ai.gemspec --strict
 
-      - name: Verify the built gem is signed when signing was requested
+      - name: Verify the built gem is signed
         run: |
           gem_file="simplecov-ai-${VERSION}.gem"
-          if [[ -n "${SIMPLECOV_AI_SIGN:-}" ]] &&
-            ! gem specification "${gem_file}" cert_chain | grep -q 'BEGIN CERTIFICATE'; then
-            echo "::error::Signing was requested but ${gem_file} carries no certificate chain." >&2
+          if ! gem specification "${gem_file}" cert_chain | grep -q 'BEGIN CERTIFICATE'; then
+            echo "::error::${gem_file} carries no certificate chain." >&2
             exit 1
           fi
 

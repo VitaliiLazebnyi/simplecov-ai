@@ -39,7 +39,7 @@ check 'gitleaks allow' 'gitleaks:allow'
 check 'zizmor ignore' 'zizmor: ?ignore'
 check 'shellcheck disable' 'shellcheck +disable'
 check 'typos ignore' 'typos: ?(ignore|off)|spellchecker: ?disable'
-check 'markdownlint directive' 'markdownlint-(disable|capture|configure-file)'
+check 'Markdown lint directive' '(markdownlint|rumdl)-(disable|enable|capture|restore|configure-file)'
 check 'yamllint directive' 'yamllint (disable|enable)'
 check 'editorconfig-checker directive' 'editorconfig-checker-(disable|enable)'
 check 'Semgrep suppression' 'nosemgrep'
@@ -49,7 +49,11 @@ check 'warning silencing' \
   '[$]VERBOSE *= *(nil|false)|Warning\.ignore|Warning\[[^]]*\] *= *false|silence_warnings|[$]stderr *= *File::NULL|-W0'
 skipped_test='^[[:space:]]*([xf](it|specify|example|describe|context)|skip|pending)([[:space:]]|\(|$)'
 check 'skipped or focused test' "${skipped_test}|focus: *true|, *:focus|, *(skip|pending): " 'spec/'
-check 'Sorbet escape hatch' 'T\.(unsafe|cast|bind|must|untyped)\b|T::Utils\.run_all_sig_blocks|T::Configuration' 'lib/'
+# Every Ruby source of the gem and its tooling (the specs are not type-checked, and the RBIs in
+# sorbet/rbi/ describe upstream signatures as their gems define them).
+ruby_sources='(lib/|script/|bin/|gemfiles/|sorbet/tapioca/|Rakefile$|Gemfile$|simplecov-ai\.gemspec$)'
+check 'Sorbet escape hatch' 'T\.(unsafe|cast|bind|must|untyped)\b|T::Utils\.run_all_sig_blocks|T::Configuration' \
+  "${ruby_sources}"
 check 'Sorbet sigil below strict' 'typed: *(ignore|false|true)\b' 'lib/'
 check 'CI step allowed to fail' 'continue-on-error: *true' '.github/'
 

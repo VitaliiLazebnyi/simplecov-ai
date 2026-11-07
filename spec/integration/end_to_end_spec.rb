@@ -110,7 +110,7 @@ RSpec.describe(EndToEnd) do
   # accepted there but yields no branch data, so its digest carries an N/A branch line, no branch
   # deficit, none of the files whose only deficits were branches and no bypass for a branch-scoped
   # directive - the README's promise that only line deficits are reported on those engines.
-  let(:branches)     { branch_coverage_measurable? }
+  let(:branches)     { branch_coverage_measurable?                                                   }
   let(:announcement) { "AI coverage digest written to #{described_class.report_path(project_dir)}\n" }
 
   before { described_class.write_project(project_dir) }

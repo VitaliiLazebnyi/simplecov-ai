@@ -8,9 +8,9 @@ require 'fileutils'
 require 'tmpdir'
 
 RSpec.describe(SimpleCov::Formatter::AIFormatter::MarkdownBuilder) do
-  let(:tmpdir)        { Dir.mktmpdir('scai') }
-  let(:config)        { SimpleCov::Formatter::AIFormatter::Configuration.new }
-  let(:calc_path)     { write_source(tmpdir, 'calc.rb', calc_source) }
+  let(:tmpdir)        { Dir.mktmpdir('scai')                                   }
+  let(:config)        { SimpleCov::Formatter::AIFormatter::Configuration.new   }
+  let(:calc_path)     { write_source(tmpdir, 'calc.rb', calc_source)           }
   let(:perfect_lines) { line_hits(17, covered: [1, 2, 3, 4, 7, 8, 11, 12, 13]) }
   # SimpleCov's merged data names a singleton method's owner plainly (`build`); a live result
   # names it `#<Class:Owner>` (`phantom` and `ghost`, methods the resolver cannot see, on the

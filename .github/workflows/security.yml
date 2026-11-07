@@ -34,6 +34,7 @@ jobs:
         uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
         with:
           egress-policy: block
+          disable-telemetry: true
           disable-sudo-and-containers: true
           allowed-endpoints: >-
             *.blob.core.windows.net:443
@@ -71,6 +72,7 @@ jobs:
         uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
         with:
           egress-policy: block
+          disable-telemetry: true
           disable-sudo-and-containers: true
           allowed-endpoints: >-
             api.deps.dev:443
@@ -85,6 +87,11 @@ jobs:
         with:
           fail-on-severity: low
           fail-on-scopes: runtime, development, unknown
+          # The OpenSSF Scorecard of every dependency is enforced by the scorecard job below instead:
+          # this action only warns, for the dependencies a pull request adds, under one global
+          # threshold, while `rake scorecard` scores every dependency and allows exceptions one
+          # package at a time, each with its reason (script/scorecard_allowlist.yml).
+          show-openssf-scorecard: false
 
   gitleaks:
     name: Secret scanning (gitleaks)
@@ -97,6 +104,7 @@ jobs:
         uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
         with:
           egress-policy: block
+          disable-telemetry: true
           disable-sudo-and-containers: true
           allowed-endpoints: >-
             github.com:443
@@ -122,6 +130,88 @@ jobs:
         run: >-
           "${RUNNER_TEMP}/gitleaks" git --redact --verbose --exit-code 1 .
 
+  # Every gem of Gemfile.lock, every GitHub Action of the workflows and every pip package at or
+  # above OpenSSF Scorecard 3, unless script/scorecard_allowlist.yml allows it with its reason.
+  scorecard:
+    name: OpenSSF Scorecard of dependencies
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            *.blob.core.windows.net:443
+            api.github.com:443
+            api.securityscorecards.dev:443
+            github.com:443
+            index.rubygems.org:443
+            objects.githubusercontent.com:443
+            pypi.org:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            rubygems.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199  # v1.338.0
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+      - name: Check the Ruby version
+        run: script/check_ruby.sh
+      - name: Turn on every Ruby warning for the remaining steps
+        run: echo "RUBYOPT=$(ruby script/rubyopt.rb)" >> "${GITHUB_ENV}"
+      - run: bundle exec rake scorecard
+
+  # Trivy: known vulnerabilities of any severity in every lockfile (Gemfile.lock and
+  # .github/python/requirements.txt, development dependencies included), and secrets in the
+  # working tree. The archive is verified against its SHA-256 before it is run.
+  trivy:
+    name: Trivy (lockfiles and working tree)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            ghcr.io:443
+            github.com:443
+            mirror.gcr.io:443
+            objects.githubusercontent.com:443
+            pkg-containers.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Trivy
+        env:
+          TRIVY_VERSION: 0.76.2
+          TRIVY_SHA256: bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf
+        run: |
+          archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl --fail --silent --show-error --location --output "${RUNNER_TEMP}/${archive}" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${archive}"
+          echo "${TRIVY_SHA256}  ${RUNNER_TEMP}/${archive}" | sha256sum --check --strict
+          tar -xzf "${RUNNER_TEMP}/${archive}" -C "${RUNNER_TEMP}" trivy
+      - name: Scan the lockfiles for vulnerabilities and the working tree for secrets
+        env:
+          TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+        run: >-
+          "${RUNNER_TEMP}/trivy" filesystem --scanners vuln,secret --include-dev-deps
+          --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --exit-code 1 --no-progress --skip-version-check .
+
   # Semgrep runs in its pinned image, started from a step rather than as the job's container so
   # Harden-Runner guards the job.
   semgrep:
@@ -135,6 +225,8 @@ jobs:
         uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
         with:
           egress-policy: block
+          disable-sudo: true
+          disable-telemetry: true
           allowed-endpoints: >-
             auth.docker.io:443
             docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com:443
@@ -157,7 +249,7 @@ jobs:
   warning-gate:
     name: Warning gate (security)
     if: ${{ !cancelled() }}
-    needs: [bundler-audit, dependency-review, gitleaks, semgrep]
+    needs: [bundler-audit, dependency-review, gitleaks, scorecard, trivy, semgrep]
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
@@ -168,6 +260,7 @@ jobs:
         uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
         with:
           egress-policy: block
+          disable-telemetry: true
           disable-sudo-and-containers: true
           allowed-endpoints: >-
             *.actions.githubusercontent.com:443

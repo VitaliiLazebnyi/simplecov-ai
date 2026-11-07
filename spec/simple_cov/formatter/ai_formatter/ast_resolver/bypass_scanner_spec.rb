@@ -12,10 +12,10 @@ RSpec.describe(SimpleCov::Formatter::AIFormatter::ASTResolver::BypassScanner) do
   end
 
   let(:root)          { SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.root(20) }
-  let(:klass)         { node('Runner', 3, 18, type: 'Class') }
-  let(:first_method)  { node('Runner#first', 4, 8) }
-  let(:second_method) { node('Runner#second', 10, 14) }
-  let(:nodes)         { [root, klass, first_method, second_method] }
+  let(:klass)         { node('Runner', 3, 18, type: 'Class')                                  }
+  let(:first_method)  { node('Runner#first', 4, 8)                                            }
+  let(:second_method) { node('Runner#second', 10, 14)                                         }
+  let(:nodes)         { [root, klass, first_method, second_method]                            }
 
   def names_with_reasons(reasons_by_node)
     reasons_by_node.map { |semantic_node, reasons| [semantic_node.name, reasons] }

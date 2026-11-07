@@ -8,7 +8,7 @@ require 'fileutils'
 require 'tmpdir'
 
 RSpec.describe(SimpleCov::Formatter::AIFormatter::MarkdownBuilder::SourceLines) do
-  let(:tmpdir) { Dir.mktmpdir('scai') }
+  let(:tmpdir) { Dir.mktmpdir('scai')                                                                           }
   let(:file)   { source_file(write_source(tmpdir, 'lines.rb', "def a\n  1\nend\n"), { 'lines' => [1, 1, nil] }) }
 
   after { FileUtils.remove_entry(tmpdir) }

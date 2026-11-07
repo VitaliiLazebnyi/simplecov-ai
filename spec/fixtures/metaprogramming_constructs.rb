@@ -37,7 +37,7 @@ module MetaprogrammingConstructs
   end
 
   # 4. method_missing
-  sig { params(method_name: Object, args: Object, block: Object).returns(Object) }
+  sig { params(method_name: Object, args: Object, block: T.nilable(Proc)).returns(Object) }
   def method_missing(method_name, *args, &block)
     if method_name.to_s.start_with?('magic_')
       :magic_handled

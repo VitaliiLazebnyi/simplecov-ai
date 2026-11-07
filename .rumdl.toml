@@ -1,0 +1,59 @@
+# rumdl (https://github.com/rvben/rumdl) lints every Markdown file with every markdownlint rule and rumdl's own, at
+# their strictest: the rules that rumdl leaves off by default are switched on, and the configurable ones are
+# configured. There are no inline disable comments (script/forbidden_suppressions.sh).
+
+[global]
+respect-gitignore = true
+
+[MD004]
+# Lists use dashes everywhere.
+style = "dash"
+
+[MD013]
+# Prose, code blocks and tables are wrapped at the width of the code (RuboCop Layout/LineLength).
+line-length = 120
+code-blocks = true
+headings = true
+tables = true
+# No exception for long link URLs: a long URL goes into a link reference definition.
+strict = true
+
+[MD044]
+# Proper names are written with their correct capitalization (outside code).
+names = [
+  "CodeQL",
+  "GitHub",
+  "GitHub Actions",
+  "Markdown",
+  "OpenSSF",
+  "RuboCop",
+  "Ruby",
+  "RubyGems",
+  "ShellCheck",
+  "SimpleCov",
+  "Sorbet",
+  "YAML",
+  "YARD",
+]
+
+[MD060]
+enabled = true
+style = "aligned"
+
+[MD061]
+# Unfinished work is tracked in issues, not in the documentation.
+terms = ["TODO", "FIXME", "XXX", "TBD"]
+
+[MD063]
+enabled = true
+# Headings are sentences: only the first word and proper names start with a capital.
+style = "sentence_case"
+
+[MD072]
+enabled = true
+
+[MD073]
+enabled = true
+
+[MD096]
+enabled = true

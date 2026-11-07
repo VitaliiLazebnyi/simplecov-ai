@@ -7,7 +7,7 @@ require 'spec_helper'
 RSpec.describe(SimpleCov::Formatter::AIFormatter::MarkdownBuilder::SnippetFormatter) do
   subject(:snippets) { described_class.new(source_lines, 1) }
 
-  let(:node)         { semantic_node('Foo#bar', 1, 4) }
+  let(:node)         { semantic_node('Foo#bar', 1, 4)                   }
   let(:source_lines) { ["def bar\n", "  x = 1\n", "  x = 1\n", "end\n"] }
 
   def semantic_node(name, start_line, end_line)

@@ -11,8 +11,8 @@ RSpec.describe(SimpleCov::Formatter::AIFormatter::ASTResolver::NodeChildren) do
 
   # A node of the `ast` gem that is not a Parser node: the resolver only ever descends into
   # Parser's own nodes.
-  let(:foreign) { AST::Node.new(:foreign) }
-  let(:const)   { node(:const, nil, :Alpha) }
+  let(:foreign) { AST::Node.new(:foreign)         }
+  let(:const)   { node(:const, nil, :Alpha)       }
   let(:casgn)   { node(:casgn, nil, :Beta, const) }
 
   describe '.nodes' do

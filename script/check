@@ -5,8 +5,8 @@
 #   script/check          # everything, including the Docker runs on the other Rubies and engines
 #   script/check --fast   # without the Docker runs (mutation testing and the Ruby matrix)
 #
-# CI alone runs CodeQL, Scorecard and the dependency review (GitHub services) and the Windows
-# job; the Ruby matrix and mutation testing run here in the same official Docker images.
+# CI alone runs CodeQL, the repository's own Scorecard and the dependency review (GitHub services)
+# and the Windows job; the Ruby matrix and mutation testing run here in the same official Docker images.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -41,25 +41,29 @@ required() {
   done
 }
 
-required actionlint docker editorconfig-checker gitleaks lychee npm python3 shellcheck shfmt typos zizmor
+required actionlint docker editorconfig-checker gh gitleaks lychee python3 shellcheck shfmt trivy typos
 
 RUBYOPT="$(ruby script/rubyopt.rb)"
 export RUBYOPT
 
 # Ruby: the default Rake task (RSpec with 100% coverage, RuboCop, suppressions, Sorbet, YARD,
-# Reek, Flay, Flog, Debride, bundler-audit, gem build) and the dependency freshness check.
+# Reek, Flay, Flog, Debride, bundler-audit, gem build), the dependency freshness check and the
+# OpenSSF Scorecard of every dependency.
 step bundle exec rake
-step bundle exec rake outdated
+step bundle exec rake outdated scorecard
 
-# Every other file type.
-step npm ci --silent
-step npm audit --audit-level=low
-step npm run --silent markdownlint
-if [[ ! -x tmp/venv/bin/yamllint ]]; then
+# The Python linters (rumdl, yamllint, zizmor), from the hash-pinned requirements, reinstalled
+# whenever they change.
+if [[ ! -f tmp/venv/installed ]] || [[ .github/python/requirements.txt -nt tmp/venv/installed ]]; then
+  rm -rf tmp/venv
   python3 -m venv tmp/venv
   tmp/venv/bin/pip install --quiet --disable-pip-version-check --require-hashes --no-deps \
     -r .github/python/requirements.txt
+  touch tmp/venv/installed
 fi
+
+# Every other file type.
+step tmp/venv/bin/rumdl check --deny-config-warnings --no-cache .
 step tmp/venv/bin/yamllint --strict .
 script/shell_scripts.sh >tmp/shell_scripts.txt
 step xargs shellcheck --severity=style <tmp/shell_scripts.txt
@@ -68,8 +72,14 @@ step editorconfig-checker
 step lychee --root-dir "${PWD}" '**/*.md'
 step typos
 step actionlint
-step zizmor --persona=pedantic .github/workflows
+# zizmor's online audits (known-vulnerable Actions, impostor commits) need a GitHub token.
+GH_TOKEN="${GH_TOKEN:-$(gh auth token)}"
+export GH_TOKEN
+step tmp/venv/bin/zizmor --persona=auditor --format=plain --no-progress .
 step gitleaks git --redact --exit-code 1 .
+step trivy filesystem --scanners vuln,secret --include-dev-deps --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+  --exit-code 1 --no-progress --skip-version-check --skip-dirs tmp --skip-dirs coverage --skip-dirs doc \
+  --skip-dirs .yardoc --skip-dirs vendor .
 step docker run --rm --volume "${PWD}:/src" --workdir /src "${semgrep_image}" semgrep scan \
   --config p/ruby --config p/secrets --config p/security-audit --config p/github-actions --error --metrics=off .
 

@@ -1,4 +1,4 @@
-# Active Defects
+# Active defects
 
 No open defects. Report new ones via [GitHub issues](https://github.com/VitaliiLazebnyi/simplecov-ai/issues).
 

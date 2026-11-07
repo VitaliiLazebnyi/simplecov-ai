@@ -1,6 +1,6 @@
-# Contributing to simplecov-ai
+# Contributing to `simplecov-ai`
 
-Thanks for your interest in improving simplecov-ai! This document describes how to set up the
+Thanks for your interest in improving `simplecov-ai`! This document describes how to set up the
 project locally and the gates your change has to pass. Every gate below is enforced in CI and
 fails the build; none of them has an exception list.
 
@@ -34,21 +34,27 @@ every other warning fails.
 - `rake spec`: RSpec; 100% line, branch and (SimpleCov >= 1.0) method coverage on MRI; no pending,
   skipped or focused example; any warning that reaches STDERR, from `lib/`, `spec/` or a
   dependency, fails the run (`spec/support/warnings.rb`).
-- `rake rubocop`: RuboCop with every cop of RuboCop and of rubocop-md, -packaging, -performance,
-  -rake, -rspec, -sorbet, -thread_safety and -yard enabled (`EnabledByDefault`); the few cops
-  that are off are listed in `.rubocop.yml`, each with the cop or contract it contradicts. No
-  todo file, no inline directives.
+- `rake rubocop`: RuboCop with every cop of RuboCop and of its plugins (`rubocop-md`,
+  `-packaging`, `-performance`, `-rake`, `-rspec`, `-sorbet`, `-thread_safety` and `-yard`)
+  enabled (`EnabledByDefault`); the few cops that are off are listed in `.rubocop.yml`, each with
+  the cop or contract it contradicts. No todo file, no inline directives.
 - `rake suppressions`: no inline suppression anywhere (`script/forbidden_suppressions.sh`, see
   *Rules*).
-- `rake typecheck`: Tapioca generates the gem RBIs, then `srb tc` must report no errors; every
-  `lib/` file is `# typed: strong` except `branch_enricher.rb` (`strict`, see its header), and
-  every other file Sorbet checks is at least `strict`.
+- `rake typecheck`: Tapioca generates the gem RBIs, then `srb tc` must report no errors over the
+  whole repository, `spec/` included; every `lib/` file is `# typed: strong` except
+  `branch_enricher.rb` (`strict`, see its header), and every other file is at least `strict`,
+  except the example files, support mixins and fixtures of `spec/` (`typed: false`, the reason is
+  in `.rubocop.yml`).
 - `rake yard`: YARD builds without warnings and reports 100% documented.
 - `rake reek`: no code smell (Reek's default configuration; `.reek.yml` narrows one detector for
   one class, with the reason).
-- `rake flay`, `rake flog`, `rake debride`: no structural duplication, no method above the flog
-  threshold, no method without a caller (the few callers debride cannot see are listed in the
-  `Rakefile`).
+- `rake flay`, `rake flog`, `rake debride`: no structural duplication (Flay mass 20; below it
+  Flay only reports the identical Sorbet signatures of sibling methods), no method scoring above
+  20 (the end of Flog's "good" band), no method without a caller (the few callers debride cannot
+  see are listed in the `Rakefile`).
+- Reek, Flay, Flog and debride check every Ruby source of the gem and its tooling: `lib/`,
+  `script/`, the `Rakefile`, the gemspec and the Gemfiles (`CODE_SOURCES` in the `Rakefile`). The
+  specs are held to RuboCop with `rubocop-rspec` instead.
 - `rake audit`: bundler-audit, no locked gem with a known vulnerability.
 - `rake build`: `gem build --strict`, then the gem is installed into a clean `GEM_HOME` and
   required with `ruby -w`.
@@ -68,44 +74,51 @@ Also enforced on every pull request and every push to `main`:
   `.ruby-version` against the newest Ruby release, every exact Ruby in the workflows against the
   newest release of its series, every Action against the commit of its newest release tag, the
   downloaded tools and the Semgrep image against their newest releases, every container image
-  against the digest its tag points to, the npm packages (`package.json`), the pip packages
-  (`.github/python/requirements.txt`) and `.node-version`. The only exceptions are the holds in
+  against the digest its tag points to and the pip packages (`.github/python/requirements.txt`).
+  The only exceptions are the holds in
   `script/outdated_holds.yml`, each with the upstream constraint that blocks it. Dependabot
   proposes updates for every ecosystem (`.github/dependabot.yml`).
 - **Test matrix**: MRI 2.7, 3.2, 3.3, 3.4 and 4.0 (newest patch release each, each resolving its
   own test bundle; Ruby 2.7 in its official Docker image, as `ruby/setup-ruby` has no 2.7 build
   for the current runner image), the lockfile bundle, Windows, JRuby and TruffleRuby, and every
   SimpleCov line from 0.18 to 1.3 (`gemfiles/`).
-- **Every other file type**: markdownlint with every rule (`.markdownlint-cli2.yaml`), yamllint
-  in strict mode with every rule but key-ordering (`.yamllint.yml`), ShellCheck with every
-  optional check at the style level (`.shellcheckrc`) and shfmt on every shell script
-  (`script/shell_scripts.sh`), actionlint (with ShellCheck on every `run:` script), zizmor
-  (pedantic), editorconfig-checker (`.editorconfig`), lychee on every link and anchor of the
-  Markdown files (`lychee.toml`), typos (`_typos.toml`).
+- **Every other file type**: rumdl with every markdownlint rule and rumdl's own, the optional ones
+  included (`.rumdl.toml`), yamllint in strict mode with every rule but key-ordering
+  (`.yamllint.yml`), ShellCheck with every optional check at the style level (`.shellcheckrc`)
+  and shfmt on every shell script (`script/shell_scripts.sh`), actionlint (with ShellCheck on
+  every `run:` script), zizmor (auditor persona, with its online audits) on the workflows and
+  `dependabot.yml`, editorconfig-checker (`.editorconfig`), lychee on every link and anchor of
+  the Markdown files (`lychee.toml`), typos (`_typos.toml`).
 - **Security**: Semgrep (`p/ruby`, `p/secrets`, `p/security-audit`, `p/github-actions`), gitleaks
-  over the full history, bundler-audit, the dependency review (fails on a vulnerability of any
-  severity), CodeQL (Ruby and the workflows) and the OpenSSF Scorecard.
-- **Hardened runners**: every job starts with Harden-Runner and may only reach the endpoints
-  listed with it (audit mode on Windows, the only mode it supports there, and in the publishing
-  job of a release, whose endpoints only a release reaches); every Action is pinned to a commit,
-  every downloaded tool and Python package to its SHA-256, and every container image to its
-  digest.
+  over the full history, Trivy (a known vulnerability of any severity in `Gemfile.lock` or
+  `.github/python/requirements.txt`, and secrets in the working tree), bundler-audit, the
+  dependency review (fails on a vulnerability of any severity), the OpenSSF Scorecard of every
+  dependency (`bundle exec rake scorecard`: every gem, Action and pip package at or above 3, or
+  allowed with its reason in `script/scorecard_allowlist.yml`), CodeQL (Ruby and the workflows)
+  and the repository's own OpenSSF Scorecard.
+- **Hardened runners**: every job starts with Harden-Runner, without telemetry, and may only
+  reach the endpoints listed with it (audit mode on Windows, the only mode it supports there);
+  sudo is removed from every Linux job, and so is Docker where the job does not run a container.
+  Every Action is pinned to a commit, every downloaded tool and Python package to its SHA-256,
+  and every container image to its digest. Every release is signed: the release fails without
+  the signing key.
 - **Warning gate**: every workflow ends with a job (`script/warning_gate.sh`) that fails the run
   when the log of any other job contains a warning or a deprecation notice.
 
-`script/check` expects `actionlint`, `docker`, `editorconfig-checker`, `gitleaks`, `lychee`,
-`npm`, `python3`, `shellcheck`, `shfmt`, `typos` and `zizmor` on the `PATH` (yamllint and
-markdownlint-cli2 are installed from the pinned `.github/python/requirements.txt` and
-`package-lock.json`). CI alone runs CodeQL, the Scorecard, the dependency review (GitHub
-services) and the Windows job.
+`script/check` expects `actionlint`, `docker`, `editorconfig-checker`, `gh` (signed in: zizmor's
+online audits use its token), `gitleaks`, `lychee`, `python3`, `shellcheck`, `shfmt`, `trivy`
+and `typos` on the `PATH` (rumdl, yamllint and zizmor are installed from the hash-pinned
+`.github/python/requirements.txt`). CI alone runs CodeQL, the repository's own Scorecard, the
+dependency review (GitHub services) and the Windows job.
 
 ## Rules
 
 - **No inline suppressions.** Nothing may silence a linter, scanner, type checker, coverage
   tool, warning or test in place: no `rubocop:disable`, `:reek:`, `nosemgrep`, `zizmor: ignore`,
-  `shellcheck disable`, `yamllint disable`, `markdownlint-disable`, `gitleaks:allow`,
+  `shellcheck disable`, `yamllint disable`, `rumdl-disable`, `markdownlint-disable`, `gitleaks:allow`,
   `mutant:disable`, nocov or `simplecov:disable`
-  directives in `lib/`, `T.unsafe` / `T.cast` / `T.bind` / `T.must` / `T.untyped` in `lib/`,
+  directives in `lib/`, `T.unsafe` / `T.cast` / `T.bind` / `T.must` / `T.untyped` in the Ruby
+  sources of the gem and its tooling,
   `$VERBOSE = nil`, `skip` / `pending` / focused examples, `continue-on-error`, and so on
   (`script/forbidden_suppressions.sh` has the full list). Fix the cause. A rule that genuinely
   cannot apply to a file is configured narrowly in the tool's configuration file, with the reason
@@ -139,7 +152,7 @@ services) and the Windows job.
 - `gemfiles/simplecov_<line>.gemfile` pin each supported SimpleCov release line
   (`BUNDLE_GEMFILE=gemfiles/simplecov_0.22.gemfile bundle exec rspec`).
 
-## Verifying on other Rubies and engines
+## Verifying on other Ruby versions and engines
 
 `bin/check-ruby` runs the suite (or any command) on another Ruby inside its official Docker image,
 resolving dependencies from scratch the way the CI matrix does. The checkout is streamed into the

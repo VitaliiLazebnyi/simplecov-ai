@@ -10,12 +10,11 @@ ignore: |
   .claude/
   coverage/
   doc/
-  node_modules/
   tmp/
   vendor/
 
 rules:
-  # The line length of every other file (RuboCop, markdownlint, .editorconfig).
+  # The line length of every other file (RuboCop, rumdl, .editorconfig).
   line-length:
     max: 120
   # Quote a string only when YAML needs it, always with double quotes.

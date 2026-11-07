@@ -37,12 +37,11 @@ if ENV['MUTANT']
 else
   # Coverage tracking MUST begin before the library under test is required, otherwise the gem's
   # own lines are never instrumented and the 100% mandate below is vacuously satisfied.
-  SimpleCov.start do
-    suite_criteria.each { |criterion| enable_coverage(criterion) }
-    # SimpleCov >= 1.1 renamed add_filter to skip and deprecates the old name.
-    public_send(respond_to?(:skip) ? :skip : :add_filter, '/spec/')
-    minimum_coverage(suite_criteria.to_h { |criterion| [criterion, 100] }) if mri
-  end
+  suite_criteria.each { |criterion| SimpleCov.enable_coverage(criterion) }
+  # SimpleCov >= 1.1 renamed add_filter to skip and deprecates the old name.
+  SimpleCov.public_send(SimpleCov.respond_to?(:skip) ? :skip : :add_filter, '/spec/')
+  SimpleCov.minimum_coverage(suite_criteria.to_h { |criterion| [criterion, 100] }) if mri
+  SimpleCov.start
 end
 
 # On an engine that records no branches the branch criterion is switched on all the same - after
@@ -96,13 +95,15 @@ RSpec.configure do |config|
   # `measuring_methods`), so the formatter's branch and method rendering is exercised with
   # hand-built data on every engine; spec/integration/end_to_end_spec.rb proves what a real run
   # on such an engine produces (an N/A branch line and line deficits only). An example that stubs
-  # a predicate itself (ai_formatter_spec.rb) still wins, as its `allow` comes later.
-  config.before do
+  # a predicate itself (ai_formatter_spec.rb) still wins, as its `allow` comes later. The stubs
+  # are set through the example's group instance, the object RSpec runs the example on.
+  config.before do |example|
+    group = example.example_group_instance
     unless branch_coverage_supported
-      allow(SimpleCov).to(receive(:branch_coverage?) { SimpleCov.coverage_criterion_enabled?(:branch) })
+      group.allow(SimpleCov).to(group.receive(:branch_coverage?) { SimpleCov.coverage_criterion_enabled?(:branch) })
     end
     if SimpleCov.respond_to?(:method_coverage?) && !method_coverage_supported
-      allow(SimpleCov).to(receive(:method_coverage?) { SimpleCov.coverage_criterion_enabled?(:method) })
+      group.allow(SimpleCov).to(group.receive(:method_coverage?) { SimpleCov.coverage_criterion_enabled?(:method) })
     end
   end
 

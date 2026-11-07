@@ -1,5 +1,5 @@
 # EditorConfig (https://editorconfig.org), enforced on every tracked file by editorconfig-checker
-# (CI, script/check). Lines wrap at 120 columns, the width RuboCop and markdownlint enforce.
+# (CI, script/check). Lines wrap at 120 columns, the width RuboCop and rumdl enforce.
 root = true
 
 [*]
@@ -12,6 +12,6 @@ indent_size = 2
 max_line_length = 120
 
 # A Markdown list item continues aligned with its text, so the continuation lines of an ordered
-# list (`1. `) are indented by three spaces; markdownlint checks the list indentation instead.
+# list (`1. `) are indented by three spaces; rumdl checks the list indentation instead.
 [*.md]
 indent_size = unset
