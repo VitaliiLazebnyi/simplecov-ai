@@ -4,17 +4,16 @@
 
 require 'openssl'
 
-version_content = File.read(File.expand_path('lib/simplecov-ai/version.rb', __dir__))
-version_match = version_content.match(/VERSION\s*=\s*['"]([^'"]+)['"]/)
-version = version_match&.captures&.first or
-  raise(
-    Gem::InvalidSpecificationException,
-    'Unable to parse VERSION from lib/simplecov-ai/version.rb; the constant definition may have changed'
-  )
-
 Gem::Specification.new do |spec|
-  spec.name        = 'simplecov-ai'
-  spec.version     = version
+  spec.name = 'simplecov-ai'
+  # Read from lib/simplecov-ai/version.rb without loading the gem. The whole expression is the
+  # right-hand side of `spec.version =`, which Dependabot replaces with a literal before it
+  # evaluates the gemspec (it also stubs every File.read).
+  spec.version = File.read(File.expand_path('lib/simplecov-ai/version.rb', __dir__))[/VERSION = '([^']+)'/, 1] or
+    raise(
+      Gem::InvalidSpecificationException,
+      'Unable to parse VERSION from lib/simplecov-ai/version.rb; the constant definition may have changed'
+    )
   spec.authors     = ['Vitalii Lazebnyi']
   spec.email       = ['vitalii.lazebnyi.github@gmail.com']
   spec.homepage    = 'https://github.com/VitaliiLazebnyi/simplecov-ai'
