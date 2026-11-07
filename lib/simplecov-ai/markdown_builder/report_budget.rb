@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -16,21 +17,25 @@ module SimpleCov
 
           # The number of bytes in a kilobyte (metric kB, matching the "kB" unit shown to users)
           BYTES_PER_KB = 1000
+          private_constant(:BYTES_PER_KB)
           # Alert heading for truncated reports
           TRUNCATION_ALERT_HEADING = "> **[WARNING] TRUNCATION NOTIFICATION:**\n"
+          public_constant(:TRUNCATION_ALERT_HEADING)
           # Alert body for truncated reports, naming what the size budget left out
           TRUNCATION_ALERT_BODY =
             '> The report reached the maximum token constraint (%<limit>d kB) and was truncated: ' \
-            '%<deficit_files>d deficit file(s) and %<bypass_files>d bypass file(s) omitted or cut short. ' \
-            'Lowest-coverage files are listed first; resolve the deficits above to reveal the remaining ' \
-            "ones in subsequent test runs.\n"
+              '%<deficit_files>d deficit file(s) and %<bypass_files>d bypass file(s) omitted or cut short. ' \
+              'Lowest-coverage files are listed first; resolve the deficits above to reveal the remaining ' \
+              "ones in subsequent test runs.\n"
+          public_constant(:TRUNCATION_ALERT_BODY)
           # Bytes kept free, beyond the notice itself, for the blank-line separators the
           # sections write outside the admission check.
           SEPARATOR_MARGIN = 4
+          public_constant(:SEPARATOR_MARGIN)
 
           # @param buffer [StringIO] The report being composed.
           # @param limit_kb [Integer] The configured ceiling for the whole file, in kB.
-          # @param file_count [Integer] The number of files in the result — the most any notice
+          # @param file_count [Integer] The number of files in the result - the most any notice
           #   could name, so the reserve is sized for the widest possible notice up front.
           sig { params(buffer: StringIO, limit_kb: Integer, file_count: Integer).void }
           def initialize(buffer, limit_kb, file_count)
@@ -79,8 +84,13 @@ module SimpleCov
 
           sig { params(deficit_files: Integer, bypass_files: Integer).returns(String) }
           def notice(deficit_files, bypass_files)
-            TRUNCATION_ALERT_HEADING +
-              format(TRUNCATION_ALERT_BODY, limit: @limit_kb, deficit_files: deficit_files, bypass_files: bypass_files)
+            body = format(
+              TRUNCATION_ALERT_BODY,
+              limit: @limit_kb,
+              deficit_files: deficit_files,
+              bypass_files: bypass_files
+            )
+            "#{TRUNCATION_ALERT_HEADING}#{body}"
           end
         end
       end

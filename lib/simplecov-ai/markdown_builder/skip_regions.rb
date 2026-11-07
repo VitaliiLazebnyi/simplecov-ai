@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -9,8 +10,8 @@ module SimpleCov
         # directives: the lines SimpleCov marked skipped (`:nocov:` pairs, `simplecov:disable`
         # blocks and trailing comments, a custom nocov token) form contiguous regions, and the
         # branches it skipped outside those regions (a `simplecov:disable branch` scope) add
-        # their own. Each region is paired with the directive comment that caused it — found on
-        # the region's first line or the nearest line above — so the report quotes the exact
+        # their own. Each region is paired with the directive comment that caused it - found on
+        # the region's first line or the nearest line above - so the report quotes the exact
         # text a maintainer wrote. Whatever SimpleCov did not skip (a directive inside a heredoc,
         # a `simplecov:disable` on a SimpleCov that predates it) is not a bypass here either, and
         # neither is a skipped region made only of comments and blank lines, which takes nothing
@@ -21,11 +22,14 @@ module SimpleCov
 
           # Runs of consecutive skipped lines.
           Runs = T.type_alias { T::Array[T::Array[SimpleCov::SourceFile::Line]] }
+          private_constant(:Runs)
           # Reason reported when the directive that produced a region cannot be located.
           FALLBACK_REASON = 'coverage skipped by SimpleCov'
+          private_constant(:FALLBACK_REASON)
           # Whether the installed SimpleCov (>= 1.0) has the non-deprecated token reader,
           # decided once at load time.
           CURRENT_TOKEN_READER = T.let(SimpleCov.singleton_class.method_defined?(:current_nocov_token), T::Boolean)
+          public_constant(:CURRENT_TOKEN_READER)
 
           # Cheap pre-check (no AST parse) for whether SimpleCov skipped anything in the file.
           #
@@ -50,6 +54,11 @@ module SimpleCov
             ranges.sort_by(&:begin).map { |range| [range, reason_for(range, source_lines)] }
           end
 
+          # Whether one of the outer ranges encloses the range.
+          #
+          # @param range [Range<Integer>] The candidate range.
+          # @param outer_ranges [Array<Range<Integer>>] The ranges it may sit inside.
+          # @return [Boolean] Whether any of them encloses it.
           sig { params(range: T::Range[Integer], outer_ranges: T::Array[T::Range[Integer]]).returns(T::Boolean) }
           def self.enclosed?(range, outer_ranges)
             outer_ranges.any? { |outer_range| LineSpan.encloses?(outer_range, range) }
@@ -62,8 +71,8 @@ module SimpleCov
             ranges.uniq
           end
 
-          # A region holding nothing SimpleCov would count — comments and blank lines only, such as
-          # a doc comment that mentions a directive — excludes nothing from any figure and is
+          # A region holding nothing SimpleCov would count - comments and blank lines only, such as
+          # a doc comment that mentions a directive - excludes nothing from any figure and is
           # dropped; a region with at least one relevant line is a bypass, whatever else it wraps.
           sig { params(file: SimpleCov::SourceFile).returns(T::Array[T::Range[Integer]]) }
           def self.skipped_line_ranges(file)
@@ -72,6 +81,10 @@ module SimpleCov
             end
           end
 
+          # Whether a run of skipped lines holds a line SimpleCov counts.
+          #
+          # @param run [Array<SimpleCov::SourceFile::Line>] Consecutive skipped lines.
+          # @return [Boolean] Whether any of them is relevant.
           sig { params(run: T::Array[SimpleCov::SourceFile::Line]).returns(T::Boolean) }
           def self.relevant_run?(run)
             run.any? { |line| relevant?(line) }
@@ -79,7 +92,7 @@ module SimpleCov
 
           # SimpleCov lists skipped lines in line order, so a run closes at the first gap.
           sig do
-            params(lines: T::Array[SimpleCov::SourceFile::Line]).returns(T::Array[T::Array[SimpleCov::SourceFile::Line]])
+            params(lines: T::Array[SimpleCov::SourceFile::Line]).returns(Runs)
           end
           def self.contiguous_runs(lines)
             lines.each_with_object(T.let([], Runs)) do |line, runs|
@@ -115,7 +128,7 @@ module SimpleCov
             FALLBACK_REASON
           end
 
-          # Matches a `simplecov:disable …` comment or a nocov marker carrying the token
+          # Matches a `simplecov:disable ...` comment or a nocov marker carrying the token
           # SimpleCov is configured with, from its `#` to the end of the line.
           sig { returns(Regexp) }
           def self.directive_pattern
@@ -129,8 +142,15 @@ module SimpleCov
             (CURRENT_TOKEN_READER && SimpleCov.current_nocov_token) || SimpleCov.nocov_token
           end
 
-          private_class_method :enclosed?, :skipped_branch_ranges, :skipped_line_ranges, :relevant_run?,
-                               :contiguous_runs, :relevant?, :reason_for, :directive_pattern, :nocov_token
+          private_class_method :enclosed?,
+            :skipped_branch_ranges,
+            :skipped_line_ranges,
+            :relevant_run?,
+            :contiguous_runs,
+            :relevant?,
+            :reason_for,
+            :directive_pattern,
+            :nocov_token
         end
       end
     end

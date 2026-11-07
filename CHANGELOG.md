@@ -18,9 +18,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`Configuration#report_destination`.** The absolute path the report is written to is
   available from the configuration.
 - **Verified against SimpleCov 1.2 and 1.3** in addition to 0.18–1.1.
+- **Explicit constant visibility.** Every constant declares its visibility. The documented ones
+  (`VERSION`, the `Configuration::DEFAULT_*` defaults and `Configuration::VALID_GRANULARITIES`,
+  `Constants::PERFECT_COVERAGE_PERCENT`, the report templates) stay public; the implementation
+  details of the resolver and the report builder are now `private_constant`.
 
 ### Development
 
+- The strictest settings of every tool, on every file type: RuboCop with every cop of RuboCop and
+  its plugins enabled (`EnabledByDefault`, plus rubocop-yard), each cop that stays off documented
+  with what it contradicts; every Ruby command run with `-w -W:deprecated -W:performance`;
+  markdownlint with every rule; yamllint in strict mode; ShellCheck with every optional check and
+  shfmt; editorconfig-checker; lychee on every link and anchor; Harden-Runner blocking all
+  unlisted egress in every job; a timeout on every job; the dependency review failing on any
+  severity in any scope; Dependabot for the npm and pip tooling as well; build provenance
+  attestations for released gems; and `script/check`, which runs every CI check locally.
 - Every gate now runs with no exceptions: RuboCop with all plugins and no inline directives,
   Sorbet `typed: strong` in `lib/` with no `T.cast` / `T.must` / `T.untyped`, Reek with its
   default configuration, Flay, Flog, Debride, YARD at 100%, mutation testing with no ignore

@@ -1,12 +1,13 @@
+---
 name: CodeQL
 
-on:
+"on":
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   schedule:
-    - cron: '41 5 * * 1'
+    - cron: 41 5 * * 1
   workflow_dispatch:
 
 # Nothing is writable by default; every job re-declares the (read-only) permissions it needs.
@@ -22,43 +23,64 @@ jobs:
   analyze:
     name: CodeQL (${{ matrix.language }})
     runs-on: ubuntu-26.04
+    timeout-minutes: 20
     permissions:
-      actions: read # CodeQL reads workflow metadata
+      actions: read  # CodeQL reads workflow metadata
       contents: read
-      security-events: write # upload CodeQL results to code scanning
+      security-events: write  # upload CodeQL results to code scanning
     strategy:
       fail-fast: false
       matrix:
         language: [ruby, actions]
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
-
-    - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
-      with:
-        languages: ${{ matrix.language }}
-        queries: security-and-quality
-        build-mode: none
-    - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
-      with:
-        category: "/language:${{ matrix.language }}"
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            api.github.com:443
+            github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            uploads.github.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066  # v4.39.3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-and-quality
+          build-mode: none
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066  # v4.39.3
+        with:
+          category: /language:${{ matrix.language }}
 
   warning-gate:
-    name: Warning gate
+    name: Warning gate (CodeQL)
     if: ${{ !cancelled() }}
     needs: [analyze]
     runs-on: ubuntu-26.04
+    timeout-minutes: 10
     permissions:
-      actions: read # reads the logs of the other jobs of this run
+      actions: read  # reads the logs of the other jobs of this run
       contents: read
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
-
-    - name: Fail on any warning or deprecation in the logs of this run
-      env:
-        GH_TOKEN: ${{ github.token }}
-        GATE_JOB_NAME: Warning gate
-      run: script/warning_gate.sh
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+            api.github.com:443
+            github.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fail on any warning or deprecation in the logs of this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GATE_JOB_NAME: Warning gate (CodeQL)
+        run: script/warning_gate.sh

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -11,10 +12,13 @@ module SimpleCov
 
           # Error message for AST parsing failures
           ERROR_AST_FAILED = '  - **ERROR:** AST Parsing Failed. Showing raw line numbers instead.'
+          private_constant(:ERROR_AST_FAILED)
           # Template for node-level deficit headings
           NODE_HEADING_TEMPLATE = '- %s'
+          private_constant(:NODE_HEADING_TEMPLATE)
           # Coarse-grained deficit summary message
           DEFICIT_COARSE = '  - **Deficit:** Contains unexecuted lines or branches.'
+          private_constant(:DEFICIT_COARSE)
 
           # @param markdown_lines [Array<String>] The lines of a fragment.
           # @return [String] The lines joined, each ending in a newline.
@@ -27,7 +31,11 @@ module SimpleCov
           # @param source_lines [Array<String>] The file's source, for snippets.
           # @param branch_columns [Hash] The branch column map from {BranchEnricher}.
           sig do
-            params(config: Configuration, source_lines: T::Array[String], branch_columns: BranchEnricher::ColumnMap).void
+            params(
+              config: Configuration,
+              source_lines: T::Array[String],
+              branch_columns: BranchEnricher::ColumnMap
+            ).void
           end
           def initialize(config, source_lines, branch_columns)
             @coarse = T.let(config.granularity == :coarse, T::Boolean)
@@ -43,8 +51,11 @@ module SimpleCov
           #   file without nodes a single fragment: the parse-failure notice followed by every
           #   deficit under its raw line numbers.
           sig do
-            params(file: SimpleCov::SourceFile, nodes: T.nilable(T::Array[ASTResolver::SemanticNode]),
-                   method_deficits: T::Array[MethodDeficit]).returns(T::Array[String])
+            params(
+              file: SimpleCov::SourceFile,
+              nodes: T.nilable(T::Array[ASTResolver::SemanticNode]),
+              method_deficits: T::Array[MethodDeficit]
+            ).returns(T::Array[String])
           end
           def render(file, nodes, method_deficits)
             return [raw_fragment(DeficitGrouper.raw_group(file, method_deficits))] unless nodes

@@ -58,7 +58,8 @@ require 'simplecov-ai'
 
 SimpleCov.start do
   enable_coverage :branch
-  skip '/spec/' # SimpleCov >= 1.0; use `add_filter '/spec/'` on 0.x (1.x deprecates it)
+  # SimpleCov >= 1.0; use `add_filter '/spec/'` on 0.x (1.x deprecates it)
+  skip '/spec/'
 end
 
 SimpleCov.formatter = SimpleCov::Formatter::AIFormatter
@@ -78,12 +79,18 @@ All settings are optional; the defaults are shown:
 
 ```ruby
 SimpleCov::Formatter::AIFormatter.configure do |config|
-  config.report_path = 'coverage/ai_report.md' # default: ai_report.md inside SimpleCov's coverage_dir
-  config.max_file_size_kb = 50                 # hard ceiling on the written file (metric kB)
-  config.max_snippet_lines = 5                 # snippets longer than 5 x 80 characters end in `...`
-  config.output_to_console = false             # true: print the digest to STDOUT instead of the notice
-  config.granularity = :fine                   # :fine (every line/branch) or :coarse (one line per node)
-  config.include_bypasses = true               # false: omit the "Ignored Coverage Bypasses" section
+  # Default: ai_report.md inside SimpleCov's coverage_dir.
+  config.report_path = 'coverage/ai_report.md'
+  # Hard ceiling on the written file (metric kB).
+  config.max_file_size_kb = 50
+  # Snippets longer than 5 x 80 characters end in `...`.
+  config.max_snippet_lines = 5
+  # true: print the digest to STDOUT instead of the notice.
+  config.output_to_console = false
+  # :fine (every line/branch) or :coarse (one line per node).
+  config.granularity = :fine
+  # false: omit the "Ignored Coverage Bypasses" section.
+  config.include_bypasses = true
 end
 ```
 
@@ -221,7 +228,9 @@ the report. With a 1 kB limit the sample above ends in:
 
 ```md
 > **[WARNING] TRUNCATION NOTIFICATION:**
-> The report reached the maximum token constraint (1 kB) and was truncated: 3 deficit file(s) and 2 bypass file(s) omitted or cut short. Lowest-coverage files are listed first; resolve the deficits above to reveal the remaining ones in subsequent test runs.
+> The report reached the maximum token constraint (1 kB) and was truncated: 3 deficit file(s) and 2 bypass file(s)
+> omitted or cut short. Lowest-coverage files are listed first; resolve the deficits above to reveal the remaining ones
+> in subsequent test runs.
 ```
 
 A file whose block was cut short counts towards those numbers. No notice is printed when
@@ -262,9 +271,10 @@ The repository holds itself to "zero warnings, zero suppressions, everything che
 branch and method coverage, every mutant killed, Sorbet `typed: strong`, 100% YARD
 documentation, RuboCop, Reek, Flay, Flog and Debride without findings, no inline suppression of
 any tool, no warning in any CI log, and every dependency at its newest release unless a
-documented hold says why not. [CONTRIBUTING.md](CONTRIBUTING.md) lists every gate and how to run
-it (`bundle exec rake` runs the local ones).
+documented hold says why not, with every linter at its strictest setting on every file type and
+every CI job on a hardened runner. [CONTRIBUTING.md](CONTRIBUTING.md) lists every gate;
+`script/check` runs them all locally.
 
 ## License
 
-The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
+The gem is available as open source under the terms of the [MIT License](https://opensource.org/license/MIT).

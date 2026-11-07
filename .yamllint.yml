@@ -1,0 +1,33 @@
+---
+# yamllint (https://github.com/adrienverge/yamllint), run in strict mode (`yamllint --strict`: a
+# warning fails like an error) on every YAML file. Every rule is enabled, including the ones the
+# default configuration leaves off, with the settings below, except key-ordering: mappings are
+# ordered for the reader as their schema documents them (a workflow reads name, on, permissions,
+# jobs; a step reads name, uses, with), not alphabetically.
+extends: default
+
+ignore: |
+  .claude/
+  coverage/
+  doc/
+  node_modules/
+  tmp/
+  vendor/
+
+rules:
+  # The line length of every other file (RuboCop, markdownlint, .editorconfig).
+  line-length:
+    max: 120
+  # Quote a string only when YAML needs it, always with double quotes.
+  quoted-strings:
+    quote-type: double
+    required: only-when-needed
+  # Optional rules, off in the default configuration.
+  float-values:
+    forbid-inf: true
+    forbid-nan: true
+    forbid-scientific-notation: true
+    require-numeral-before-decimal: true
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true

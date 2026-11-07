@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: false
 # frozen_string_literal: true
 
@@ -5,8 +6,8 @@ require 'spec_helper'
 
 # Audits the gem's own sources the way the formatter audits any project: every lib file is
 # loaded as a SimpleCov::SourceFile and must come back with nothing skipped. SimpleCov honours
-# a directive wherever it appears in a comment — to SimpleCov 1.x a doc comment that merely
-# quotes `simplecov:disable` is an inline directive — which the directive auditor in
+# a directive wherever it appears in a comment - to SimpleCov 1.x a doc comment that merely
+# quotes `simplecov:disable` is an inline directive - which the directive auditor in
 # directive_auditor_spec.rb cannot see, since it only matches lines that start with a marker.
 # The probe coverage puts a covered branch and (SimpleCov >= 1.0) a covered method on every
 # line, so a directive of any scope on any line surfaces as a skipped line, branch or method.
@@ -14,9 +15,10 @@ require 'spec_helper'
 # `Coverage.line_stub`, which resets the suite's live coverage of that file.)
 module SelfAudit
   LIB_FILES = Dir.glob(File.expand_path('../../lib/**/*.rb', __dir__)).sort
+  public_constant(:LIB_FILES)
 end
 
-RSpec.describe SelfAudit do
+RSpec.describe(SelfAudit) do
   def probe_coverage(path)
     line_numbers = (1..File.foreach(path).count)
     branches = line_numbers.to_h { |line| [[:if, line, line, 0, line, 0], { [:then, line, line, 0, line, 0] => 1 }] }
@@ -32,17 +34,17 @@ RSpec.describe SelfAudit do
   end
 
   it 'has no line SimpleCov skips in any lib file' do
-    expect(offenders { |file| file.skipped_lines.map(&:line_number) }).to eq([])
+    expect(offenders { |file| file.skipped_lines.map(&:line_number) }).to(eq([]))
   end
 
   it 'has no branch SimpleCov skips in any lib file' do
-    expect(offenders { |file| file.branches.select(&:skipped?).map(&:start_line) }).to eq([])
+    expect(offenders { |file| file.branches.filter_map { |branch| branch.start_line if branch.skipped? } }).to(eq([]))
   end
 
   # SimpleCov < 1.0 has no methods to skip.
   if SimpleCovFixtures.method_coverage_supported?
     it 'has no method SimpleCov skips in any lib file' do
-      expect(offenders { |file| file.methods.select(&:skipped?).map(&:start_line) }).to eq([])
+      expect(offenders { |file| file.methods.filter_map { |method| method.start_line if method.skipped? } }).to(eq([]))
     end
   end
 end

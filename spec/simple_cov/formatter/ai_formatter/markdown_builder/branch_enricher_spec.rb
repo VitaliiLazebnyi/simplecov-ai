@@ -1,17 +1,19 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: false
 # frozen_string_literal: true
 
 require 'spec_helper'
+
 require 'fileutils'
 require 'tmpdir'
 
-RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::BranchEnricher do
-  let(:tmpdir) { Dir.mktmpdir('scai') }
-  let(:source) { "def sign(number)\n  number.positive? ? :pos : :neg\nend\n" }
-  let(:path) { write_source(tmpdir, 'sign.rb', source) }
-  let(:condition) { branch_descriptor(source, :if, 0, 2, 'number.positive? ? :pos : :neg') }
-  let(:then_arm) { branch_descriptor(source, :then, 1, 2, ':pos') }
-  let(:else_arm) { branch_descriptor(source, :else, 2, 2, ':neg') }
+RSpec.describe(SimpleCov::Formatter::AIFormatter::MarkdownBuilder::BranchEnricher) do
+  let(:tmpdir)        { Dir.mktmpdir('scai') }
+  let(:source)        { "def sign(number)\n  number.positive? ? :pos : :neg\nend\n" }
+  let(:path)          { write_source(tmpdir, 'sign.rb', source) }
+  let(:condition)     { branch_descriptor(source, :if, 0, 2, 'number.positive? ? :pos : :neg') }
+  let(:then_arm)      { branch_descriptor(source, :then, 1, 2, ':pos') }
+  let(:else_arm)      { branch_descriptor(source, :else, 2, 2, ':neg') }
   let(:live_coverage) { { 'lines' => [1, 1, nil], 'branches' => { condition => { then_arm => 1, else_arm => 0 } } } }
 
   after { FileUtils.remove_entry(tmpdir) }
@@ -36,31 +38,33 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::BranchEnriche
   end
 
   it 'maps every branch to the columns of its native descriptor, keyed by the branch itself' do
-    expect(columns_by_type(source_file(path, live_coverage))).to eq(then: [21, 25], else: [28, 32])
+    expect(columns_by_type(source_file(path, live_coverage))).to(eq(then: [21, 25], else: [28, 32]))
   end
 
   it 'decodes stringified descriptors with the installed SimpleCov decoder' do
-    expect(columns_by_type(stringified_file)).to eq(then: [21, 25], else: [28, 32])
+    expect(columns_by_type(stringified_file)).to(eq(then: [21, 25], else: [28, 32]))
   end
 
   it 'picks the decoder of the installed SimpleCov' do
     ruby_data_parser = defined?(SimpleCov::SourceFile::RubyDataParser) ? true : false
     expected = ruby_data_parser ? described_class::RubyDataParserDecoder : described_class::LegacyDecoder
-    expect(described_class::DECODER).to equal(expected)
+    expect(described_class::DECODER).to(equal(expected))
   end
 
   it 'decodes a stringified descriptor and returns a native array as it is' do
     file = source_file(path, live_coverage)
     decoded = [described_class::DECODER.call(file, then_arm.to_s), described_class::DECODER.call(file, then_arm)]
-    expect(decoded).to eq([then_arm, then_arm])
+    expect(decoded).to(eq([then_arm, then_arm]))
   end
 
   it 'decodes through RubyDataParser where SimpleCov ships it' do
     lookup = { then_arm.to_s => then_arm }
-    stub_const('SimpleCov::SourceFile::RubyDataParser',
-               Module.new { define_singleton_method(:call) { |descriptor| lookup.fetch(descriptor) } })
+    stub_const(
+      'SimpleCov::SourceFile::RubyDataParser',
+      Module.new { define_singleton_method(:call) { |descriptor| lookup.fetch(descriptor) } }
+    )
     file = source_file(path, live_coverage)
-    expect(described_class::RubyDataParserDecoder.call(file, then_arm.to_s)).to eq(then_arm)
+    expect(described_class::RubyDataParserDecoder.call(file, then_arm.to_s)).to(eq(then_arm))
   end
 
   it 'decodes through the private restore_ruby_data_structure of SimpleCov < 1.0' do
@@ -68,23 +72,25 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::BranchEnriche
     lookup = { then_arm.to_s => then_arm }
     file.define_singleton_method(:restore_ruby_data_structure) { |descriptor| lookup.fetch(descriptor) }
     file.singleton_class.__send__(:private, :restore_ruby_data_structure)
-    expect(described_class::LegacyDecoder.call(file, then_arm.to_s)).to eq(then_arm)
+    expect(described_class::LegacyDecoder.call(file, then_arm.to_s)).to(eq(then_arm))
   end
 
   it 'hands every arm descriptor, with its file, to the decoder' do
     received = []
-    stub_const("#{described_class}::DECODER", lambda { |file, descriptor|
-      received << [file.filename, descriptor]
-      { then_arm.to_s => then_arm, else_arm.to_s => else_arm }.fetch(descriptor)
-    })
+    decoder =
+      lambda do |file, descriptor|
+        received << [file.filename, descriptor]
+        { then_arm.to_s => then_arm, else_arm.to_s => else_arm }.fetch(descriptor)
+      end
+    stub_const("#{described_class}::DECODER", decoder)
     columns = columns_by_type(stringified_file)
     expect([columns, received])
-      .to eq([{ then: [21, 25], else: [28, 32] }, [[path, then_arm.to_s], [path, else_arm.to_s]]])
+      .to(eq([{ then: [21, 25], else: [28, 32] }, [[path, then_arm.to_s], [path, else_arm.to_s]]]))
   end
 
   it 'ignores a descriptor the decoder cannot turn into an array' do
     stub_const("#{described_class}::DECODER", ->(_file, _descriptor) {})
-    expect(columns_by_type(stringified_file)).to eq({})
+    expect(columns_by_type(stringified_file)).to(eq({}))
   end
 
   it 'matches descriptors to branches by type, start and end line, whatever order SimpleCov lists them in' do
@@ -92,79 +98,84 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder::BranchEnriche
     branches = arms.each_with_index.to_h { |arm, index| [[:if, index * 4, arm[2], 0, 4, 0], { arm => 0 }] }
     coverage = { 'lines' => [1, 1, 1, 1, 1], 'branches' => branches }
     file = source_file(write_source(tmpdir, 'arms.rb', "1\n2\n3\n4\n5\n"), coverage)
-    allow(file).to receive(:branches).and_return(file.branches.reverse)
+    allow(file).to(receive(:branches).and_return(file.branches.reverse))
     columns = described_class.enrich(file).to_h { |branch, cols| [[branch.start_line, branch.end_line], cols] }
-    expect(columns).to eq([2, 2] => [4, 9], [2, 4] => [11, 3], [3, 4] => [2, 5])
+    expect(columns).to(eq([2, 2] => [4, 9], [2, 4] => [11, 3], [3, 4] => [2, 5]))
   end
 
   it 'assigns columns in descriptor order to arms sharing type and line (two conditionals on one line)' do
     line = "def pick(a, b)\n  [a ? 1 : 2, b ? 3 : 4]\nend\n"
-    first = %w[1 2].zip(%i[then else], [1, 2]).map { |text, type, id| branch_descriptor(line, type, id, 2, text) }
-    second = %w[3 4].zip(%i[then else], [3, 4]).map { |text, type, id| branch_descriptor(line, type, id, 2, text) }
-    branches = { branch_descriptor(line, :if, 0, 2, 'a ? 1 : 2') => first.zip([1, 0]).to_h,
-                 branch_descriptor(line, :if, 2, 2, 'b ? 3 : 4') => second.zip([1, 0]).to_h }
+    first = [['1', :then, 1], ['2', :else, 2]].map { |text, type, id| branch_descriptor(line, type, id, 2, text) }
+    second = [['3', :then, 3], ['4', :else, 4]].map { |text, type, id| branch_descriptor(line, type, id, 2, text) }
+    conditions = [branch_descriptor(line, :if, 0, 2, 'a ? 1 : 2'), branch_descriptor(line, :if, 2, 2, 'b ? 3 : 4')]
+    branches = conditions.zip([first, second]).to_h { |condition, arms| [condition, arms.zip([1, 0]).to_h] }
     file = source_file(write_source(tmpdir, 'pair.rb', line), { 'lines' => [1, 1, nil], 'branches' => branches })
-    expect(described_class.enrich(file).values_at(*file.branches)).to eq((first + second).map { |arm| columns_of(arm) })
+    expected = (first + second).map { |arm| columns_of(arm) }
+    expect(described_class.enrich(file).values_at(*file.branches)).to(eq(expected))
   end
 
   it 'leaves a branch whose descriptor is too short for column data out of the map but keeps its siblings' do
     short_then = then_arm.first(5)
-    expect(columns_by_type(sign_file({ condition => { short_then => 1, else_arm => 0 } }))).to eq(else: [28, 32])
+    expect(columns_by_type(sign_file({ condition => { short_then => 1, else_arm => 0 } }))).to(eq(else: [28, 32]))
   end
 
   it 'accepts descriptors carrying more than the six documented entries' do
     arms = { then_arm + [:extra] => 1, else_arm + [:extra] => 0 }
-    expect(columns_by_type(sign_file({ condition => arms }))).to eq(then: [21, 25], else: [28, 32])
+    expect(columns_by_type(sign_file({ condition => arms }))).to(eq(then: [21, 25], else: [28, 32]))
   end
 
   it 'reads the positions from entries three to six, whatever numbers follow them' do
     arms = { then_arm + [7, 8] => 1, else_arm + [99] => 0 }
-    expect(columns_by_type(sign_file({ condition => arms }))).to eq(then: [21, 25], else: [28, 32])
+    expect(columns_by_type(sign_file({ condition => arms }))).to(eq(then: [21, 25], else: [28, 32]))
   end
 
   it 'never modifies the SimpleCov branch objects' do
     file = source_file(path, live_coverage)
     described_class.enrich(file)
-    expect(file.branches.map(&:instance_variables).flatten.uniq).not_to include(:@start_col, :@end_col)
+    expect(file.branches.flat_map(&:instance_variables)).not_to(include(:@start_col, :@end_col))
   end
 
   it 'yields an empty map for a branches entry that is not a hash' do
-    expect(columns_by_type(sign_file([]))).to eq({})
+    expect(columns_by_type(sign_file([]))).to(eq({}))
   end
 
   it 'leaves the branches without columns when an arm map is a list of pairs rather than a hash' do
-    expect(columns_by_type(sign_file({ condition => [[then_arm, 1], [else_arm, 0]] }))).to eq({})
+    expect(columns_by_type(sign_file({ condition => [[then_arm, 1], [else_arm, 0]] }))).to(eq({}))
   end
 
   it 'raises like SimpleCov for arms SimpleCov cannot build branches from' do
-    expect { described_class.enrich(sign_file({ condition => nil })) }.to raise_error(NoMethodError)
+    expect { described_class.enrich(sign_file({ condition => nil })) }
+      .to(raise_error(NoMethodError))
   end
 
   it 'raises like SimpleCov for coverage data that is not a hash, leaving the file to the decode guard' do
-    expect { described_class.enrich(source_file(path, [])) }.to raise_error(TypeError)
+    expect { described_class.enrich(source_file(path, [])) }
+      .to(raise_error(TypeError))
   end
 
   # The error class differs between SimpleCov releases (the eval of SimpleCov < 1.0 and the
   # RubyDataParser of 1.3 raise TypeError, the parser of 1.0-1.2 ArgumentError), so the
   # expectation is taken from SimpleCov's own branch building on the same data.
   it 'raises like SimpleCov for a descriptor that is not an array' do
-    simplecov_error = begin
-      sign_file({ condition => { 42 => 0 } }).branches
-    rescue StandardError => error
-      error.class
-    end
-    expect { described_class.enrich(sign_file({ condition => { 42 => 0 } })) }.to raise_error(simplecov_error)
+    simplecov_error =
+      begin
+        sign_file({ condition => { 42 => 0 } }).branches
+      rescue StandardError => error
+        error.class
+      end
+    expect { described_class.enrich(sign_file({ condition => { 42 => 0 } })) }
+      .to(raise_error(simplecov_error))
   end
 
   it 'raises TypeError for a descriptor whose line or column is not an Integer, leaving the file to the decode guard' do
     [2, 3, 4, 5].each do |position|
       descriptor = then_arm.dup.tap { |arm| arm[position] = 2.5 }
       expect { described_class.enrich(sign_file({ condition => { descriptor => 0 } })) }
-        .to raise_error(TypeError, 'branch descriptor positions must be Integers')
+        .to(raise_error(TypeError, 'branch descriptor positions must be Integers'))
     end
   end
 
   it 'ignores a descriptor with fewer than six elements' do
-    expect(described_class.enrich(sign_file({ condition => { then_arm.first(5) => 0 } }))).to eq({})
+    expect(described_class.enrich(sign_file({ condition => { then_arm.first(5) => 0 } }))).to(eq({}))
   end
 end

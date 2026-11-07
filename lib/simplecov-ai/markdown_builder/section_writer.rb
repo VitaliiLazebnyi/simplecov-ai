@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -17,8 +18,10 @@ module SimpleCov
 
           # Template for file-level headings in both sections
           FILE_HEADING_TEMPLATE = '### %s'
+          private_constant(:FILE_HEADING_TEMPLATE)
           # The section heading while it is still to be written with the first block; empty after.
           Headings = T.type_alias { T::Array[String] }
+          private_constant(:Headings)
 
           # Renders the heading line of a file block from the file's project-relative path.
           #
@@ -48,8 +51,10 @@ module SimpleCov
           # @yieldreturn [Array<String>] Its node fragments.
           # @return [Integer] The number of files omitted or cut short.
           sig do
-            params(files: T::Array[SimpleCov::SourceFile],
-                   blk: T.proc.params(file: SimpleCov::SourceFile).returns(T::Array[String])).returns(Integer)
+            params(
+              files: T::Array[SimpleCov::SourceFile],
+              blk: T.proc.params(file: SimpleCov::SourceFile).returns(T::Array[String])
+            ).returns(Integer)
           end
           def write_files(files, &blk)
             files.each do |file|
@@ -93,7 +98,7 @@ module SimpleCov
             @attempted_blocks += 1
             first_fragment, *further_fragments = node_fragments
             complete = @budget.admit("#{@pending_headings.join}#{file_heading}\n#{first_fragment}") &&
-                       write_further(further_fragments)
+              write_further(further_fragments)
             @written_blocks += 1 if complete
           end
 

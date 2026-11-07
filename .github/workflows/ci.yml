@@ -1,10 +1,11 @@
+---
 name: CI
 
-on:
+"on":
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 # Nothing is writable by default; every job re-declares the (read-only) permissions it needs.
@@ -14,9 +15,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Installs run with the deprecation category on; once a job's Ruby is installed, every repository
+# command runs with all warnings on (script/rubyopt.rb).
 env:
   RUBYOPT: -W:deprecated
 
+# Every job first hardens its runner (step-security/harden-runner): outbound traffic is blocked
+# except to the endpoints the job is known to need, listed with it. The Windows job runs it in
+# audit mode, the only mode Harden-Runner supports on Windows.
+#
 # The single-version gates run on the Ruby of .ruby-version against the committed Gemfile.lock.
 # The test matrix deletes the lockfile first: it was resolved on that Ruby, and older Rubies
 # (and the other engines) cannot install that set, so each one resolves its own test bundle
@@ -25,196 +32,332 @@ jobs:
   lint:
     name: RuboCop and inline suppressions
     runs-on: ubuntu-26.04
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
-
-    - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
-      with:
-        ruby-version: .ruby-version
-        bundler-cache: true
-    - name: Check the Ruby version
-      run: script/check_ruby.sh
-    - run: bundle exec rake rubocop suppressions
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            *.blob.core.windows.net:443
+            api.github.com:443
+            github.com:443
+            index.rubygems.org:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            rubygems.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199  # v1.338.0
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+      - name: Check the Ruby version
+        run: script/check_ruby.sh
+      - name: Turn on every Ruby warning for the remaining steps
+        run: echo "RUBYOPT=$(ruby script/rubyopt.rb)" >> "${GITHUB_ENV}"
+      - run: bundle exec rake rubocop suppressions
 
   typecheck:
     name: "Sorbet (lib/ typed: strong)"
     runs-on: ubuntu-26.04
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
-
-    - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
-      with:
-        ruby-version: .ruby-version
-        bundler-cache: true
-    - name: Check the Ruby version
-      run: script/check_ruby.sh
-    - run: bundle exec rake typecheck
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            *.blob.core.windows.net:443
+            api.github.com:443
+            github.com:443
+            index.rubygems.org:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            rubygems.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199  # v1.338.0
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+      - name: Check the Ruby version
+        run: script/check_ruby.sh
+      - name: Turn on every Ruby warning for the remaining steps
+        run: echo "RUBYOPT=$(ruby script/rubyopt.rb)" >> "${GITHUB_ENV}"
+      - run: bundle exec rake typecheck
 
   docs:
     name: YARD (no warnings, 100% documented)
     runs-on: ubuntu-26.04
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
-
-    - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
-      with:
-        ruby-version: .ruby-version
-        bundler-cache: true
-    - name: Check the Ruby version
-      run: script/check_ruby.sh
-    - run: bundle exec rake yard
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            *.blob.core.windows.net:443
+            api.github.com:443
+            github.com:443
+            index.rubygems.org:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            rubygems.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199  # v1.338.0
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+      - name: Check the Ruby version
+        run: script/check_ruby.sh
+      - name: Turn on every Ruby warning for the remaining steps
+        run: echo "RUBYOPT=$(ruby script/rubyopt.rb)" >> "${GITHUB_ENV}"
+      - run: bundle exec rake yard
 
   smells:
     name: Reek, Flay, Flog, Debride
     runs-on: ubuntu-26.04
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
-
-    - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
-      with:
-        ruby-version: .ruby-version
-        bundler-cache: true
-    - name: Check the Ruby version
-      run: script/check_ruby.sh
-    - run: bundle exec rake reek flay flog debride
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            *.blob.core.windows.net:443
+            api.github.com:443
+            github.com:443
+            index.rubygems.org:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            rubygems.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199  # v1.338.0
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+      - name: Check the Ruby version
+        run: script/check_ruby.sh
+      - name: Turn on every Ruby warning for the remaining steps
+        run: echo "RUBYOPT=$(ruby script/rubyopt.rb)" >> "${GITHUB_ENV}"
+      - run: bundle exec rake reek flay flog debride
 
   build:
     name: Gem build and install smoke test
     runs-on: ubuntu-26.04
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            *.blob.core.windows.net:443
+            api.github.com:443
+            github.com:443
+            index.rubygems.org:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            rubygems.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199  # v1.338.0
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+      - name: Check the Ruby version
+        run: script/check_ruby.sh
+      - name: Turn on every Ruby warning for the remaining steps
+        run: echo "RUBYOPT=$(ruby script/rubyopt.rb)" >> "${GITHUB_ENV}"
+      - run: bundle exec rake build
 
-    - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
-      with:
-        ruby-version: .ruby-version
-        bundler-cache: true
-    - name: Check the Ruby version
-      run: script/check_ruby.sh
-    - run: bundle exec rake build
-
-  # Every gem, Ruby, Action and tool at its newest release, except the documented holds
-  # (script/outdated_holds.yml), which name the upstream constraint that blocks each one.
+  # Every gem, Ruby, Action, npm and pip package, container image and downloaded tool at its newest
+  # release, except the documented holds (script/outdated_holds.yml), which name the upstream
+  # constraint that blocks each one.
   outdated:
     name: Outdated dependencies
     runs-on: ubuntu-26.04
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            *.blob.core.windows.net:443
+            api.github.com:443
+            cache.ruby-lang.org:443
+            github.com:443
+            hub.docker.com:443
+            index.rubygems.org:443
+            nodejs.org:443
+            objects.githubusercontent.com:443
+            pypi.org:443
+            registry.npmjs.org:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            rubygems.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199  # v1.338.0
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+      - name: Check the Ruby version
+        run: script/check_ruby.sh
+      - name: Turn on every Ruby warning for the remaining steps
+        run: echo "RUBYOPT=$(ruby script/rubyopt.rb)" >> "${GITHUB_ENV}"
+      - run: bundle exec rake outdated
 
-    - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
-      with:
-        ruby-version: .ruby-version
-        bundler-cache: true
-    - name: Check the Ruby version
-      run: script/check_ruby.sh
-    - run: bundle exec rake outdated
-
-  # RUBYOPT=-w on every suite run, and only there (RubyGems and Bundler trip Ruby's verbose-mode
-  # diagnostics while they install): spec/support/warnings.rb fails the suite on any warning that
-  # reaches STDERR. On MRI with the lockfile Ruby SimpleCov enforces 100% line, branch and method
-  # coverage (spec/spec_helper.rb).
+  # On MRI with the lockfile Ruby SimpleCov enforces 100% line, branch and method coverage
+  # (spec/spec_helper.rb); spec/support/warnings.rb fails the suite on any warning that reaches
+  # STDERR.
   test:
     name: RSpec (Ruby ${{ matrix.ruby }})
     runs-on: ubuntu-26.04
+    timeout-minutes: 20
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        ruby: ["3.2.11", "3.3.13", "3.4.12", "4.0.9"]
+        ruby: [3.2.11, 3.3.13, 3.4.12, 4.0.9]
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
-
-    - name: Resolve the test bundle for this Ruby (see the note at the top of this file)
-      run: rm -f Gemfile.lock
-    - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
-      with:
-        ruby-version: ${{ matrix.ruby }}
-        bundler-cache: true
-    - name: Check the Ruby version
-      env:
-        EXPECTED_RUBY: ${{ matrix.ruby }}
-      run: script/check_ruby.sh "$EXPECTED_RUBY"
-    - run: bundle exec rspec
-      env:
-        RUBYOPT: -w -W:deprecated
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            *.blob.core.windows.net:443
+            api.github.com:443
+            github.com:443
+            index.rubygems.org:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            rubygems.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Resolve the test bundle for this Ruby (see the note at the top of this file)
+        run: rm -f Gemfile.lock
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199  # v1.338.0
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: Check the Ruby version
+        env:
+          EXPECTED_RUBY: ${{ matrix.ruby }}
+        run: script/check_ruby.sh "${EXPECTED_RUBY}"
+      - name: Turn on every Ruby warning for the remaining steps
+        run: echo "RUBYOPT=$(ruby script/rubyopt.rb)" >> "${GITHUB_ENV}"
+      - run: bundle exec rspec
 
   # The supported floor, Ruby 2.7, runs in its official image: ruby/setup-ruby has no Ruby 2.7
   # build for ubuntu-26.04 (2.7 reached its end of life before that image existed). It runs the
-  # default bundle and the oldest supported SimpleCov.
+  # default bundle and the oldest supported SimpleCov. The container is started from a step
+  # (bin/check-ruby) rather than as the job's container, so Harden-Runner guards the job.
   test-ruby27:
     name: RSpec (Ruby 2.7.8, ${{ matrix.gemfile }})
     runs-on: ubuntu-26.04
-    container:
-      image: ruby:2.7.8-bullseye@sha256:2347de892e419c7160fc21dec721d5952736909f8c3fbb7f84cb4a07aaf9ce7d
+    timeout-minutes: 20
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
         gemfile: [Gemfile, gemfiles/simplecov_0.18.gemfile]
-    env:
-      BUNDLE_GEMFILE: ${{ matrix.gemfile }}
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
-
-    - name: Resolve the test bundle for this Ruby (see the note at the top of this file)
-      run: rm -f Gemfile.lock
-    - name: Check the Ruby version
-      run: script/check_ruby.sh "2.7.8"
-    - run: bundle install --jobs 4
-    - run: bundle exec rspec
-      env:
-        RUBYOPT: -w -W:deprecated
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          allowed-endpoints: >-
+            auth.docker.io:443
+            docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com:443
+            github.com:443
+            index.rubygems.org:443
+            production.cloudflare.docker.com:443
+            production.cloudfront.docker.com:443
+            registry-1.docker.io:443
+            rubygems.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run the suite in the Ruby 2.7.8 image
+        env:
+          BUNDLE_GEMFILE: ${{ matrix.gemfile }}
+          RUBY27_IMAGE: ruby:2.7.8-bullseye@sha256:2347de892e419c7160fc21dec721d5952736909f8c3fbb7f84cb4a07aaf9ce7d
+        run: bin/check-ruby "${RUBY27_IMAGE}" 'script/check_ruby.sh 2.7.8 && bundle exec rspec'
 
   # The lockfile Ruby once more, against the committed Gemfile.lock: the exact bundle the other
   # gates use.
   test-lockfile:
     name: RSpec (Gemfile.lock)
     runs-on: ubuntu-26.04
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
-
-    - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
-      with:
-        ruby-version: .ruby-version
-        bundler-cache: true
-    - name: Check the Ruby version
-      run: script/check_ruby.sh
-    - run: bundle exec rake spec
-      env:
-        RUBYOPT: -w -W:deprecated
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            *.blob.core.windows.net:443
+            api.github.com:443
+            github.com:443
+            index.rubygems.org:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            rubygems.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199  # v1.338.0
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+      - name: Check the Ruby version
+        run: script/check_ruby.sh
+      - name: Turn on every Ruby warning for the remaining steps
+        run: echo "RUBYOPT=$(ruby script/rubyopt.rb)" >> "${GITHUB_ENV}"
+      - run: bundle exec rake spec
 
   # sorbet-static has no Windows build, so the Windows bundle is the test bundle only. What sets
   # Windows apart (text-mode writes turning "\n" into "\r\n") is also exercised everywhere by
@@ -225,25 +368,28 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+    defaults:
+      run:
+        shell: bash
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
-
-    - name: Resolve the test bundle for this platform (see the note at the top of this file)
-      run: rm -f Gemfile.lock
-      shell: bash
-    - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
-      with:
-        ruby-version: "4.0.9"
-        bundler-cache: true
-    - name: Check the Ruby version
-      run: script/check_ruby.sh 4.0.9
-      shell: bash
-    - run: bundle exec rspec
-      env:
-        RUBYOPT: -w -W:deprecated
-      shell: bash
+      - name: Harden the runner (audit mode, the only mode supported on Windows)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Resolve the test bundle for this Ruby (see the note at the top of this file)
+        run: rm -f Gemfile.lock
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199  # v1.338.0
+        with:
+          ruby-version: 4.0.9
+          bundler-cache: true
+      - name: Check the Ruby version
+        run: script/check_ruby.sh 4.0.9
+      - name: Turn on every Ruby warning for the remaining steps
+        run: echo "RUBYOPT=$(ruby script/rubyopt.rb)" >> "${GITHUB_ENV}"
+      - run: bundle exec rspec
 
   # JRuby and TruffleRuby record no branch or method coverage: the suite drives the formatter's
   # branch and method rendering with hand-built SimpleCov data there (spec/spec_helper.rb), and
@@ -260,90 +406,320 @@ jobs:
       matrix:
         ruby: [jruby-10.1.3.0, truffleruby-40.0.0]
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
-
-    - name: Resolve the test bundle for this engine (see the note at the top of this file)
-      run: rm -f Gemfile.lock
-    - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
-      with:
-        ruby-version: ${{ matrix.ruby }}
-        bundler-cache: true
-    - run: bundle exec rspec
-      env:
-        RUBYOPT: -w
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            *.blob.core.windows.net:443
+            api.github.com:443
+            github.com:443
+            index.rubygems.org:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            rubygems.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Resolve the test bundle for this Ruby (see the note at the top of this file)
+        run: rm -f Gemfile.lock
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199  # v1.338.0
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: Turn on every Ruby warning for the remaining steps
+        run: echo "RUBYOPT=$(ruby script/rubyopt.rb)" >> "${GITHUB_ENV}"
+      - run: bundle exec rspec
 
   # Every SimpleCov release line inside the gemspec's `>= 0.18, < 2.0` range, each from its own
   # gemfile (gemfiles/simplecov_<line>.gemfile); test-ruby27 additionally covers the floor.
   simplecov-compat:
     name: RSpec (SimpleCov ${{ matrix.simplecov }}, Ruby ${{ matrix.ruby }})
     runs-on: ubuntu-26.04
+    timeout-minutes: 20
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        ruby: ["3.4.12"]
+        ruby: [3.4.12]
         simplecov: ["0.18", "0.21", "0.22", "1.0", "1.1", "1.2", "1.3"]
     env:
       BUNDLE_GEMFILE: gemfiles/simplecov_${{ matrix.simplecov }}.gemfile
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
-
-    - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
-      with:
-        ruby-version: ${{ matrix.ruby }}
-        bundler-cache: true
-    - name: Check the Ruby version
-      env:
-        EXPECTED_RUBY: ${{ matrix.ruby }}
-      run: script/check_ruby.sh "$EXPECTED_RUBY"
-    - run: bundle exec rspec
-      env:
-        RUBYOPT: -w -W:deprecated
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            *.blob.core.windows.net:443
+            api.github.com:443
+            github.com:443
+            index.rubygems.org:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            rubygems.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199  # v1.338.0
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: Check the Ruby version
+        env:
+          EXPECTED_RUBY: ${{ matrix.ruby }}
+        run: script/check_ruby.sh "${EXPECTED_RUBY}"
+      - name: Turn on every Ruby warning for the remaining steps
+        run: echo "RUBYOPT=$(ruby script/rubyopt.rb)" >> "${GITHUB_ENV}"
+      - run: bundle exec rspec
 
   markdownlint:
-    name: markdownlint
+    name: markdownlint (every rule)
     runs-on: ubuntu-26.04
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            github.com:443
+            nodejs.org:443
+            objects.githubusercontent.com:443
+            raw.githubusercontent.com:443
+            registry.npmjs.org:443
+            release-assets.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      # No dependency cache: npm ci installs the exact, integrity-checked set of package-lock.json.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - run: npm ci
+      # Every installed package, transitive ones included, free of known vulnerabilities.
+      - run: npm audit --audit-level=low
+      - run: npm run markdownlint
 
-    - run: npx --yes markdownlint-cli2@0.24.0 "**/*.md"
+  yamllint:
+    name: yamllint (strict, every rule)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            files.pythonhosted.org:443
+            github.com:443
+            pypi.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      # Every package is pinned by its SHA-256 (.github/python/requirements.txt).
+      - name: Install yamllint
+        run: |
+          python3 -m venv "${RUNNER_TEMP}/venv"
+          "${RUNNER_TEMP}/venv/bin/pip" install --quiet --disable-pip-version-check --require-hashes --no-deps \
+            -r .github/python/requirements.txt
+      - run: >-
+          "${RUNNER_TEMP}/venv/bin/yamllint" --strict --format github .
+
+  # ShellCheck with every optional check (.shellcheckrc) at the style level, and shfmt; each
+  # archive is verified against its SHA-256 before it is run.
+  shell:
+    name: ShellCheck and shfmt
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install ShellCheck and shfmt
+        env:
+          SHELLCHECK_VERSION: 0.11.0
+          SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+          SHFMT_VERSION: 3.14.1
+          SHFMT_SHA256: 76e77641faa025814b77f153b29796b8e6fa2fca03e0c76a691608b86c7ea7bf
+        run: |
+          archive="shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          curl --fail --silent --show-error --location --output "${RUNNER_TEMP}/${archive}" \
+            "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/${archive}"
+          echo "${SHELLCHECK_SHA256}  ${RUNNER_TEMP}/${archive}" | sha256sum --check --strict
+          tar -xJf "${RUNNER_TEMP}/${archive}" -C "${RUNNER_TEMP}" --strip-components 1 \
+            "shellcheck-v${SHELLCHECK_VERSION}/shellcheck"
+          binary="shfmt_v${SHFMT_VERSION}_linux_amd64"
+          curl --fail --silent --show-error --location --output "${RUNNER_TEMP}/shfmt" \
+            "https://github.com/mvdan/sh/releases/download/v${SHFMT_VERSION}/${binary}"
+          echo "${SHFMT_SHA256}  ${RUNNER_TEMP}/shfmt" | sha256sum --check --strict
+          chmod +x "${RUNNER_TEMP}/shfmt"
+      - name: ShellCheck every shell script
+        run: script/shell_scripts.sh | xargs "${RUNNER_TEMP}/shellcheck" --severity=style
+      - name: Check the formatting of every shell script
+        run: script/shell_scripts.sh | xargs "${RUNNER_TEMP}/shfmt" --diff
+
+  editorconfig:
+    name: editorconfig-checker
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install editorconfig-checker
+        env:
+          EDITORCONFIG_CHECKER_VERSION: 4.0.2
+          EDITORCONFIG_CHECKER_SHA256: 44efaef3ed14c6ab52eb87481d78e5e5c204796dccf26e2f4598a61ba17f8003
+        run: |
+          archive=editorconfig-checker-linux-amd64.tar.gz
+          releases=https://github.com/editorconfig-checker/editorconfig-checker/releases
+          curl --fail --silent --show-error --location --output "${RUNNER_TEMP}/${archive}" \
+            "${releases}/download/v${EDITORCONFIG_CHECKER_VERSION}/${archive}"
+          echo "${EDITORCONFIG_CHECKER_SHA256}  ${RUNNER_TEMP}/${archive}" | sha256sum --check --strict
+          tar -xzf "${RUNNER_TEMP}/${archive}" -C "${RUNNER_TEMP}" editorconfig-checker
+      - run: >-
+          "${RUNNER_TEMP}/editorconfig-checker"
+
+  links:
+    name: Links (lychee, including anchors)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            api.github.com:443
+            github.com:443
+            keepachangelog.com:443
+            objects.githubusercontent.com:443
+            opensource.org:443
+            release-assets.githubusercontent.com:443
+            semver.org:443
+            www.contributor-covenant.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install lychee
+        env:
+          LYCHEE_VERSION: 0.24.2
+          LYCHEE_SHA256: 1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a
+        run: |
+          archive=lychee-x86_64-unknown-linux-gnu.tar.gz
+          curl --fail --silent --show-error --location --output "${RUNNER_TEMP}/${archive}" \
+            "https://github.com/lycheeverse/lychee/releases/download/lychee-v${LYCHEE_VERSION}/${archive}"
+          echo "${LYCHEE_SHA256}  ${RUNNER_TEMP}/${archive}" | sha256sum --check --strict
+          tar -xzf "${RUNNER_TEMP}/${archive}" -C "${RUNNER_TEMP}" --strip-components 1 \
+            lychee-x86_64-unknown-linux-gnu/lychee
+      - name: Check every link and anchor of the Markdown files (lychee.toml)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          "${RUNNER_TEMP}/lychee" --root-dir "${PWD}" "**/*.md"
 
   typos:
     name: typos
     runs-on: ubuntu-26.04
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
-
-    - uses: crate-ci/typos@4c8b7f51ca60df14e3c5ca82770dfbbe6c3dae85 # v1.52.0
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: crate-ci/typos@4c8b7f51ca60df14e3c5ca82770dfbbe6c3dae85  # v1.52.0
 
   warning-gate:
-    name: Warning gate
+    name: Warning gate (CI)
     if: ${{ !cancelled() }}
-    needs: [lint, typecheck, docs, smells, build, outdated, test, test-ruby27, test-lockfile, test-windows, test-engines, simplecov-compat, markdownlint, typos]
+    needs:
+      - lint
+      - typecheck
+      - docs
+      - smells
+      - build
+      - outdated
+      - test
+      - test-ruby27
+      - test-lockfile
+      - test-windows
+      - test-engines
+      - simplecov-compat
+      - markdownlint
+      - yamllint
+      - shell
+      - editorconfig
+      - links
+      - typos
     runs-on: ubuntu-26.04
+    timeout-minutes: 10
     permissions:
-      actions: read # reads the logs of the other jobs of this run
+      actions: read  # reads the logs of the other jobs of this run
       contents: read
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
-
-    - name: Fail on any warning or deprecation in the logs of this run
-      env:
-        GH_TOKEN: ${{ github.token }}
-        GATE_JOB_NAME: Warning gate
-      run: script/warning_gate.sh
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+            api.github.com:443
+            github.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fail on any warning or deprecation in the logs of this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GATE_JOB_NAME: Warning gate (CI)
+        run: script/warning_gate.sh

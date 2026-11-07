@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -6,14 +7,16 @@ module SimpleCov
     class AIFormatter
       # Inclusive source-line ranges: the span of anything with a first and a last line, the
       # containment predicates shared by bypass attribution (skip regions against semantic nodes),
-      # deficit grouping and branch rendering (arms against sibling arms), and the `[L…]` labels.
+      # deficit grouping and branch rendering (arms against sibling arms), and the `[L...]` labels.
       module LineSpan
         extend T::Sig
 
         # Anything that spans source lines.
-        Spanning = T.type_alias do
-          T.any(SimpleCov::SourceFile::Branch, ASTResolver::SemanticNode, MarkdownBuilder::MethodDeficit)
-        end
+        Spanning =
+          T.type_alias do
+            T.any(SimpleCov::SourceFile::Branch, ASTResolver::SemanticNode, MarkdownBuilder::MethodDeficit)
+          end
+        private_constant(:Spanning)
 
         # @param spanning [SimpleCov::SourceFile::Branch, ASTResolver::SemanticNode,
         #   MarkdownBuilder::MethodDeficit] A branch, node or method deficit.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pre-commit hook: the fast gates (lint, suppressions, types, tests).
+# Pre-commit hook: the fast gates (lint, suppressions, types, tests); script/check runs them all.
 # Install: git config core.hooksPath .githooks
 set -euo pipefail
 
@@ -13,6 +13,7 @@ echo "==> Running Sorbet..."
 bundle exec srb tc
 
 echo "==> Running RSpec..."
-RUBYOPT=-w bundle exec rspec --format progress
+rubyopt=$(ruby script/rubyopt.rb)
+RUBYOPT="${rubyopt}" bundle exec rspec --format progress
 
 echo "==> All checks passed."

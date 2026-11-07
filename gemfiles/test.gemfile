@@ -1,0 +1,27 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
+# typed: strict
+# frozen_string_literal: true
+
+# The test bundle, which installs on every supported Ruby, engine and platform. The Gemfile and
+# every SimpleCov compatibility gemfile (gemfiles/simplecov_*.gemfile) evaluate it. The
+# development tooling lives in the Gemfile (see there).
+group :development, :test do
+  # Default gems that left Ruby's default set in 3.4 / 4.0 and that the suite's dependencies
+  # require.
+  gem 'base64', '~> 0.3'
+  # See base64.
+  gem 'benchmark', '~> 0.5'
+  # See base64.
+  gem 'logger', '~> 1.7'
+  # See base64.
+  gem 'ostruct', '~> 0.6'
+  # See base64.
+  gem 'tsort', '~> 0.2'
+  # The parser backend the formatter prefers when it is installed: the suite drives it with the
+  # newest Prism every SimpleCov gemfile resolves, not with whatever Prism a Ruby bundles.
+  gem 'prism', '~> 1.9'
+  # Runs the suite and the gates (`bundle exec rake`).
+  gem 'rake', '~> 13.4'
+  # The test framework.
+  gem 'rspec', '~> 3.13'
+end

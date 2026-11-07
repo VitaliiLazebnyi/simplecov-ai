@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -13,7 +14,7 @@ module SimpleCov
         # warnings are dropped and only errors surface). Prism's `parser`-compatible translation
         # layer is preferred whenever it offers a grammar for the running Ruby (Ruby >= 3.3 with
         # Prism >= 1.2 and a `parser` gem recent enough for the translation to load); otherwise
-        # the `parser` gem's own grammar for the running Ruby is loaded — its exact `parser/rubyXY`
+        # the `parser` gem's own grammar for the running Ruby is loaded - its exact `parser/rubyXY`
         # grammar, or for a Ruby newer than any it ships the newest one, which is what
         # `parser/current` would load, minus the version-deviation warning `parser/current`
         # prints. Syntax errors surface as `Parser::SyntaxError`; warnings and non-fatal
@@ -24,9 +25,11 @@ module SimpleCov
           # Prism releases below this predate the version-specific translation grammars this
           # backend selects (Ruby 3.4.0 bundles Prism 1.2.0).
           PRISM_MINIMUM_VERSION = '1.2.0'
+          private_constant(:PRISM_MINIMUM_VERSION)
           # Prism's translation layer refuses to load alongside older `parser` gems, so it is
-          # only attempted when the installed gem satisfies that floor.
-          PARSER_MINIMUM_FOR_PRISM = '3.3.7.2'
+          # only attempted when the installed gem satisfies this requirement.
+          PARSER_REQUIREMENT_FOR_PRISM = '>= 3.3.7.2'
+          private_constant(:PARSER_REQUIREMENT_FOR_PRISM)
 
           # Prism's version-specific translation grammars keyed by Ruby major.minor, oldest first,
           # resolved lazily because the newer classes only exist in newer Prism releases. Rubies
@@ -41,6 +44,7 @@ module SimpleCov
             }.freeze,
             T::Hash[String, T.proc.returns(T.nilable(T.class_of(Parser::Base)))]
           )
+          private_constant(:PRISM_GRAMMARS)
 
           # The `parser` gem's grammars keyed by Ruby major.minor, oldest first, resolved lazily
           # so only the grammar for the running Ruby is ever loaded.
@@ -55,6 +59,7 @@ module SimpleCov
             }.freeze,
             T::Hash[String, T.proc.returns(T.class_of(Parser::Base))]
           )
+          private_constant(:PARSER_GEM_GRAMMARS)
 
           # Picks the grammar class used to parse every file in this process.
           #
@@ -83,17 +88,19 @@ module SimpleCov
             parser.parse(buffer)
           end
 
-          # Prism's translation grammar for the running Ruby — the version-specific class when
-          # Prism ships one, else the base class parsing with Prism's newest grammar — or nil
+          # Prism's translation grammar for the running Ruby - the version-specific class when
+          # Prism ships one, else the base class parsing with Prism's newest grammar - or nil
           # when Prism cannot be used: a Ruby older than its oldest grammar, a `parser` gem too
           # old for the translation layer, or a missing/too-old Prism.
           sig do
             params(ruby_version: String, parser_version: String).returns(T.nilable(T.class_of(Parser::Base)))
           end
           def self.prism_grammar(ruby_version, parser_version)
-            return nil if below?(ruby_version, PRISM_GRAMMARS.keys.fetch(0))
-            return nil if below?(parser_version, PARSER_MINIMUM_FOR_PRISM)
-            return nil unless prism_translation_loaded?
+            return if below?(ruby_version, PRISM_GRAMMARS.keys.fetch(0))
+            unless Gem::Requirement.new(PARSER_REQUIREMENT_FOR_PRISM).satisfied_by?(Gem::Version.new(parser_version))
+              return
+            end
+            return unless prism_translation_loaded?
 
             PRISM_GRAMMARS[major_minor(ruby_version)]&.call || Prism::Translation::Parser
           end
@@ -102,10 +109,10 @@ module SimpleCov
           # it (Ruby 3.3's bundled Prism 0.19 has none).
           sig { returns(T::Boolean) }
           def self.prism_translation_loaded?
-            require 'prism'
+            require('prism')
             return false if below?(Prism::VERSION, PRISM_MINIMUM_VERSION)
 
-            require 'prism/translation/parser'
+            require('prism/translation/parser')
             true
           rescue LoadError
             false
@@ -119,12 +126,16 @@ module SimpleCov
               next if below?(ruby_version, series)
               return grammar.call if loadable?("parser/ruby#{series.delete('.')}")
             end
-            raise LoadError, "the parser gem ships no grammar for Ruby #{ruby_version}"
+            raise(LoadError, "the parser gem ships no grammar for Ruby #{ruby_version}")
           end
 
+          # Whether a feature can be required.
+          #
+          # @param feature [String] The path to require.
+          # @return [Boolean] true once it is loaded, false when it is not installed.
           sig { params(feature: String).returns(T::Boolean) }
           def self.loadable?(feature)
-            require feature
+            require(feature)
             true
           rescue LoadError
             false
@@ -138,16 +149,25 @@ module SimpleCov
             Gem::Requirement.new("< #{floor}").satisfied_by?(Gem::Version.new(version))
           end
 
+          # The `major.minor` series of a Ruby version.
+          #
+          # @param ruby_version [String] A full version (`3.4.1`).
+          # @return [String] Its series (`3.4`).
           sig { params(ruby_version: String).returns(String) }
           def self.major_minor(ruby_version)
             Gem::Version.new(ruby_version).segments.first(2).join('.')
           end
 
-          private_class_method :prism_grammar, :prism_translation_loaded?, :parser_gem_grammar, :loadable?,
-                               :below?, :major_minor
+          private_class_method :prism_grammar,
+            :prism_translation_loaded?,
+            :parser_gem_grammar,
+            :loadable?,
+            :below?,
+            :major_minor
 
           # The grammar class selected for this process.
           GRAMMAR = T.let(select_grammar, T.class_of(Parser::Base))
+          public_constant(:GRAMMAR)
         end
       end
     end

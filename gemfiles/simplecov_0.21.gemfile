@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strict
 # frozen_string_literal: true
 
@@ -7,5 +8,7 @@
 source 'https://rubygems.org'
 
 gemspec path: '..'
+eval_gemfile 'test.gemfile'
 
+# The SimpleCov release line this bundle runs the suite against.
 gem 'simplecov', '~> 0.21.0'

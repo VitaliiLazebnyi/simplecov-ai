@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -14,11 +15,12 @@ module SimpleCov
 
           # The context, own node and child method kind of one classified node.
           Metadata = T.type_alias { [String, T.nilable(SemanticNode), MethodKind] }
+          private_constant(:Metadata)
 
           # @param node [Parser::AST::Node] The node to classify.
           # @param context [String] The enclosing namespace (empty at the top level).
           # @param kind [MethodKind] The kind of method a plain `def` defines in this scope.
-          # @return [[String, SemanticNode, nil, MethodKind]] The child context, the node's own
+          # @return [Array(String, SemanticNode, nil, MethodKind)] The child context, the node's own
           #   SemanticNode (or nil), and the method kind of the children's scope.
           sig { params(node: Parser::AST::Node, context: String, kind: MethodKind).returns(Metadata) }
           def self.classify(node, context, kind)
@@ -29,6 +31,12 @@ module SimpleCov
             end
           end
 
+          # The metadata of a method definition, or of any other node by its assignment shape.
+          #
+          # @param node [Parser::AST::Node] The node to classify.
+          # @param context [String] The enclosing scope's name.
+          # @param kind [MethodKind] The method kind of the enclosing scope.
+          # @return [Metadata] The context, the node (if any) and the kind for its children.
           sig { params(node: Parser::AST::Node, context: String, kind: MethodKind).returns(Metadata) }
           def self.definition_metadata(node, context, kind)
             case node.type
@@ -38,6 +46,13 @@ module SimpleCov
             end
           end
 
+          # The metadata of a constant assignment or of a block that defines a scope; anything else
+          # leaves the context and kind unchanged and yields no node.
+          #
+          # @param node [Parser::AST::Node] The node to classify.
+          # @param context [String] The enclosing scope's name.
+          # @param kind [MethodKind] The method kind of the enclosing scope.
+          # @return [Metadata] The context, the node (if any) and the kind for its children.
           sig { params(node: Parser::AST::Node, context: String, kind: MethodKind).returns(Metadata) }
           def self.assignment_metadata(node, context, kind)
             if node.type == :casgn
@@ -63,7 +78,7 @@ module SimpleCov
             [full_name, SemanticNode.spanning(node, name: full_name, type: builder), MethodKind::INSTANCE]
           end
 
-          # A `define_method(:name) do … end` / `define_singleton_method(:name) { … }` block with
+          # A `define_method(:name) do ... end` / `define_singleton_method(:name) { ... }` block with
           # a literal name is the body of the method it defines, so it becomes a method node
           # spanning the block; every other block is transparent. Like a method body (see
           # {method_metadata}), the block keeps the lexical method kind for its children.
@@ -90,11 +105,19 @@ module SimpleCov
             receiver_name ? [receiver_name, nil, MethodKind::SINGLETON] : [context, nil, MethodKind::INSTANCE]
           end
 
+          # The metadata of a `class` or `module` definition.
+          #
+          # @param node [Parser::AST::Node] The :class or :module node.
+          # @param context [String] The enclosing scope's name.
+          # @return [Metadata] The nested context, its node and the instance method kind.
           sig { params(node: Parser::AST::Node, context: String).returns(Metadata) }
           def self.class_metadata(node, context)
             new_context = nest(context, ReceiverResolver.const_name(NodeChildren.node_at(node, 0)))
-            [new_context, SemanticNode.spanning(node, name: new_context, type: node.type.to_s.capitalize),
-             MethodKind::INSTANCE]
+            [
+              new_context,
+              SemanticNode.spanning(node, name: new_context, type: node.type.to_s.capitalize),
+              MethodKind::INSTANCE
+            ]
           end
 
           # Children traverse under the enclosing context, not the method name, so a nested def
@@ -106,6 +129,12 @@ module SimpleCov
             [context, kind.node_for(node, context, NodeChildren.symbol_at(node, 0).to_s), kind]
           end
 
+          # The metadata of a `def receiver.name` definition.
+          #
+          # @param node [Parser::AST::Node] The :defs node.
+          # @param context [String] The enclosing scope's name.
+          # @param kind [MethodKind] The method kind of the enclosing scope.
+          # @return [Metadata] The unchanged context, the method node and the unchanged kind.
           sig { params(node: Parser::AST::Node, context: String, kind: MethodKind).returns(Metadata) }
           def self.singleton_method_metadata(node, context, kind)
             receiver_name = ReceiverResolver.singleton_method_receiver(NodeChildren.required_node_at(node, 0), context)
@@ -118,9 +147,15 @@ module SimpleCov
             context.empty? ? name : "#{context}#{ReceiverResolver::NAMESPACE_SEPARATOR}#{name}"
           end
 
-          private_class_method :definition_metadata, :assignment_metadata, :constant_assignment_metadata,
-                               :block_metadata, :singleton_class_metadata, :class_metadata, :method_metadata,
-                               :singleton_method_metadata, :nest
+          private_class_method :definition_metadata,
+            :assignment_metadata,
+            :constant_assignment_metadata,
+            :block_metadata,
+            :singleton_class_metadata,
+            :class_metadata,
+            :method_metadata,
+            :singleton_method_metadata,
+            :nest
         end
       end
     end

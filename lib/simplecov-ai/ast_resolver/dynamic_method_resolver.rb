@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -5,7 +6,7 @@ module SimpleCov
   module Formatter
     class AIFormatter
       class ASTResolver
-        # Recognizes `define_method(:name) do … end` and `define_singleton_method(:name) { … }`
+        # Recognizes `define_method(:name) do ... end` and `define_singleton_method(:name) { ... }`
         # blocks whose method name is a literal symbol or string. Such a block is the body of the
         # method it defines, so deficits inside it belong to that method rather than to the whole
         # enclosing class. Dynamic names (`define_method(name)`), explicit foreign receivers
@@ -15,14 +16,15 @@ module SimpleCov
           extend T::Sig
 
           # Method-defining calls mapped to whether they define a singleton method.
-          DEFINERS = T.let({ define_method: false, define_singleton_method: true }.freeze,
-                           T::Hash[Symbol, T::Boolean])
+          DEFINERS = T.let({ define_method: false, define_singleton_method: true }.freeze, T::Hash[Symbol, T::Boolean])
+          private_constant(:DEFINERS)
           # Node types accepted as a literal method name.
           LITERAL_NAME_TYPES = %i[sym str].freeze
+          private_constant(:LITERAL_NAME_TYPES)
 
           # @param node [Parser::AST::Node] A node whose type is one of
           #   {MetaclassResolver::BLOCK_TYPES}.
-          # @return [[String, Boolean], nil] The literal method name and whether the call
+          # @return [Array(String, Boolean), nil] The literal method name and whether the call
           #   defines a singleton method, or nil when the block is not a recognized definition.
           sig { params(node: Parser::AST::Node).returns(T.nilable([String, T::Boolean])) }
           def self.definition(node)
@@ -30,6 +32,11 @@ module SimpleCov
             literal_definition(call) if call && implicit_receiver?(call)
           end
 
+          # The literal name a `define_method` / `define_singleton_method` call defines, and whether it
+          # defines a singleton method.
+          #
+          # @param call [Parser::AST::Node] The send node of the call.
+          # @return [Array(String, Boolean), nil] The name and the singleton flag; nil for any other call.
           sig { params(call: Parser::AST::Node).returns(T.nilable([String, T::Boolean])) }
           def self.literal_definition(call)
             definer = NodeChildren.symbol_at(call, 1)
@@ -49,7 +56,7 @@ module SimpleCov
           sig { params(call: Parser::AST::Node).returns(T.nilable(String)) }
           def self.literal_name(call)
             argument = NodeChildren.node_at(call, 2)
-            return nil unless argument && LITERAL_NAME_TYPES.include?(argument.type)
+            return unless argument && LITERAL_NAME_TYPES.include?(argument.type)
 
             NodeChildren.literal_value(argument)
           end

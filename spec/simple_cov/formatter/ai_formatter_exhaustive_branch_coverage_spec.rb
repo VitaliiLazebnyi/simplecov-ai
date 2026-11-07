@@ -1,27 +1,36 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: false
 # frozen_string_literal: true
 
 require 'spec_helper'
-require 'tmpdir'
+
 require 'fileutils'
+require 'tmpdir'
 
 # Measures the fixture's real coverage through the suite's own Coverage session and formats it.
 # Under mutant no coverage session runs (see spec_helper.rb), so these examples are excluded
 # there (`mutant: false`); the formatter's subjects are covered by the exact-report specs. On an
 # engine that records no branch coverage the examples are skipped after the report is produced.
-RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
+RSpec.describe(SimpleCov::Formatter::AIFormatter, mutant: false) do
   let(:fixture_path) { File.expand_path('../../fixtures/exhaustive_branching.rb', __dir__) }
-  let(:report_path) { 'coverage/exhaustive_test_ai_report.md' }
+  let(:report_path)  { 'coverage/exhaustive_test_ai_report.md' }
   # Every method with a missed arm or line, in source order. `&&`, `||` and their assignment
   # forms produce no branch data in Ruby's coverage, and neither does the one-line `in` pattern
   # since Ruby 3.4 compiles with Prism, so those methods have no deficit.
   let(:expected_headings) do
     headings = %w[
-      ExhaustiveBranching.test_if_else ExhaustiveBranching.test_unless_else ExhaustiveBranching.test_ternary
-      ExhaustiveBranching.test_case_when ExhaustiveBranching.test_safe_nav ExhaustiveBranching.test_while_loop
-      ExhaustiveBranching.test_until_loop ExhaustiveBranching.test_pattern_matching
-      ExhaustiveBranching.test_inline_if ExhaustiveBranching.test_multiple_when
-      ExhaustiveBranching.test_chained_safe_nav ExhaustiveBranching.test_inline_rescue
+      ExhaustiveBranching.test_if_else
+      ExhaustiveBranching.test_unless_else
+      ExhaustiveBranching.test_ternary
+      ExhaustiveBranching.test_case_when
+      ExhaustiveBranching.test_safe_nav
+      ExhaustiveBranching.test_while_loop
+      ExhaustiveBranching.test_until_loop
+      ExhaustiveBranching.test_pattern_matching
+      ExhaustiveBranching.test_inline_if
+      ExhaustiveBranching.test_multiple_when
+      ExhaustiveBranching.test_chained_safe_nav
+      ExhaustiveBranching.test_inline_rescue
       ExhaustiveBranching.test_begin_rescue
     ]
     next headings if Gem::Version.new(RUBY_VERSION) >= Gem::Version.new('3.4')
@@ -37,7 +46,8 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
     return if defined?(ExhaustiveBranching)
 
     notice = Gem::Version.new(RUBY_VERSION) < Gem::Version.new('3.0') ? /Pattern matching is experimental/ : ''
-    expect { require_relative '../../fixtures/exhaustive_branching' }.to output(notice).to_stderr
+    expect { require_relative('../../fixtures/exhaustive_branching') }
+      .to(output(notice).to_stderr)
   end
 
   before do
@@ -66,7 +76,8 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
     begin
       ExhaustiveBranching.test_one_line_pattern({ a: 1 })
     rescue NoMatchingPatternError => error
-      error.class # Intentionally swallowed to execute specific path
+      # Intentionally swallowed to execute specific path
+      error.class
     end
     ExhaustiveBranching.test_chained_safe_nav(nil)
 
@@ -85,16 +96,17 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
   # The deficit lines the report must contain, in the order the fixture defines the constructs
   # (nodes are listed in source order, so the report must list these lines in this order too).
   def ordered_deficit_lines(*snippets)
-    lines = snippets.map do |snippet|
-      "^  - \\*\\*Branch Deficit:\\*\\* \\[L\\d+(?:-\\d+)?\\] #{Regexp.escape(snippet)}$"
-    end
+    lines =
+      snippets.map do |snippet|
+        "^  - \\*\\*Branch Deficit:\\*\\* \\[L\\d+(?:-\\d+)?\\] #{Regexp.escape(snippet)}$"
+      end
     Regexp.new(lines.join('.*'), Regexp::MULTILINE)
   end
 
   # Formatting proves that what this engine's Coverage recorded builds a Result and renders; the
   # examples below assert branch deficits, which only an engine recording branches produces.
   it 'writes the report from what this engine recorded' do
-    expect(File.size?(report_path)).to be_positive
+    expect(File.size?(report_path)).to(be_positive)
   end
 
   if SimpleCovFixtures.branch_coverage_measurable?
@@ -107,7 +119,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
         'Missing coverage for `else` branch: `:case_else`',
         'Missing coverage for `then` branch: `obj&.name`'
       )
-      expect(File.read(report_path, encoding: Encoding::UTF_8)).to match(pattern)
+      expect(File.read(report_path, encoding: Encoding::UTF_8)).to(match(pattern))
     end
 
     it 'lists the loop and pattern-matching deficits in source order' do
@@ -117,7 +129,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
         'Missing coverage for `in` branch: `:pattern_two`',
         'Missing coverage for `else` branch: `:pattern_else`'
       )
-      expect(File.read(report_path, encoding: Encoding::UTF_8)).to match(pattern)
+      expect(File.read(report_path, encoding: Encoding::UTF_8)).to(match(pattern))
     end
 
     it 'lists the edge-case deficits in source order' do
@@ -127,12 +139,12 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
         'Missing coverage for `then` branch: `obj&.a`',
         'Missing coverage for `then` branch: `obj&.a&.b`'
       )
-      expect(File.read(report_path, encoding: Encoding::UTF_8)).to match(pattern)
+      expect(File.read(report_path, encoding: Encoding::UTF_8)).to(match(pattern))
     end
 
     it 'attributes every deficit to a method of the fixture module, in source order' do
       headings = File.read(report_path, encoding: Encoding::UTF_8).scan(/^- `(ExhaustiveBranching\.\w+)`$/).flatten
-      expect(headings).to eq(expected_headings)
+      expect(headings).to(eq(expected_headings))
     end
   end
 end

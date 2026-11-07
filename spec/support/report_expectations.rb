@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: false
 # frozen_string_literal: true
 
@@ -6,12 +7,14 @@
 # same on every machine, and the header a run at that instant produces.
 module ReportExpectations
   FROZEN_TIME = Time.new(2026, 4, 21, 23, 40, 44, '+09:00').freeze
+  private_constant(:FROZEN_TIME)
   # {FROZEN_TIME} as the header prints it.
   FROZEN_ISO8601 = '2026-04-21T23:40:44+09:00'
+  public_constant(:FROZEN_ISO8601)
 
   # Pins `Time.now` to {FROZEN_TIME} for the example.
   def freeze_time
-    allow(Time).to receive(:now).and_return(FROZEN_TIME)
+    allow(Time).to(receive(:now).and_return(FROZEN_TIME))
   end
 
   # The report header of a run at {FROZEN_TIME}, with the method line only when given.

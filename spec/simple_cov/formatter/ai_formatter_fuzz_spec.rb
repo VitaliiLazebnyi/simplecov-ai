@@ -1,7 +1,9 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: false
 # frozen_string_literal: true
 
 require 'spec_helper'
+
 require 'fileutils'
 require 'tmpdir'
 
@@ -9,18 +11,20 @@ require 'tmpdir'
 # spec/support/coverage_fuzzer.rb): whatever SimpleCov raises while decoding a file's data must
 # be contained to that file (SCAI-REQ-011), so the formatter never raises and always writes a
 # report. Failures name the seed; FORMATTER_FUZZ_SEED replays or shifts the sequence.
-RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScopes.containment do
-  let(:tmpdir) { Dir.mktmpdir('scai-fuzz') }
+RSpec.describe(SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScopes.containment) do
+  let(:tmpdir)      { Dir.mktmpdir('scai-fuzz') }
   let(:report_path) { File.join(tmpdir, 'report.md') }
-  let(:base_seed) { Integer(ENV.fetch('FORMATTER_FUZZ_SEED', CoverageFuzzer::DEFAULT_SEED)) }
+  let(:base_seed)   { Integer(ENV.fetch('FORMATTER_FUZZ_SEED', CoverageFuzzer::DEFAULT_SEED)) }
   # A parsable file with a branch, an unparsable one and one with a nocov region, so deficit
   # rendering, the raw fallback and bypass auditing all run over the fuzzed data. Each is padded
   # with blank lines to the longest fuzzed line array: a line array longer than its file is a
   # resultset of a different file, which SimpleCov < 1.0 reports with a warning of its own.
   let(:paths) do
-    { 'plain.rb' => "def plain(flag)\n  flag ? 1 : 2\nend\n",
+    {
+      'plain.rb' => "def plain(flag)\n  flag ? 1 : 2\nend\n",
       'broken.rb' => "class Broken\n  def half\n    1 +\n  end\n",
-      'skipped.rb' => "#{nocov_marker}\nLIMIT = 1\n#{nocov_marker}\ndef kept\n  LIMIT\nend\n" }.map do |name, code|
+      'skipped.rb' => "#{nocov_marker}\nLIMIT = 1\n#{nocov_marker}\ndef kept\n  LIMIT\nend\n"
+    }.map do |name, code|
       write_source(tmpdir, name, code + ("\n" * (CoverageFuzzer::MAX_LINES - code.lines.size)))
     end
   end
@@ -28,7 +32,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
   before do
     described_class.reset_configuration!
     described_class.configure { |configuration| configuration.report_path = report_path }
-    allow(SimpleCov).to receive(:root).and_return(tmpdir)
+    allow(SimpleCov).to(receive(:root).and_return(tmpdir))
   end
 
   after do
@@ -47,7 +51,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
   # @return [String, nil] The failure for `seed`, or nil when the report was written.
   def failure_for(seed)
     fuzzer = CoverageFuzzer.new(seed)
-    coverage_by_path = paths.first(1 + (seed % 3)).to_h { |path| [path, fuzzer.coverage] }
+    coverage_by_path = paths.first((seed % 3) + 1).to_h { |path| [path, fuzzer.coverage] }
     result = build_result(coverage_by_path)
     result ? format_failure(seed, result, coverage_by_path) : nil
   end
@@ -62,7 +66,9 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
 
   it "never raises and always writes a report for #{CoverageFuzzer::CASE_COUNT} fuzzed resultsets" do
     failures = (0...CoverageFuzzer::CASE_COUNT).filter_map { |offset| failure_for(base_seed + offset) }
-    expect(failures).to be_empty,
-                        "#{failures.size} of #{CoverageFuzzer::CASE_COUNT} cases failed; first:\n#{failures.first}"
+    expect(failures).to(
+      be_empty,
+      "#{failures.size} of #{CoverageFuzzer::CASE_COUNT} cases failed; first:\n#{failures.first}"
+    )
   end
 end

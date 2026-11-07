@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: false
 # frozen_string_literal: true
 
@@ -10,22 +11,57 @@
 class CoverageFuzzer
   # How many resultsets the fuzz spec formats, and the first seed of its fixed sequence.
   CASE_COUNT = 150
+  public_constant(:CASE_COUNT)
   DEFAULT_SEED = 20_260_501
+  public_constant(:DEFAULT_SEED)
   DESCRIPTORS = [
-    [:then, 1, 2, 4, 2, 9], [:else, 2, 2, 12, 2, 16], [:if, 0, 2, 2, 2, 16], ['Object', :plain, 1, 0, 3, 3],
-    [:then, 1], [], [nil, nil, nil, nil, nil, nil], [:then, 'x', 2, 4, 2, 9], [:then, 1, 2, 4, 2, 9, 7, 8],
-    [:then, 1, 99, 0, 98, 0], [:then, 1, -1, -1, -1, -1], [:then, 1, 2.5, 4, 2, 9],
-    '[', '[:then, 1, 2', 'nil', '42', 'foo', '"str"', '', '[1, 2, 3, 4, 5, 6]', '[:then, 1, 2, 4, 2, 9]', 'then',
-    nil, 42, 3.5, true
+    [:then, 1, 2, 4, 2, 9],
+    [:else, 2, 2, 12, 2, 16],
+    [:if, 0, 2, 2, 2, 16],
+    ['Object', :plain, 1, 0, 3, 3],
+    [:then, 1],
+    [],
+    [nil, nil, nil, nil, nil, nil],
+    [:then, 'x', 2, 4, 2, 9],
+    [:then, 1, 2, 4, 2, 9, 7, 8],
+    [:then, 1, 99, 0, 98, 0],
+    [:then, 1, -1, -1, -1, -1],
+    [:then, 1, 2.5, 4, 2, 9],
+    '[',
+    '[:then, 1, 2',
+    'nil',
+    '42',
+    'foo',
+    '"str"',
+    '',
+    '[1, 2, 3, 4, 5, 6]',
+    '[:then, 1, 2, 4, 2, 9]',
+    'then',
+    nil,
+    42,
+    3.5,
+    true
   ].freeze
+  private_constant(:DESCRIPTORS)
   HIT_COUNTS = [0, 1, 7, -1, nil, 'x', [], {}, 2**70, 1.5].freeze
+  private_constant(:HIT_COUNTS)
   LINE_ARRAYS = [
-    [1, 1, 0, nil], [0, 0, 0, 0], [nil, nil, nil, nil], ['x', 1, nil, nil], [1, 1, 0, nil, 1, 1, 1, 1, 1, 1], [],
-    [1.5, 1, 0, nil], [-1, 1, 0, nil], [nil, 1, 0, nil]
+    [1, 1, 0, nil],
+    [0, 0, 0, 0],
+    [nil, nil, nil, nil],
+    ['x', 1, nil, nil],
+    [1, 1, 0, nil, 1, 1, 1, 1, 1, 1],
+    [],
+    [1.5, 1, 0, nil],
+    [-1, 1, 0, nil],
+    [nil, 1, 0, nil]
   ].freeze
+  private_constant(:LINE_ARRAYS)
   NOT_A_COLLECTION = [nil, 42, 'x', true, []].freeze
+  private_constant(:NOT_A_COLLECTION)
   # The longest line array, which the fuzzed files are padded to.
   MAX_LINES = LINE_ARRAYS.map(&:size).max
+  public_constant(:MAX_LINES)
 
   def initialize(seed)
     @random = Random.new(seed)
@@ -67,6 +103,7 @@ class CoverageFuzzer
   # and its stringified twin would be one duplicated key there, which no real resultset holds
   # (and which the JSON parser warns about). The first of such twins is kept.
   def json_keyed(pairs)
-    pairs.uniq { |descriptor, _value| descriptor.to_s }.to_h
+    pairs.uniq { |descriptor, _value| descriptor.to_s }
+      .to_h
   end
 end

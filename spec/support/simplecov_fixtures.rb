@@ -1,9 +1,10 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: false
 # frozen_string_literal: true
 
 require 'json'
-require 'stringio'
 require 'simplecov'
+require 'stringio'
 
 # Builds REAL SimpleCov objects for the suite from sources written to disk, so every example
 # drives the formatter exactly as SimpleCov does and passes sorbet-runtime's signature checks.
@@ -25,8 +26,9 @@ require 'simplecov'
 module SimpleCovFixtures
   # The nocov marker the examples write into their fixture sources.
   NOCOV_MARKER = '# :nocov:'
+  public_constant(:NOCOV_MARKER)
 
-  # What this Ruby's Coverage records in a live run — a different question from what the
+  # What this Ruby's Coverage records in a live run - a different question from what the
   # installed SimpleCov has an API for (see {#method_coverage_supported?}).
   module Engine
     # Whether Coverage records `criterion` (`:branches` or `:methods`): asked of
@@ -46,20 +48,23 @@ module SimpleCovFixtures
   # SimpleCov 1.0 added, derived from method descriptors exactly as SimpleCov 1.x derives them.
   module MethodEmulation
     # Duck-typed stand-in for `SimpleCov::SourceFile::Method`.
-    EmulatedMethod = Struct.new(:class_name, :method_name, :start_line, :end_line, :coverage) do
-      def missed?
-        coverage.zero?
+    EmulatedMethod =
+      Struct.new(:class_name, :method_name, :start_line, :end_line, :coverage) do
+        def missed?
+          coverage.zero?
+        end
       end
-    end
+    private_constant(:EmulatedMethod)
 
     # Gives a real SimpleCov < 1.0 SourceFile the `missed_methods` reader of SimpleCov >= 1.0, and
     # tells the formatter (which detects the API once, at load time) that the API is there.
     def emulate_method_coverage!(file, methods)
       stub_const('SimpleCov::Formatter::AIFormatter::MarkdownBuilder::MethodDeficit::API_AVAILABLE', true)
-      emulated = methods.map do |descriptor, hits|
-        class_name, method_name, start_line, _start_col, end_line, _end_col = descriptor
-        EmulatedMethod.new(class_name, method_name, start_line, end_line, hits)
-      end
+      emulated =
+        methods.map do |descriptor, hits|
+          class_name, method_name, start_line, _start_col, end_line, _end_col = descriptor
+          EmulatedMethod.new(class_name, method_name, start_line, end_line, hits)
+        end
       file.define_singleton_method(:missed_methods) { emulated.select(&:missed?) }
     end
 
@@ -119,7 +124,7 @@ module SimpleCovFixtures
   #
   # A source holding a nocov toggle is a deprecated input on SimpleCov >= 1.0, which prints a
   # deprecation notice for it the first time it reads the file. The suite feeds SimpleCov such
-  # sources on purpose — auditing them is a feature of the gem — so the notice is asserted here,
+  # sources on purpose - auditing them is a feature of the gem - so the notice is asserted here,
   # as the file is first read, instead of being left to reach STDERR (where the suite's warning
   # check would fail on it); every later read of the file is silent in SimpleCov itself.
   def write_source(directory, basename, code)
@@ -139,7 +144,8 @@ module SimpleCovFixtures
   # (and nothing at all from a SimpleCov that does not deprecate the toggle).
   def expect_nocov_deprecation(path, code)
     notice = nocov_deprecated? ? /\A#{Regexp.escape(path)}:\d+: \[DEPRECATION\] `# :nocov:` is deprecated/ : ''
-    expect { source_file(path, { 'lines' => Array.new(code.lines.size) }).skipped_lines }.to output(notice).to_stderr
+    expect { source_file(path, { 'lines' => Array.new(code.lines.size) }).skipped_lines }
+      .to(output(notice).to_stderr)
   end
 
   # Line-coverage array for a file of `line_count` lines: 1 for covered lines, 0 for missed
@@ -158,7 +164,7 @@ module SimpleCovFixtures
   def branch_descriptor(source, type, id, line_number, expression)
     line_text = source.lines.fetch(line_number - 1)
     start_col = line_text.index(expression)
-    raise ArgumentError, "#{expression.inspect} is not on line #{line_number}" unless start_col
+    raise(ArgumentError, "#{expression.inspect} is not on line #{line_number}") unless start_col
 
     [type, id, line_number, start_col, line_number, start_col + expression.bytesize]
   end

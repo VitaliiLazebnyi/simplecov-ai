@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -51,7 +52,7 @@ module SimpleCov
             child = node.children.at(index)
             case child
             when Symbol then child
-            else raise TypeError, unexpected(node, index, 'a Symbol')
+            else raise(TypeError, unexpected(node, index, 'a Symbol'))
             end
           end
 
@@ -63,10 +64,16 @@ module SimpleCov
             child = node.children.at(0)
             case child
             when Symbol, String then child.to_s
-            else raise TypeError, unexpected(node, 0, 'a Symbol or String')
+            else raise(TypeError, unexpected(node, 0, 'a Symbol or String'))
             end
           end
 
+          # The message of the error raised for a child of an unexpected shape.
+          #
+          # @param node [Parser::AST::Node] The parent node.
+          # @param index [Integer] The position of the child.
+          # @param expected [String] What the child should have been.
+          # @return [String] The message.
           sig { params(node: Parser::AST::Node, index: Integer, expected: String).returns(String) }
           def self.unexpected(node, index, expected)
             "child #{index} of a :#{node.type} node is not #{expected}"

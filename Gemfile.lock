@@ -178,6 +178,10 @@ GEM
       lint_roller (~> 1.1)
       rubocop (~> 1.89)
       rubocop-ast (>= 1.44.0, < 2.0)
+    rubocop-yard (1.3.0)
+      lint_roller
+      rubocop (~> 1.72)
+      yard
     ruby-progressbar (1.13.0)
     rubydex (0.4.4-aarch64-linux)
     rubydex (0.4.4-arm64-darwin)
@@ -259,6 +263,7 @@ DEPENDENCIES
   rubocop-rspec (~> 3.10)
   rubocop-sorbet (~> 0.17)
   rubocop-thread_safety (~> 0.8)
+  rubocop-yard (~> 1.3)
   simplecov-ai!
   sorbet (~> 0.6)
   tapioca (~> 0.20)
@@ -330,6 +335,7 @@ CHECKSUMS
   rubocop-rspec (3.10.2) sha256=0b3e2ecc592cd10ecbf0095bb58d1e357905276e069643523cc19eb7495f65e2
   rubocop-sorbet (0.17.2) sha256=0d34ae2f268c7d36d39102bdafdbbec4bc9a65bedac6cc3732a20692dbe96558
   rubocop-thread_safety (0.8.0) sha256=71fe5e7894fb9acfbd4c2dcd394feabc35bd690f75b0bc846e1504d9e31f9034
+  rubocop-yard (1.3.0) sha256=29bc44274e0b10d7db60655e84089328c0aceadd246d24f8e963c67949a60269
   ruby-progressbar (1.13.0) sha256=80fc9c47a9b640d6834e0dc7b3c94c9df37f08cb072b7761e4a71e22cff29b33
   rubydex (0.4.4-aarch64-linux) sha256=3638b08b7d683f264eb3215e86974c0f2458c7d63e4aab0c772d625e9e0392ea
   rubydex (0.4.4-arm64-darwin) sha256=e593b7a2b820e3d91ba3d6b7371916efe7c742b75d44f6eaa39cd04546211c09

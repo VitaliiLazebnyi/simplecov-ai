@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -11,16 +12,22 @@ module SimpleCov
 
           # Approximate maximum characters per line for truncation calculation
           ESTIMATED_CHARS_PER_LINE = 80
+          private_constant(:ESTIMATED_CHARS_PER_LINE)
           # Suffix added to truncated snippets
           TRUNCATION_ELLIPSIS = '...'
+          private_constant(:TRUNCATION_ELLIPSIS)
           # Template for identical snippet occurrences indicator
           OCCURRENCE_TEMPLATE = '(Occurrence %d of %d).'
+          private_constant(:OCCURRENCE_TEMPLATE)
           # The stripped text of every non-blank line, by line number.
           TextsByLine = T.type_alias { T::Hash[Integer, String] }
+          private_constant(:TextsByLine)
           # Per node (nodes compare by identity), the lines holding each text; nil for blank lines.
-          OccurrenceIndexes = T.type_alias do
-            T::Hash[ASTResolver::SemanticNode, T::Hash[T.nilable(String), T::Array[Integer]]]
-          end
+          OccurrenceIndexes =
+            T.type_alias do
+              T::Hash[ASTResolver::SemanticNode, T::Hash[T.nilable(String), T::Array[Integer]]]
+            end
+          private_constant(:OccurrenceIndexes)
 
           # Extracts a byte range from a source line. SimpleCov reports branch columns as
           # byte offsets, so slicing on the byte representation and restoring the original
@@ -34,7 +41,7 @@ module SimpleCov
           sig { params(line_text: String, start_col: Integer, end_col: Integer).returns(T.nilable(String)) }
           def self.byte_slice(line_text, start_col, end_col)
             bytes = line_text.b
-            return nil if bytes.length < end_col
+            return if bytes.length < end_col
 
             slice = bytes[start_col...end_col]
             slice ? slice.force_encoding(line_text.encoding).scrub.strip : ''
@@ -55,7 +62,7 @@ module SimpleCov
           sig { params(source_lines: T::Array[String]).returns(T::Hash[Integer, String]) }
           def self.texts_by_line(source_lines)
             source_lines.each.with_index(1).to_h { |line, line_number| [line_number, line.strip] }
-                        .reject { |_line_number, stripped| stripped.empty? }
+              .reject { |_line_number, stripped| stripped.empty? }
           end
 
           # The exact sub-line expression of a single-line branch, or nil when the branch spans
@@ -72,7 +79,7 @@ module SimpleCov
           def self.inline_slice(source_lines, range, columns)
             first_line = range.begin
             source_line = source_lines.at(first_line - 1)
-            return nil unless columns && source_line && first_line == range.end
+            return unless columns && source_line && first_line == range.end
 
             byte_slice(source_line, *columns)
           end
@@ -94,7 +101,8 @@ module SimpleCov
           #   are left out.
           sig { params(line_numbers: T::Enumerable[Integer]).returns(String) }
           def text(line_numbers)
-            line_numbers.filter_map { |line_number| line_text(line_number) }.join(' ')
+            line_numbers.filter_map { |line_number| line_text(line_number) }
+              .join(' ')
           end
 
           # Safely limits the character length of a code snippet according to the configuration.
@@ -126,7 +134,8 @@ module SimpleCov
           # @return [String] The stripped first line (empty when the range is blank) and `...`.
           sig { params(range: T::Range[Integer]).returns(String) }
           def cut(range)
-            "#{range.filter_map { |line_number| line_text(line_number) }.first}#{TRUNCATION_ELLIPSIS}"
+            "#{range.filter_map { |line_number| line_text(line_number) }
+.first}#{TRUNCATION_ELLIPSIS}"
           end
 
           # Disambiguates identical code snippets within the same semantic block (e.g., "(Occurrence 2 of 3)").
@@ -151,7 +160,7 @@ module SimpleCov
 
           # A map, built once per node, of stripped line text to the line numbers where it occurs
           # within the node, so occurrence disambiguation is O(node span) instead of
-          # O(deficits × node span). Blank lines (and lines past the end of the file) are grouped
+          # O(deficits x node span). Blank lines (and lines past the end of the file) are grouped
           # under nil, which no snippet looks up, so a blank snippet never has an occurrence.
           sig { params(node: ASTResolver::SemanticNode).returns(T::Hash[T.nilable(String), T::Array[Integer]]) }
           def occurrence_index(node)
