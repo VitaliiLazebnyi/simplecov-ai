@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Vitalii Lazebnyi
-# typed: false
+# typed: strict
 # frozen_string_literal: true
 
 # The sources of the fixture project the end-to-end spec (spec/integration/end_to_end_spec.rb)

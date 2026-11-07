@@ -142,15 +142,15 @@ ThreadSafety/ClassInstanceVariable:
   Exclude:
     - lib/simplecov-ai.rb
 
-# Justification: Sorbet checks spec/ (constants and syntax everywhere), but the example files,
-# the support mixins and the fixtures are `typed: false`: Sorbet has no model of RSpec's
-# `instance_exec`ed example groups, so typing them would take a `T.bind` in every block (which
-# Sorbet/ForbidTBind forbids), and the support mixins call RSpec's mocks DSL on the example they
-# are mixed into and build SimpleCov's loosely-shaped coverage hashes, which only `T.untyped`
-# (forbidden by Sorbet/ForbidTUntyped) could describe. spec/spec_helper.rb is `typed: strict`.
+# Justification: Sorbet checks all of spec/, and spec_helper.rb and spec/support/ are
+# `typed: strict`, but the example files and the fixtures are `typed: false`: Sorbet has no model
+# of RSpec's `instance_exec`ed example groups, so typing them would take a `T.bind` in every block
+# (which Sorbet/ForbidTBind forbids), and the fixtures are the untyped user code the resolver and
+# the coverage specs measure, line by line.
 Sorbet/EnforceSignatures:
   Exclude:
-    - spec/**/*
+    - spec/**/*_spec.rb
+    - spec/fixtures/**/*
     # RUBYOPT loads it (`-r`) into every Ruby process before Bundler, where sorbet-runtime, which
     # a `sig` needs, is not loaded; it is `typed: true`.
     - script/upstream_warnings.rb
@@ -165,24 +165,22 @@ Sorbet/ForbidExtendTSigHelpersInShims:
   Include:
     - "**/*.rbi"
 
-# Every file Sorbet checks is at least `strict`, and lib/ is `strong`. Below `strict`: the specs
-# but spec_helper.rb, and script/upstream_warnings.rb (see Sorbet/EnforceSignatures) and tapioca's generated require
-# list. Not `strong` either: branch_enricher.rb, whose header gives the reason, and the build and
-# tool files outside lib/ (Rakefile, Gemfiles, gemspec, scripts), which call the untyped DSLs of
-# Rake, Bundler and RubyGems.
+# Every file Sorbet checks is at least `strict`, and lib/ is `strong`. Below `strict`: the example
+# files and fixtures of spec/ and script/upstream_warnings.rb (see Sorbet/EnforceSignatures), and
+# tapioca's generated require list. Not `strong` either: branch_enricher.rb, whose header gives the
+# reason, and the build and tool files outside lib/ (Rakefile, Gemfiles, gemspec, scripts), which
+# call the untyped DSLs of Rake, Bundler and RubyGems.
 Sorbet/TrueSigil:
   Exclude:
     - bin/tapioca
     - spec/**/*_spec.rb
     - spec/fixtures/**/*
-    - spec/support/**/*
 Sorbet/StrictSigil:
   Exclude:
     - bin/tapioca
     - sorbet/tapioca/require.rb
     - spec/**/*_spec.rb
     - spec/fixtures/**/*
-    - spec/support/**/*
     - script/upstream_warnings.rb
 Sorbet/StrongSigil:
   Exclude:
@@ -239,7 +237,8 @@ Naming/RescuedExceptionsVariableName:
 # group is how RSpec scopes a helper method to that group.
 Sorbet/BlockMethodDefinition:
   Exclude:
-    - spec/**/*
+    - spec/**/*_spec.rb
+    - spec/fixtures/**/*
 
 # Lines wrap at 120 columns without exception (editorconfig-checker enforces the same width on
 # every file), and continuation lines are indented by a fixed two spaces rather than aligned with

@@ -1,9 +1,10 @@
 # Copyright (c) 2026 Vitalii Lazebnyi
-# typed: false
+# typed: strict
 # frozen_string_literal: true
 
 require 'json'
 require 'simplecov'
+require 'sorbet-runtime'
 require 'stringio'
 
 # Builds REAL SimpleCov objects for the suite from sources written to disk, so every example
@@ -24,6 +25,9 @@ require 'stringio'
 # the real SimpleCov objects there all the same (spec_helper.rb lifts SimpleCov's engine gate for
 # the examples); only a child process measuring real code (spec/integration) depends on the engine.
 module SimpleCovFixtures
+  extend T::Sig
+  include Kernel
+
   # The nocov marker the examples write into their fixture sources.
   NOCOV_MARKER = '# :nocov:'
   public_constant(:NOCOV_MARKER)
@@ -31,12 +35,15 @@ module SimpleCovFixtures
   # What this Ruby's Coverage records in a live run - a different question from what the
   # installed SimpleCov has an API for (see {#method_coverage_supported?}).
   module Engine
+    extend T::Sig
+
     # Whether Coverage records `criterion` (`:branches` or `:methods`): asked of
     # `Coverage.supported?` where it exists (Ruby >= 3.2, TruffleRuby) and assumed for MRI alone
     # before that (JRuby 9.4 has neither the query nor the criteria).
     #
     # @param criterion [Symbol] A `Coverage.start` keyword.
     # @return [Boolean]
+    sig { params(criterion: Symbol).returns(T::Boolean) }
     def self.measures?(criterion)
       return Coverage.supported?(criterion) if Coverage.respond_to?(:supported?)
 
@@ -47,28 +54,68 @@ module SimpleCovFixtures
   # Method coverage on a SimpleCov without the API (< 1.0): real objects are given the readers
   # SimpleCov 1.0 added, derived from method descriptors exactly as SimpleCov 1.x derives them.
   module MethodEmulation
+    extend T::Sig
+    include Kernel
+    include RSpec::Mocks::ExampleMethods
+
     # Duck-typed stand-in for `SimpleCov::SourceFile::Method`.
-    EmulatedMethod =
-      Struct.new(:class_name, :method_name, :start_line, :end_line, :coverage) do
-        def missed?
-          coverage.zero?
-        end
+    class EmulatedMethod
+      extend T::Sig
+
+      sig do
+        params(class_name: String, method_name: String, start_line: Integer, end_line: Integer, coverage: Integer).void
       end
+      def initialize(class_name, method_name, start_line, end_line, coverage)
+        @class_name = class_name
+        @method_name = method_name
+        @start_line = start_line
+        @end_line = end_line
+        @coverage = coverage
+      end
+
+      # @return [String] The owner of the method.
+      sig { returns(String) }
+      attr_reader :class_name
+
+      # @return [String] The name of the method.
+      sig { returns(String) }
+      attr_reader :method_name
+
+      # @return [Integer] The first line of the method.
+      sig { returns(Integer) }
+      attr_reader :start_line
+
+      # @return [Integer] The last line of the method.
+      sig { returns(Integer) }
+      attr_reader :end_line
+
+      # @return [Integer] How often the method was called.
+      sig { returns(Integer) }
+      attr_reader :coverage
+
+      # @return [Boolean] Whether the method was never called.
+      sig { returns(T::Boolean) }
+      def missed?
+        coverage.zero?
+      end
+    end
     private_constant(:EmulatedMethod)
 
     # Gives a real SimpleCov < 1.0 SourceFile the `missed_methods` reader of SimpleCov >= 1.0, and
     # tells the formatter (which detects the API once, at load time) that the API is there.
+    sig { params(file: SimpleCov::SourceFile, methods: T::Hash[T::Array[T.any(String, Integer)], Integer]).void }
     def emulate_method_coverage!(file, methods)
       stub_const('SimpleCov::Formatter::AIFormatter::MarkdownBuilder::MethodDeficit::API_AVAILABLE', true)
       emulated =
         methods.map do |descriptor, hits|
-          class_name, method_name, start_line, _start_col, end_line, _end_col = descriptor
-          EmulatedMethod.new(class_name, method_name, start_line, end_line, hits)
+          class_name, method_name, start_line, _start_col, end_line, _end_col = descriptor.map(&:to_s)
+          EmulatedMethod.new(class_name.to_s, method_name.to_s, Integer(start_line), Integer(end_line), hits)
         end
       file.define_singleton_method(:missed_methods) { emulated.select(&:missed?) }
     end
 
     # Gives a real SimpleCov < 1.0 Result the aggregate method counters of SimpleCov >= 1.0.
+    sig { params(result: SimpleCov::Result, covered: Integer, total: Integer).void }
     def emulate_method_totals!(result, covered:, total:)
       stub_const('SimpleCov::Formatter::AIFormatter::MarkdownBuilder::MethodDeficit::API_AVAILABLE', true)
       result.define_singleton_method(:total_methods) { total }
@@ -76,8 +123,74 @@ module SimpleCovFixtures
     end
   end
   include MethodEmulation
+  # After MethodEmulation, whose RSpec::Mocks::ExampleMethods has an `expect` of its own: the
+  # block form used here is RSpec::Matchers'.
+  include RSpec::Matchers
+
+  # SimpleCov's own objects over the examples' sources and coverage data.
+  module Results
+    extend T::Sig
+
+    # @param path [String] The source file.
+    # @param coverage [Object] Its coverage data, well-formed or not.
+    # @return [SimpleCov::SourceFile] SimpleCov's object over it.
+    sig { params(path: String, coverage: Object).returns(SimpleCov::SourceFile) }
+    def source_file(path, coverage)
+      SimpleCov::SourceFile.new(path, coverage)
+    end
+
+    # A result over the given files. SimpleCov's project filters are suspended while it is built:
+    # they are the host project's policy, not formatter behaviour, and SimpleCov < 1.0's root
+    # filter memoises the first `SimpleCov.root` it sees, which would drop files written to a
+    # temp directory depending on example order.
+    sig { params(coverage_by_path: T::Hash[String, Object]).returns(SimpleCov::Result) }
+    def result_for(coverage_by_path)
+      without_simplecov_filters { SimpleCov::Result.new(coverage_by_path) }
+    end
+
+    # The result as SimpleCov hands it to a formatter on its default (merging) path: rebuilt
+    # from the JSON resultset, where every branch and method descriptor became a String.
+    # (`Result.from_hash` returns one result per command name since SimpleCov 0.19 and a single
+    # result before that.)
+    sig { params(result: SimpleCov::Result).returns(SimpleCov::Result) }
+    def merged_result(result)
+      rebuilt = without_simplecov_filters { SimpleCov::Result.from_hash(JSON.parse(JSON.generate(result.to_hash))) }
+      rebuilt.is_a?(Array) ? rebuilt.first : rebuilt
+    end
+
+    # A result over `path` from what this process's Coverage session has recorded so far
+    # (`Coverage.peek_result`), normalised through SimpleCov's own adapter as `SimpleCov.result`
+    # does: an engine whose Coverage runs without criteria (JRuby, TruffleRuby) reports the legacy
+    # `{ path => [hits...] }` shape, which `SimpleCov::Result.new` cannot take as it is and
+    # `ResultAdapter` turns into `{ 'lines' => [hits...] }`.
+    sig { params(path: String).returns(SimpleCov::Result) }
+    def session_result(path)
+      recorded = Coverage.peek_result.select { |recorded_path, _coverage| recorded_path == path }
+      result_for(SimpleCov::ResultAdapter.call(recorded))
+    end
+
+    # Runs the block with SimpleCov's project filters suspended.
+    sig do
+      type_parameters(:Result).params(blk: T.proc.returns(T.type_parameter(:Result))).returns(T.type_parameter(:Result))
+    end
+    def without_simplecov_filters(&blk)
+      original_filters = SimpleCov.filters.dup
+      SimpleCov.filters.clear
+      yield
+    ensure
+      SimpleCov.filters.replace(original_filters)
+    end
+
+    # The path as a report file heading shows it: relative to SimpleCov.root, no leading slash.
+    sig { params(path: String).returns(String) }
+    def heading_path(path)
+      path.delete_prefix(SimpleCov.root).delete_prefix('/')
+    end
+  end
+  include Results
 
   # @return [String] The `# :nocov:` marker line, for sources written by the examples.
+  sig { returns(String) }
   def nocov_marker
     NOCOV_MARKER
   end
@@ -86,29 +199,36 @@ module SimpleCovFixtures
   # examples are defined at all: an example asserting a capability the platform lacks is not
   # defined there (never skipped), and the CI matrix runs every example on a platform that has it.
   module Capabilities
+    extend T::Sig
+
     # @return [Boolean] Whether the installed SimpleCov honours `# simplecov:disable` directives.
+    sig { returns(T::Boolean) }
     def simplecov_directives_supported?
       defined?(SimpleCov::Directive) ? true : false
     end
 
     # @return [Boolean] Whether the installed SimpleCov (>= 1.0) has the method coverage API.
+    sig { returns(T::Boolean) }
     def method_coverage_supported?
       SimpleCov::SourceFile.method_defined?(:missed_methods)
     end
 
     # @return [Boolean] Whether a run on this Ruby records branch coverage.
+    sig { returns(T::Boolean) }
     def branch_coverage_measurable?
       Engine.measures?(:branches)
     end
 
     # @return [Boolean] Whether a run on this Ruby with the installed SimpleCov records method
     #   coverage.
+    sig { returns(T::Boolean) }
     def method_coverage_measurable?
       method_coverage_supported? && Engine.measures?(:methods)
     end
 
     # @return [Boolean] Whether the installed SimpleCov (>= 1.1) scrubs invalid UTF-8 bytes from
     #   a source instead of raising on them.
+    sig { returns(T::Boolean) }
     def invalid_bytes_scrubbed?
       Gem::Version.new(SimpleCov::VERSION) >= Gem::Version.new('1.1')
     end
@@ -127,6 +247,7 @@ module SimpleCovFixtures
   # sources on purpose - auditing them is a feature of the gem - so the notice is asserted here,
   # as the file is first read, instead of being left to reach STDERR (where the suite's warning
   # check would fail on it); every later read of the file is silent in SimpleCov itself.
+  sig { params(directory: String, basename: String, code: String).returns(String) }
   def write_source(directory, basename, code)
     path = File.join(directory, basename)
     File.binwrite(path, code)
@@ -135,6 +256,7 @@ module SimpleCovFixtures
   end
 
   # @return [Boolean] Whether the installed SimpleCov deprecates the nocov toggle.
+  sig { returns(T::Boolean) }
   def nocov_deprecated?
     SimpleCov::SourceFile.const_defined?(:SkipChunks, false) &&
       SimpleCov::SourceFile::SkipChunks.private_method_defined?(:warn_nocov_deprecation)
@@ -142,6 +264,7 @@ module SimpleCovFixtures
 
   # Reads the source through SimpleCov once, expecting its nocov deprecation notice for the file
   # (and nothing at all from a SimpleCov that does not deprecate the toggle).
+  sig { params(path: String, code: String).void }
   def expect_nocov_deprecation(path, code)
     notice = nocov_deprecated? ? /\A#{Regexp.escape(path)}:\d+: \[DEPRECATION\] `# :nocov:` is deprecated/ : ''
     expect { source_file(path, { 'lines' => Array.new(code.lines.size) }).skipped_lines }
@@ -150,6 +273,13 @@ module SimpleCovFixtures
 
   # Line-coverage array for a file of `line_count` lines: 1 for covered lines, 0 for missed
   # lines and nil (not relevant) everywhere else.
+  sig do
+    params(
+      line_count: Integer,
+      covered: T::Array[Integer],
+      missed: T::Array[Integer]
+    ).returns(T::Array[T.nilable(Integer)])
+  end
   def line_hits(line_count, covered: [], missed: [])
     Array.new(line_count) do |index|
       line_number = index + 1
@@ -161,6 +291,10 @@ module SimpleCovFixtures
 
   # A branch descriptor whose columns are located by searching `expression` on the given line
   # of `source`, so column data is always consistent with the text on disk.
+  sig do
+    params(source: String, type: Symbol, id: Integer, line_number: Integer, expression: String)
+      .returns([Symbol, Integer, Integer, Integer, Integer, Integer])
+  end
   def branch_descriptor(source, type, id, line_number, expression)
     line_text = source.lines.fetch(line_number - 1)
     start_col = line_text.index(expression)
@@ -170,56 +304,17 @@ module SimpleCovFixtures
   end
 
   # A branch descriptor spanning whole lines (a non-inline arm of a multi-line conditional).
+  sig do
+    params(type: Symbol, id: Integer, start_line: Integer, end_line: Integer)
+      .returns([Symbol, Integer, Integer, Integer, Integer, Integer])
+  end
   def multiline_branch_descriptor(type, id, start_line, end_line)
     [type, id, start_line, 0, end_line, 0]
   end
 
-  def source_file(path, coverage)
-    SimpleCov::SourceFile.new(path, coverage)
-  end
-
-  # A result over the given files. SimpleCov's project filters are suspended while it is built:
-  # they are the host project's policy, not formatter behaviour, and SimpleCov < 1.0's root
-  # filter memoises the first `SimpleCov.root` it sees, which would drop files written to a
-  # temp directory depending on example order.
-  def result_for(coverage_by_path)
-    without_simplecov_filters { SimpleCov::Result.new(coverage_by_path) }
-  end
-
-  # The result as SimpleCov hands it to a formatter on its default (merging) path: rebuilt
-  # from the JSON resultset, where every branch and method descriptor became a String.
-  # (`Result.from_hash` returns one result per command name since SimpleCov 0.19 and a single
-  # result before that.)
-  def merged_result(result)
-    rebuilt = without_simplecov_filters { SimpleCov::Result.from_hash(JSON.parse(JSON.generate(result.to_hash))) }
-    rebuilt.is_a?(Array) ? rebuilt.first : rebuilt
-  end
-
-  # A result over `path` from what this process's Coverage session has recorded so far
-  # (`Coverage.peek_result`), normalised through SimpleCov's own adapter as `SimpleCov.result`
-  # does: an engine whose Coverage runs without criteria (JRuby, TruffleRuby) reports the legacy
-  # `{ path => [hits...] }` shape, which `SimpleCov::Result.new` cannot take as it is and
-  # `ResultAdapter` turns into `{ 'lines' => [hits...] }`.
-  def session_result(path)
-    recorded = Coverage.peek_result.select { |recorded_path, _coverage| recorded_path == path }
-    result_for(SimpleCov::ResultAdapter.call(recorded))
-  end
-
-  def without_simplecov_filters
-    original_filters = SimpleCov.filters.dup
-    SimpleCov.filters.clear
-    yield
-  ensure
-    SimpleCov.filters.replace(original_filters)
-  end
-
-  # The path as a report file heading shows it: relative to SimpleCov.root, no leading slash.
-  def heading_path(path)
-    path.delete_prefix(SimpleCov.root).delete_prefix('/')
-  end
-
   # Runs the block with STDOUT captured and returns what it printed.
-  def capture_stdout
+  sig { params(blk: T.proc.void).returns(String) }
+  def capture_stdout(&blk)
     original_stdout = $stdout
     $stdout = StringIO.new
     yield
@@ -231,6 +326,15 @@ module SimpleCovFixtures
   # Runs the block with SimpleCov measuring method coverage for `result`: for real on SimpleCov
   # >= 1.0 (the files' coverage hashes carry their `methods` entries), emulated from
   # `methods_by_path` (`{ path => { descriptor => hits } }`) on older releases.
+  sig do
+    type_parameters(:Value)
+      .params(
+        result: SimpleCov::Result,
+        methods_by_path: T::Hash[String, T::Hash[T::Array[T.any(String, Integer)], Integer]],
+        block: T.proc.returns(T.type_parameter(:Value))
+      )
+      .returns(T.type_parameter(:Value))
+  end
   def measuring_methods(result, methods_by_path, &block)
     return with_method_coverage_enabled(&block) if method_coverage_supported?
 
@@ -242,7 +346,10 @@ module SimpleCovFixtures
 
   # Runs the block with SimpleCov measuring method coverage (SimpleCov >= 1.0), restoring the
   # global configuration afterwards so the suite's own coverage processing is unaffected.
-  def with_method_coverage_enabled
+  sig do
+    type_parameters(:Value).params(blk: T.proc.returns(T.type_parameter(:Value))).returns(T.type_parameter(:Value))
+  end
+  def with_method_coverage_enabled(&blk)
     SimpleCov.enable_coverage(:method)
     yield
   ensure

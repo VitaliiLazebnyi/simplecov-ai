@@ -77,9 +77,9 @@ GH_TOKEN="${GH_TOKEN:-$(gh auth token)}"
 export GH_TOKEN
 step tmp/venv/bin/zizmor --persona=auditor --format=plain --no-progress .
 step gitleaks git --redact --exit-code 1 .
-step env VIRTUAL_ENV="${PWD}/tmp/venv" trivy filesystem --scanners vuln,secret --include-dev-deps --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
-  --exit-code 1 --no-progress --skip-version-check --skip-dirs tmp --skip-dirs coverage --skip-dirs doc \
-  --skip-dirs .yardoc --skip-dirs vendor .
+step env VIRTUAL_ENV="${PWD}/tmp/venv" trivy filesystem --scanners vuln,secret --include-dev-deps \
+  --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --exit-code 1 --no-progress --skip-version-check \
+  --skip-dirs tmp --skip-dirs coverage --skip-dirs doc --skip-dirs .yardoc --skip-dirs vendor .
 step docker run --rm --volume "${PWD}:/src" --workdir /src "${semgrep_image}" semgrep scan \
   --config p/ruby --config p/secrets --config p/security-audit --config p/github-actions --error --metrics=off .
 

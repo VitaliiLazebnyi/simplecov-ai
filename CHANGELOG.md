@@ -45,14 +45,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   zizmorcore/zizmor-action 0.8.1, Semgrep 1.184.0, JRuby 10.1.3.0 in CI and `jruby:10.1` for
   `rake check:jruby`.
 - Stricter still, matching the strictest settings of the sibling repositories:
-  `RSpec/AlignRightLetBrace` is on; Sorbet checks `spec/` as well (`spec_helper.rb` at `strict`);
-  Reek, Flay, Flog and debride check `script/`, the `Rakefile`, the gemspec and the Gemfiles as well
-  as `lib/`, with Flog's threshold lowered to 20 and Flay's mass to 20; Markdown is linted by rumdl
-  with every markdownlint rule and rumdl's own (the npm tooling is gone); zizmor runs with the
-  auditor persona and its online audits; Trivy scans the lockfiles for vulnerabilities of any
-  severity and the tree for secrets; every gem, Action and pip package must reach OpenSSF Scorecard
-  3 or be allowed with a reason (`rake scorecard`); every Harden-Runner step drops telemetry and
-  sudo; the release job blocks unlisted egress and refuses to publish an unsigned gem.
+  `RSpec/AlignRightLetBrace` is on; Sorbet checks `spec/` as well, with `spec_helper.rb` and
+  `spec/support/` at `strict`; Reek, Flay, Flog and debride check `script/`, the `Rakefile`, the
+  gemspec and the Gemfiles as well as `lib/`, with Flog's threshold lowered to 20 and Flay's mass to
+  20; Markdown is linted by rumdl with every markdownlint rule and rumdl's own (the npm tooling is
+  gone); zizmor runs with the auditor persona and its online audits; Trivy scans the lockfiles for
+  vulnerabilities of any severity and the tree for secrets; every gem, Action and pip package must
+  reach OpenSSF Scorecard 3 or be allowed with a reason (`rake scorecard`); every Harden-Runner step
+  drops telemetry and sudo; the release job blocks unlisted egress and refuses to publish an
+  unsigned gem.
 
 ## [0.11.0] - 2026-08-29
 

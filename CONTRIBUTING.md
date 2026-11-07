@@ -42,9 +42,9 @@ every other warning fails.
   *Rules*).
 - `rake typecheck`: Tapioca generates the gem RBIs, then `srb tc` must report no errors over the
   whole repository, `spec/` included; every `lib/` file is `# typed: strong` except
-  `branch_enricher.rb` (`strict`, see its header), and every other file is at least `strict`,
-  except the example files, support mixins and fixtures of `spec/` (`typed: false`, the reason is
-  in `.rubocop.yml`).
+  `branch_enricher.rb` (`strict`, see its header), and every other file is at least `strict`
+  (`spec_helper.rb` and `spec/support/` included), except the example files and the fixtures of
+  `spec/` (`typed: false`, the reason is in `.rubocop.yml`).
 - `rake yard`: YARD builds without warnings and reports 100% documented.
 - `rake reek`: no code smell (Reek's default configuration; `.reek.yml` narrows one detector for
   one class, with the reason).
