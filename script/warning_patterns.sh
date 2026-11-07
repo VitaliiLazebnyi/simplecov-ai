@@ -4,13 +4,25 @@
 #
 # Usage: warning_lines < log   (prints every warning line of the log with its line number)
 warning_lines() {
-  local pattern documentation
+  local pattern
   pattern='[Ww]arning:|WARNING:|\bWARN\b|::warning|##\[warning\]'
   pattern+='|DEPRECATION|DEPRECATED|is deprecated|will be deprecated|Node\.js [0-9]+ actions are deprecated'
-  # The one kind of matching line that is not a warning: CodeQL prints the JSON schema of its
-  # extractor options, whose "title" and "description" fields document a deprecated option
-  # ("DEPRECATED - Whether to use buildless ..."). Only such JSON documentation fields are
-  # skipped; the same words anywhere else still fail.
-  documentation='^[0-9TZ:.-]+ +"(title|description)" : "'
-  grep -nE -e "${pattern}" | grep -vE -e "^[0-9]+:${documentation#^}" || true
+  # Upstream output that matches but is no warning about this repository, each line matched in
+  # full; the same words anywhere else still fail:
+  # - CodeQL prints the JSON schema of its extractor options, whose "title" and "description"
+  #   fields document a deprecated option ("DEPRECATED - Whether to use buildless ...");
+  # - the Harden-Runner agent, whose post step prints its log: on Linux, dpkg's notice when the
+  #   agent uninstalls Docker (disable-sudo-and-containers) from the runner image; on Windows,
+  #   its process monitor noting a reused process ID.
+  local timestamp='^[0-9]+:[0-9TZ:.-]+ +'
+  local codeql_schema="${timestamp}\"(title|description)\" : \""
+  local dpkg_notice="${timestamp}[A-Z][a-z]{2}, [0-9]{2} [A-Z][a-z]{2} [0-9]{4} [0-9:]{8} GMT:dpkg: warning: "
+  dpkg_notice+="while removing docker-ce, directory '/usr/libexec/docker' not empty so not removed$"
+  local reused_pid="${timestamp}time=[0-9TZ:.-]+ level=WARN "
+  reused_pid+='msg="(pid reused|existing process not stopped, resetting it)" '
+  reused_pid+='pid=[0-9]+ exe=[^ ]+ existingExe=[^ ]+ existingStartTime=[0-9TZ:.-]+$'
+  local upstream=("${codeql_schema}" "${dpkg_notice}" "${reused_pid}")
+  local exceptions
+  exceptions=$(IFS='|' && printf '%s' "${upstream[*]}")
+  grep -nE -e "${pattern}" | grep -vE -e "${exceptions}" || true
 }

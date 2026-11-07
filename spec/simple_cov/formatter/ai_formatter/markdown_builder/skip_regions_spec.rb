@@ -152,7 +152,7 @@ RSpec.describe(SimpleCov::Formatter::AIFormatter::MarkdownBuilder::SkipRegions) 
 
   it 'quotes the directive without the whitespace that trails it' do
     file = file_for("def a\n  #{nocov_marker}\n  1\n  #{nocov_marker}\nend\n")
-    expect(described_class.of(file, file.src.map { |line| line.sub("\n", "   \n") })).to(eq([[2..4, nocov_marker]]))
+    expect(described_class.of(file, file.src.map { |line| "#{line.chomp}   \n" })).to(eq([[2..4, nocov_marker]]))
   end
 
   it 'reads the token through nocov_token on a SimpleCov without current_nocov_token (< 1.0)' do
