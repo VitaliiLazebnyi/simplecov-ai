@@ -186,15 +186,24 @@ jobs:
           disable-telemetry: true
           disable-sudo-and-containers: true
           allowed-endpoints: >-
+            files.pythonhosted.org:443
             ghcr.io:443
             github.com:443
             mirror.gcr.io:443
             objects.githubusercontent.com:443
             pkg-containers.githubusercontent.com:443
+            pypi.org:443
             release-assets.githubusercontent.com:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
+      # Trivy reads the licenses of the pip packages from the environment they are installed in, and
+      # warns without one; every package is pinned by its SHA-256.
+      - name: Install the pip packages of .github/python/requirements.txt
+        run: |
+          python3 -m venv "${RUNNER_TEMP}/venv"
+          "${RUNNER_TEMP}/venv/bin/pip" install --quiet --disable-pip-version-check --require-hashes --no-deps \
+            -r .github/python/requirements.txt
       - name: Install Trivy
         env:
           TRIVY_VERSION: 0.76.2
@@ -208,6 +217,7 @@ jobs:
       - name: Scan the lockfiles for vulnerabilities and the working tree for secrets
         env:
           TRIVY_CACHE_DIR: ${{ runner.temp }}/trivy-cache
+          VIRTUAL_ENV: ${{ runner.temp }}/venv
         run: >-
           "${RUNNER_TEMP}/trivy" filesystem --scanners vuln,secret --include-dev-deps
           --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --exit-code 1 --no-progress --skip-version-check .
