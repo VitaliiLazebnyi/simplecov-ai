@@ -1,12 +1,12 @@
 # Everything in the toolchain that is deliberately NOT at its newest release, each with the exact
 # upstream reason. `rake outdated` (script/outdated.rb) fails for anything outdated that is not
-# listed here, and for a listed hold that is no longer needed. Checked on 2026-10-28.
+# listed here, and for a listed hold that is no longer needed. Checked on 2026-11-07.
 gems:
   diff-lcs:
     newest: 2.0.0
     blocked_by:
-      - 'rspec-expectations 3.13.5 (newest): diff-lcs >= 1.2.0, < 2.0'
-      - 'rspec-mocks 3.13.8 (newest): diff-lcs >= 1.2.0, < 2.0'
+      - 'rspec-expectations 3.13.6 (newest): diff-lcs >= 1.2.0, < 2.0'
+      - 'rspec-mocks 3.13.9 (newest): diff-lcs >= 1.2.0, < 2.0'
   prism:
     newest: 2.1.0
     blocked_by:

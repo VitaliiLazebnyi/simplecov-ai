@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   patterns and every mutant killed, no skipped examples, no warning anywhere in a run or a CI log,
   and every dependency at its newest release unless `script/outdated_holds.yml` documents why
   (see CONTRIBUTING.md).
+- Dependencies updated to their newest releases (2026-11-07): rubocop-md 3.0 (Kramdown-based
+  Markdown parsing), rubocop 1.92.2, RSpec 3.13.7 / 3.13.6 / 3.13.9, Sorbet 0.6.13645, spoom
+  1.8.13; ruby/setup-ruby 1.338.0, github/codeql-action 4.39.3, crate-ci/typos 1.52.0,
+  zizmorcore/zizmor-action 0.8.1, Semgrep 1.184.0, JRuby 10.1.3.0 in CI and `jruby:10.1` for
+  `rake check:jruby`.
 
 ## [0.11.0] - 2026-08-29
 
