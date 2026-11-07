@@ -3,7 +3,8 @@
 # pinned GitHub Actions, the npm tooling (package.json) and the pip tooling
 # (.github/python/requirements.txt). The cooldown keeps brand-new releases out for a week so
 # hijacked or quickly-yanked versions are never proposed automatically. The container images and
-# the downloaded tools pinned in the workflows are checked by `rake outdated` (script/outdated.rb).
+# the downloaded tools pinned in the workflows are checked by `rake outdated` (script/outdated.rb),
+# which also fails when an override of package.json is behind.
 version: 2
 updates:
   - package-ecosystem: bundler
