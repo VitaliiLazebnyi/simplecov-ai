@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strict
 # frozen_string_literal: true
 
@@ -13,7 +14,7 @@ module SimpleCov
         # Recovers the column offsets SimpleCov's Branch objects do not expose from the raw
         # coverage data, so a missed branch can quote its exact inline expression. Descriptors
         # are native Arrays in a live result and stringified (`"[:then, 1, 7, 18, 7, 22]"`) once
-        # a result has been rebuilt from `.resultset.json` — SimpleCov's default, merged path —
+        # a result has been rebuilt from `.resultset.json` - SimpleCov's default, merged path  -
         # and are decoded with SimpleCov's own parser (see {DECODER}). Data SimpleCov itself
         # cannot decode raises here exactly as it raises in SimpleCov, and the decode guard
         # contains that to the file.
@@ -23,8 +24,10 @@ module SimpleCov
           # `[start_col, end_col]` byte offsets keyed by the SimpleCov branch they belong to
           # (by identity; SimpleCov's Branch objects are never modified).
           ColumnMap = T.type_alias { T::Hash[SimpleCov::SourceFile::Branch, [Integer, Integer]] }
+          public_constant(:ColumnMap)
           # Length of a [type, id, start_line, start_col, end_line, end_col] descriptor.
           DESCRIPTOR_LENGTH = 6
+          private_constant(:DESCRIPTOR_LENGTH)
 
           # Decodes with the eval-free `RubyDataParser` of SimpleCov >= 1.0.
           module RubyDataParserDecoder
@@ -56,10 +59,12 @@ module SimpleCov
           # A descriptor decoder: `call` takes the file and one raw descriptor and returns the
           # decoded value (a native Array is returned as it is).
           Decoder = T.type_alias { T.any(T.class_of(RubyDataParserDecoder), T.class_of(LegacyDecoder)) }
+          private_constant(:Decoder)
           # The decoder of the installed SimpleCov, chosen once at load time.
           DECODER = T.let(
             (defined?(SimpleCov::SourceFile::RubyDataParser) && RubyDataParserDecoder) || LegacyDecoder, Decoder
           )
+          public_constant(:DECODER)
 
           # @param file [SimpleCov::SourceFile] The file whose branches need column data.
           # @return [Hash{SimpleCov::SourceFile::Branch => Array(Integer, Integer)}] The columns
@@ -118,7 +123,7 @@ module SimpleCov
             def column_entry(raw)
               case raw
               when Array
-                return nil if raw.size < DESCRIPTOR_LENGTH
+                return if raw.size < DESCRIPTOR_LENGTH
 
                 start_line, start_col, end_line, end_col = positions(raw)
                 [branch_key(raw.fetch(0), start_line, end_line), [start_col, end_col]]
@@ -130,7 +135,7 @@ module SimpleCov
             sig { params(raw: T::Array[BasicObject]).returns([Integer, Integer, Integer, Integer]) }
             def positions(raw)
               found = raw.drop(2).first(4).grep(Integer)
-              raise TypeError, 'branch descriptor positions must be Integers' unless found.size == 4
+              raise(TypeError, 'branch descriptor positions must be Integers') unless found.size == 4
 
               [found.fetch(0), found.fetch(1), found.fetch(2), found.fetch(3)]
             end

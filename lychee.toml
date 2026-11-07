@@ -1,0 +1,8 @@
+# lychee (https://lychee.cli.rs): every link of every Markdown file, external ones and #anchors
+# included (CI: the links job; locally: script/check). A redirect fails like a broken link: links
+# point at their final address.
+include_fragments = "full"
+max_redirects = 0
+max_retries = 3
+no_progress = true
+exclude_path = ["(^|/)\\.claude/", "(^|/)coverage/", "(^|/)doc/", "(^|/)node_modules/", "(^|/)tmp/", "(^|/)vendor/"]

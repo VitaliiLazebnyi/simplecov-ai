@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -5,8 +6,8 @@ module SimpleCov
   module Formatter
     class AIFormatter
       class MarkdownBuilder
-        # Reads a file's source through the SourceFile SimpleCov already loaded — honouring the
-        # shebang and encoding magic comment and transcoding to UTF-8 — instead of re-reading
+        # Reads a file's source through the SourceFile SimpleCov already loaded - honouring the
+        # shebang and encoding magic comment and transcoding to UTF-8 - instead of re-reading
         # the file from disk. Invalid byte sequences (which SimpleCov < 1.0 leaves in place) are
         # scrubbed so snippets can be stripped and joined without raising.
         module SourceLines

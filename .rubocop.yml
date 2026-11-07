@@ -1,238 +1,256 @@
-# Maximum-strictness configuration: every cop runs in "fail the build" mode, there is no todo
-# file, and inline RuboCop directives are forbidden (Style/DisableCopsWithinSourceCodeDirective,
-# script/forbidden_suppressions.sh). A cop that cannot apply to a file is configured narrowly
-# below, with the reason next to it.
+---
+# Maximum-strictness configuration: every cop of RuboCop and of every plugin is enabled
+# (EnabledByDefault), there is no todo file, and inline RuboCop directives are forbidden
+# (Style/DisableCopsWithinSourceCodeDirective, script/forbidden_suppressions.sh). The few cops
+# that are switched off, and the few that skip a file, are listed below with the reason.
 AllCops:
   # The gem supports Ruby >= 2.7 (gemspec), so the code must stay valid 2.7 syntax.
   TargetRubyVersion: 2.7
+  EnabledByDefault: true
   NewCops: enable
   SuggestExtensions: false
   # Setting Exclude replaces RuboCop's defaults, so they are restated here. The generated gem
   # RBIs (`bin/tapioca gem`) are machine-written and never hand-edited, hence not linted.
   Exclude:
-    - ".claude/**/*"
-    - ".git/**/*"
-    - "coverage/**/*"
-    - "doc/**/*"
-    - "node_modules/**/*"
-    - "sorbet/rbi/gems/**/*"
-    - "tmp/**/*"
-    - "vendor/**/*"
+    - .claude/**/*
+    - .git/**/*
+    - coverage/**/*
+    - doc/**/*
+    - node_modules/**/*
+    - sorbet/rbi/gems/**/*
+    - tmp/**/*
+    - vendor/**/*
 
-# The `plugins:` key requires rubocop >= 1.72, which the gemspec's rubocop floor matches.
+# The `plugins:` key requires rubocop >= 1.72, which the Gemfile's rubocop floor matches.
 plugins:
   - rubocop-md
   - rubocop-packaging
   - rubocop-performance
   - rubocop-rake
   - rubocop-rspec
-  - rubocop-thread_safety
   - rubocop-sorbet
+  - rubocop-thread_safety
+  - rubocop-yard
+
+# ---------------------------------------------------------------------------------------------
+# Cops that are off. Each one contradicts another enabled cop or tool, or a contract the code
+# cannot change; none is off merely because it reports something.
+# ---------------------------------------------------------------------------------------------
+
+# Requires every constant to be written fully qualified (`::String`, `::T::Sig`). mutant, which
+# must kill 100% of its mutations (.mutant.yml), mutates `::Foo` into `Foo`: the two resolve to
+# the same constant, so every qualified constant would add a mutation no test can kill.
+Lint/ConstantResolution:
+  Enabled: false
+
+# Contradicts Style/EmptyElse (enabled, EnforcedStyle: both): where nothing is to happen when no
+# branch matches, the only `else` this cop accepts is an empty or `nil` one, which EmptyElse
+# rejects.
+Style/MissingElse:
+  Enabled: false
+
+# Hash#[] returns nil for a missing key, Hash#fetch raises; the code picks one deliberately per
+# lookup, and Sorbet types the two differently. Either enforced style rewrites one into the
+# other (and the cop cannot tell a Hash from an Array or a String).
+Style/HashLookupMethod:
+  Enabled: false
+
+# SimpleCov's coverage data (lines, branches, methods) and every environment Hash passed to a
+# child process are keyed by Strings by contract; Symbols there would not be found.
+Style/StringHashKeys:
+  Enabled: false
+
+# Reek's NilCheck (run with its default configuration, see Rakefile) rejects `&.`, which this cop
+# asks for wherever an explicit truthiness check precedes a call; the code is written so neither
+# applies, and this cop stays on.
+
+# Requires the documentation comment directly above each `def`, where Sorbet/EmptyLineAfterSig
+# allows nothing between a method and its `sig`, so the comment sits above the `sig`. Every
+# method is documented all the same: `rake yard` fails below 100% documented.
+Style/DocumentationMethod:
+  Enabled: false
+
+# Forbids T::Struct, the typed value object every value class of lib/ is built on. The plain
+# class it would take instead has an initializer with one parameter per field and one instance
+# variable each; four of the five value classes have more than three fields, so Reek's default
+# LongParameterList (max 3) and TooManyInstanceVariables (max 4) would reject them.
+Sorbet/ForbidTStruct:
+  Enabled: false
+
+# RSpec/AlignLeftLetBrace and RSpec/AlignRightLetBrace align the same braces of consecutive
+# one-line `let`s on opposite edges; both can only hold when every name has the same length.
+# The left edge is enforced.
+RSpec/AlignRightLetBrace:
+  Enabled: false
+
+# The following rubocop-sorbet cops belong to the migration from Sorbet signatures to RBS
+# comments, or to applications that patch `T::Sig` into every Module; they forbid the very
+# signatures and `T.let` declarations that Sorbet/EnforceSignatures and `typed: strict` require,
+# or the `extend T::Sig` a library must declare itself instead of patching Module for its users.
+Sorbet/ForbidSig:
+  Enabled: false
+Sorbet/ForbidTSig:
+  Enabled: false
+Sorbet/ForbidTLet:
+  Enabled: false
+Sorbet/ForbidTTypeAlias:
+  Enabled: false
+Sorbet/RedundantExtendTSig:
+  Enabled: false
+
+# ---------------------------------------------------------------------------------------------
+# Configured cops.
+# ---------------------------------------------------------------------------------------------
 
 Style/FrozenStringLiteralComment:
-  Enabled: true
   EnforcedStyle: always
+
+# Every Ruby source file carries the copyright notice of LICENSE.txt. rubocop-md presents a
+# whole Markdown document as one Ruby file; a notice belongs to source files, not to the docs
+# and their snippets.
+Style/Copyright:
+  Notice: ^# Copyright \(c\) \d{4} Vitalii Lazebnyi$
+  AutocorrectNotice: "# Copyright (c) 2026 Vitalii Lazebnyi"
+  Exclude:
+    - "**/*.md"
 
 # Justification: the gem's conventional entry point is the hyphenated `simplecov-ai.rb`,
 # which does not match the module path the cop expects.
 Naming/FileName:
   Exclude:
-    - "lib/simplecov-ai.rb"
+    - lib/simplecov-ai.rb
     # rubocop-md lints the Ruby snippets of the Markdown files; their names (README.md,
     # CHANGELOG.md, ...) are conventional, not Ruby source file names.
     - "**/*.md"
 
 # Justification: RSpec example groups and the gemspec declaration are naturally long blocks.
 Metrics/BlockLength:
-  Enabled: true
   Exclude:
-    - "spec/**/*"
-    - "simplecov-ai.gemspec"
-Metrics/ModuleLength:
-  Enabled: true
-Metrics/ClassLength:
-  Enabled: true
+    - spec/**/*
+    - simplecov-ai.gemspec
 RSpec/ExampleLength:
-  Enabled: true
   Max: 10
-
-Gemspec/DevelopmentDependencies:
-  Enabled: false
-
 RSpec/MultipleMemoizedHelpers:
-  Enabled: true
   Max: 7
-
 RSpec/NestedGroups:
-  Enabled: true
   Max: 4
-RSpec/MultipleExpectations:
-  Enabled: true
 
-Metrics/AbcSize:
-  Enabled: true
-Metrics/MethodLength:
-  Enabled: true
-Metrics/CyclomaticComplexity:
-  Enabled: true
-Metrics/PerceivedComplexity:
-  Enabled: true
-
-Gemspec/RequiredRubyVersion:
-  Enabled: true
-Style/Documentation:
-  Enabled: true
-Lint/MissingCopEnableDirective:
-  Enabled: true
-Style/ClassVars:
-  Enabled: true
-Style/ClassMethods:
-  Enabled: true
-RSpec/SpecFilePathFormat:
-  Enabled: true
-RSpec/SpecFilePathSuffix:
-  Enabled: true
-RSpec/DescribedClass:
-  Enabled: true
-RSpec/DescribeClass:
-  Enabled: true
 # Justification: the memoized `@configuration` on the formatter class is intentionally a
 # process-global singleton, mutated only during single-threaded setup before coverage runs.
 ThreadSafety/ClassInstanceVariable:
-  Enabled: true
   Exclude:
-    - "lib/simplecov-ai.rb"
-Style/MultilineBlockChain:
-  Enabled: true
+    - lib/simplecov-ai.rb
 
-# Justification: a `sig` on `attr_accessor` is enforced by sorbet-runtime for the reader only, so
-# the Configuration booleans keep a separate `attr_reader` and a `sig`-typed `attr_writer`; that
-# writer signature is what rejects a mis-typed value (`output_to_console = "yes"`) at assignment.
-Style/BisectedAttrAccessor:
-  Enabled: false
-Layout/LineLength:
-  Enabled: true
-
-Sorbet/ForbidTUntyped:
-  Enabled: true
-
-Sorbet/ForbidTUnsafe:
-  Enabled: true
-
-# Justification: specs are `typed: false` and exercise the library through RSpec verifying
-# doubles, so requiring Sorbet signatures on test helpers adds noise without type safety.
+# Justification: specs are `typed: false` (Sorbet has no model of RSpec's `instance_exec`ed
+# example groups: checking them would take a `T.bind` in every block, which Sorbet/ForbidTBind
+# forbids, so sorbet/config leaves spec/ out), and they exercise the library through real
+# SimpleCov objects, so signatures on test helpers add noise without type safety.
 Sorbet/EnforceSignatures:
-  Enabled: true
   Exclude:
-    - "spec/**/*"
-
-Sorbet/SignatureBuildOrder:
-  Enabled: false
-
-Sorbet/KeywordArgumentOrdering:
-  Enabled: false
+    - spec/**/*
+    # RUBYOPT loads it (`-r`) into every Ruby process before Bundler, where sorbet-runtime, which
+    # a `sig` needs, is not loaded; it is `typed: true`.
+    - script/upstream_warnings.rb
 
 Sorbet/ForbidRBIOutsideOfAllowedPaths:
-  Enabled: true
   Include:
     - "**/*.rbi"
   AllowedPaths:
-    - "sorbet/rbi/**/*.rbi"
+    - sorbet/rbi/**/*.rbi
 
 Sorbet/ForbidExtendTSigHelpersInShims:
-  Enabled: true
   Include:
     - "**/*.rbi"
 
-Sorbet/StrictSigil:
-  Enabled: true
+# Every file Sorbet checks is at least `strict`, and lib/ is `strong`. Below `strict`: the specs
+# and script/upstream_warnings.rb (see Sorbet/EnforceSignatures) and tapioca's generated require
+# list. Not `strong` either: branch_enricher.rb, whose header gives the reason, and the build and
+# tool files outside lib/ (Rakefile, Gemfiles, gemspec, scripts), which call the untyped DSLs of
+# Rake, Bundler and RubyGems.
+Sorbet/TrueSigil:
   Exclude:
-    - "bin/tapioca"
-    - "sorbet/tapioca/require.rb"
-    - "spec/**/*"
+    - bin/tapioca
+    - spec/**/*
+Sorbet/StrictSigil:
+  Exclude:
+    - bin/tapioca
+    - sorbet/tapioca/require.rb
+    - spec/**/*
+    - script/upstream_warnings.rb
+Sorbet/StrongSigil:
+  Exclude:
+    - bin/tapioca
+    - sorbet/tapioca/require.rb
+    - spec/**/*
+    - lib/simplecov-ai/markdown_builder/branch_enricher.rb
+    - Rakefile
+    - Gemfile
+    - gemfiles/*.gemfile
+    - simplecov-ai.gemspec
+    - script/*.rb
 
 Sorbet/HasSigil:
-  Enabled: true
   Exclude:
-    - "bin/tapioca"
+    - bin/tapioca
 
 Sorbet/FalseSigil:
-  Enabled: true
   Exclude:
-    - "bin/tapioca"
-
-Style/DisableCopsWithinSourceCodeDirective:
-  Enabled: true
+    - bin/tapioca
 
 # Justification: fixtures deliberately use unconventional control flow to create the exact
 # branch/coverage shapes under test; linting them would destroy the scenarios.
 Style/UnlessElse:
   Exclude:
-    - "spec/fixtures/**/*"
+    - spec/fixtures/**/*
 
 Lint/UnreachableLoop:
   Exclude:
-    - "spec/fixtures/**/*"
+    - spec/fixtures/**/*
+
+# Justification: the fixtures define methods inside `class << self` and bind `Module.new` /
+# `Struct.new` blocks to constants on the assignment line: those are the shapes the resolver
+# specs assert, line by line, and the rewrites would replace them.
+Style/ClassMethodsDefinitions:
+  Exclude:
+    - spec/fixtures/**/*
+Layout/MultilineAssignmentLayout:
+  Exclude:
+    - spec/fixtures/**/*
 
 # Justification: the resolver fixture reproduces the exact `CONST ||= value` shape that used to
 # crash AST resolution; the cop's rewrite would remove the construct under test.
 Lint/OrAssignmentToConstant:
   Exclude:
-    - "spec/fixtures/**/*"
+    - spec/fixtures/**/*
 
 # Justification: single-letter identifiers are forbidden by SCAI-REQ-021, so rescued exceptions
 # are named `error` rather than RuboCop's default `e`.
 Naming/RescuedExceptionsVariableName:
   PreferredName: error
 
-# --- Optional (disabled-by-default) cops that make sense for this codebase ---
-# Not enabled: Style/StringHashKeys (SimpleCov's coverage data is keyed by Strings by contract),
-# Style/RequireOrder (lib/ requires its files in dependency order, which load-time constants
-# rely on) and Style/ConstantVisibility (every constant is part of the documented API).
-Layout/ClassStructure:
-  Enabled: true
-Layout/EmptyLineAfterMultilineCondition:
-  Enabled: true
-Lint/NumberConversion:
-  Enabled: true
-Lint/RedundantCopDisableDirective:
-  Enabled: true
-Naming/InclusiveLanguage:
-  Enabled: true
-# Library code only: the specs build expectations and fixtures, where an extra intermediate
-# Array costs nothing and an in-place `map!` would only obscure the expected value.
-Performance/ChainArrayAllocation:
-  Enabled: true
-  Include:
-    - "lib/**/*.rb"
-Style/InvertibleUnlessCondition:
-  Enabled: true
-Style/MethodCalledOnDoEndBlock:
-  Enabled: true
-Style/Send:
-  Enabled: true
-Style/SingleLineBlockParams:
-  Enabled: true
-
-# --- Sorbet: no escape hatches in the library ---
-Sorbet/ForbidTCast:
-  Enabled: true
-  Include:
-    - "lib/**/*.rb"
-Sorbet/ForbidTBind:
-  Enabled: true
-Sorbet/ForbidTMust:
-  Enabled: true
-  Include:
-    - "lib/**/*.rb"
-
 # Sorbet does not check the specs (sorbet/config ignores spec/), and a `def` inside an example
 # group is how RSpec scopes a helper method to that group.
 Sorbet/BlockMethodDefinition:
   Exclude:
-    - "spec/**/*"
+    - spec/**/*
 
-# Reek's NilCheck (run with its default configuration, see Rakefile) rejects `&.`, which this cop
-# asks for; the two cannot both hold, and the code keeps explicit truthiness checks.
-Style/SafeNavigation:
-  Enabled: false
+# Lines wrap at 120 columns without exception (editorconfig-checker enforces the same width on
+# every file), and continuation lines are indented by a fixed two spaces rather than aligned with
+# the line above, so every indentation is a multiple of two (.editorconfig).
+Layout/LineLength:
+  AllowQualifiedName: false
+  AllowURI: false
+  AllowHeredoc: false
+  AllowCopDirectives: false
+Layout/ArgumentAlignment:
+  EnforcedStyle: with_fixed_indentation
+Layout/ParameterAlignment:
+  EnforcedStyle: with_fixed_indentation
+Layout/ArrayAlignment:
+  EnforcedStyle: with_fixed_indentation
+Layout/LineEndStringConcatenationIndentation:
+  EnforcedStyle: indented
+Layout/MultilineMethodCallIndentation:
+  EnforcedStyle: indented
+Layout/MultilineOperationIndentation:
+  EnforcedStyle: indented

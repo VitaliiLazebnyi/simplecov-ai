@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -13,11 +14,15 @@ module SimpleCov
           extend T::Sig
 
           # Recognized builders mapped to the constructor method that signals the pattern.
-          BUILDERS = T.let({ 'Struct' => :new, 'Class' => :new, 'Module' => :new, 'Data' => :define }.freeze,
-                           T::Hash[String, Symbol])
-          # Every AST node type that attaches a block to a call: `do … end` / `{ … }` blocks,
+          BUILDERS = T.let(
+            { 'Struct' => :new, 'Class' => :new, 'Module' => :new, 'Data' => :define }.freeze,
+            T::Hash[String, Symbol]
+          )
+          private_constant(:BUILDERS)
+          # Every AST node type that attaches a block to a call: `do ... end` / `{ ... }` blocks,
           # numbered-parameter blocks (`{ _1 }`) and Ruby 3.4 `it` blocks.
           BLOCK_TYPES = %i[block numblock itblock].freeze
+          public_constant(:BLOCK_TYPES)
 
           # @param node [Parser::AST::Node] A `:casgn` constant-assignment node.
           # @return [String, nil] The builder label ("Struct"/"Class"/"Module"/"Data"), or nil
@@ -39,7 +44,7 @@ module SimpleCov
           #
           # @param node [Parser::AST::Node] A node whose type is one of {BLOCK_TYPES}.
           # @return [Parser::AST::Node, nil] The `:send` node the block decorates, or nil when
-          #   the block belongs to something else (`super do … end`, `yield { … }`).
+          #   the block belongs to something else (`super do ... end`, `yield { ... }`).
           sig { params(node: Parser::AST::Node).returns(T.nilable(Parser::AST::Node)) }
           def self.block_call(node)
             call = NodeChildren.required_node_at(node, 0)
@@ -48,11 +53,11 @@ module SimpleCov
 
           # The call a block-valued constant assignment wraps, or nil when the assignment has no
           # block value: a plain value, or the value-less `:casgn` targets that sit inside a
-          # multiple assignment (`MAJOR, MINOR = …`) or an or-assignment (`FOO ||= …`).
+          # multiple assignment (`MAJOR, MINOR = ...`) or an or-assignment (`FOO ||= ...`).
           sig { params(node: Parser::AST::Node).returns(T.nilable(Parser::AST::Node)) }
           def self.builder_send(node)
             value = NodeChildren.node_at(node, 2)
-            return nil unless value && block?(value)
+            return unless value && block?(value)
 
             block_call(value)
           end
@@ -61,7 +66,7 @@ module SimpleCov
           sig { params(send_node: Parser::AST::Node).returns(T.nilable(String)) }
           def self.constructor_kind(send_node)
             receiver = NodeChildren.node_at(send_node, 0)
-            return nil unless receiver && receiver.type == :const
+            return unless receiver && receiver.type == :const
 
             kind = NodeChildren.symbol_at(receiver, 1).to_s
             kind if BUILDERS[kind] == NodeChildren.symbol_at(send_node, 1)

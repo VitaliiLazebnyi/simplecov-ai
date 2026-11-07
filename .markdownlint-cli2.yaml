@@ -1,8 +1,22 @@
-# markdownlint-cli2 options (the rule set lives in .markdownlint.yml).
+---
+# markdownlint-cli2 (https://github.com/DavidAnson/markdownlint-cli2): every rule is enabled, with
+# no inline disable comments (script/forbidden_suppressions.sh).
+config:
+  default: true
+  # Prose, tables and code blocks wrap at 120 columns, the line length RuboCop enforces for the code.
+  MD013:
+    line_length: 120
+    code_blocks: true
+    tables: true
+  # Keep a Changelog repeats "Added", "Changed" and "Fixed" under every release heading; a heading
+  # must still be unique among its siblings.
+  MD024:
+    siblings_only: true
 ignores:
-  - ".claude/**"
+  - .claude/**
   # Generated output and third-party Markdown.
-  - "doc/**"
-  - "coverage/**"
-  - "node_modules/**"
-  - "vendor/**"
+  - doc/**
+  - coverage/**
+  - node_modules/**
+  - vendor/**
+  - tmp/**

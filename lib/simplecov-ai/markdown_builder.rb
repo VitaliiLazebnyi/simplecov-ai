@@ -1,25 +1,26 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
 require_relative 'ast_resolver'
-require 'time'
 require 'stringio'
+require 'time'
+require_relative 'markdown_builder/branch_enricher'
+require_relative 'markdown_builder/bypass_compiler'
 require_relative 'markdown_builder/decode_guard'
-require_relative 'markdown_builder/inline_code'
-require_relative 'markdown_builder/source_lines'
-require_relative 'markdown_builder/report_budget'
+require_relative 'markdown_builder/deficit_compiler'
+require_relative 'markdown_builder/deficit_formatter'
+require_relative 'markdown_builder/deficit_group'
+require_relative 'markdown_builder/deficit_grouper'
+require_relative 'markdown_builder/deficit_lines'
 require_relative 'markdown_builder/figure'
 require_relative 'markdown_builder/header'
+require_relative 'markdown_builder/inline_code'
+require_relative 'markdown_builder/report_budget'
 require_relative 'markdown_builder/section_writer'
-require_relative 'markdown_builder/deficit_group'
-require_relative 'markdown_builder/snippet_formatter'
 require_relative 'markdown_builder/skip_regions'
-require_relative 'markdown_builder/bypass_compiler'
-require_relative 'markdown_builder/deficit_grouper'
-require_relative 'markdown_builder/branch_enricher'
-require_relative 'markdown_builder/deficit_lines'
-require_relative 'markdown_builder/deficit_formatter'
-require_relative 'markdown_builder/deficit_compiler'
+require_relative 'markdown_builder/snippet_formatter'
+require_relative 'markdown_builder/source_lines'
 
 module SimpleCov
   module Formatter
@@ -32,6 +33,7 @@ module SimpleCov
 
         # The resolved nodes of every file, nil for a file that could not be resolved.
         ASTCache = T.type_alias { T::Hash[String, T.nilable(T::Array[ASTResolver::SemanticNode])] }
+        private_constant(:ASTCache)
 
         # Initializes the Markdown sequence compilation.
         #
@@ -54,8 +56,10 @@ module SimpleCov
         def build
           budget = ReportBudget.new(@buffer, @config.max_file_size_kb, @coverage_metrics.files.size)
           budget.write(Header.new(@coverage_metrics).render)
-          budget.write_notice(DeficitCompiler.new(@coverage_metrics, @config, self).write_deficits(budget),
-                              write_bypasses(budget))
+          budget.write_notice(
+            DeficitCompiler.new(@coverage_metrics, @config, self).write_deficits(budget),
+            write_bypasses(budget)
+          )
           @buffer.string
         end
 

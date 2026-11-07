@@ -1,11 +1,13 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: false
 # frozen_string_literal: true
 
 require 'spec_helper'
+
 require 'bundler'
 
-# Resolves the Ruby sources of every gem in the current bundle — thousands of files written by
-# other people, parsed with the grammar of the running Ruby — and checks the resolver's
+# Resolves the Ruby sources of every gem in the current bundle - thousands of files written by
+# other people, parsed with the grammar of the running Ruby - and checks the resolver's
 # structural contract on each of them: it raises nothing but Parser::SyntaxError, the root scope
 # comes first and spans the whole file, every node has a non-empty name and a line range inside
 # the file, and nodes come in source order. Files above MAX_FILE_BYTES (generated parser
@@ -15,9 +17,13 @@ require 'bundler'
 # RESOLVER_CORPUS_MAX_FILES=0 resolves every eligible file.
 module ResolverCorpus
   MAX_FILE_BYTES = 200_000
+  private_constant(:MAX_FILE_BYTES)
   MAX_FILES = Integer(ENV.fetch('RESOLVER_CORPUS_MAX_FILES', 600))
+  private_constant(:MAX_FILES)
   RESOLVER = SimpleCov::Formatter::AIFormatter::ASTResolver
+  private_constant(:RESOLVER)
   ROOT_TYPE = RESOLVER::SemanticNode::ROOT_TYPE
+  public_constant(:ROOT_TYPE)
 
   module_function
 
@@ -30,9 +36,13 @@ module ResolverCorpus
   end
 
   def eligible_files
-    gem_paths = Bundler.load.specs.map(&:full_gem_path).uniq.sort
+    gem_paths = Bundler.load.specs.map(&:full_gem_path)
+    gem_paths.uniq!
+    gem_paths.sort!
     sources = gem_paths.flat_map { |gem_path| Dir.glob(File.join(gem_path, 'lib', '**', '*.rb')) }
-    sources.uniq.sort.reject { |path| File.size(path) > MAX_FILE_BYTES }
+    sources.uniq!
+    sources.sort!
+    sources.reject { |path| File.size(path) > MAX_FILE_BYTES }
   end
 
   # @return [Array<String>, :syntax_error] The contract violations of resolving `path`, or the
@@ -91,7 +101,7 @@ module ResolverCorpus
   end
 end
 
-RSpec.describe ResolverCorpus do
+RSpec.describe(ResolverCorpus) do
   it 'resolves every sampled file of the bundle within the resolver contract' do
     files = described_class.files
     outcomes = files.map { |path| described_class.violations(path) }
@@ -100,6 +110,6 @@ RSpec.describe ResolverCorpus do
     RSpec.configuration.reporter.message(
       "Resolver corpus: #{files.size} gem files resolved (#{syntax_errors} rejected by this Ruby's grammar)."
     )
-    expect(violations).to be_empty, "Resolver contract violations:\n#{violations.first(20).join("\n")}"
+    expect(violations).to(be_empty, "Resolver contract violations:\n#{violations.first(20).join("\n")}")
   end
 end

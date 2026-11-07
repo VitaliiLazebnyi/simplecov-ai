@@ -3,10 +3,10 @@
 extend-exclude = [
   # Claude Code agent worktrees (local only, git-ignored).
   ".claude/",
-  # Generated output and machine-written RBIs.
+  # Generated output and the machine-written gem RBIs.
   "doc/",
   "coverage/",
-  "sorbet/rbi/",
+  "sorbet/rbi/gems/",
   "Gemfile.lock",
   "gemfiles/*.lock",
   # Certificates are not prose.

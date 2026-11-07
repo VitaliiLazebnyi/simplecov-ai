@@ -1,17 +1,18 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
 require 'parser'
-require_relative 'line_span'
-require_relative 'ast_resolver/semantic_node'
+require_relative 'ast_resolver/bypass_scanner'
+require_relative 'ast_resolver/dynamic_method_resolver'
+require_relative 'ast_resolver/metaclass_resolver'
 require_relative 'ast_resolver/method_kind'
 require_relative 'ast_resolver/node_children'
-require_relative 'ast_resolver/parser_backend'
-require_relative 'ast_resolver/bypass_scanner'
-require_relative 'ast_resolver/metaclass_resolver'
-require_relative 'ast_resolver/dynamic_method_resolver'
-require_relative 'ast_resolver/receiver_resolver'
 require_relative 'ast_resolver/node_classifier'
+require_relative 'ast_resolver/parser_backend'
+require_relative 'ast_resolver/receiver_resolver'
+require_relative 'ast_resolver/semantic_node'
+require_relative 'line_span'
 
 module SimpleCov
   module Formatter
@@ -77,8 +78,7 @@ module SimpleCov
         #   lexical scope: {MethodKind::SINGLETON} inside a singleton class (`class << self`).
         # @return [Array<SemanticNode>] Accumulation of all sub-tree defined endpoints.
         sig do
-          params(node: T.nilable(Parser::AST::Node), context: String, kind: MethodKind)
-            .returns(T::Array[SemanticNode])
+          params(node: T.nilable(Parser::AST::Node), context: String, kind: MethodKind).returns(T::Array[SemanticNode])
         end
         def traverse(node, context = '', kind: MethodKind::INSTANCE)
           return [] unless node

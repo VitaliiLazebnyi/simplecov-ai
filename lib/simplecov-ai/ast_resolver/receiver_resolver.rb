@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -13,6 +14,7 @@ module SimpleCov
 
           # Separator used to denote namespace nesting (e.g., Module::Class)
           NAMESPACE_SEPARATOR = '::'
+          public_constant(:NAMESPACE_SEPARATOR)
 
           # Reconstructs a fully-qualified constant path (e.g. `Foo::Bar`) from a const node so
           # compact class definitions do not lose their namespace prefix.
@@ -29,7 +31,7 @@ module SimpleCov
           end
 
           # Names the object a `class << receiver` singleton class opens on when the receiver is
-          # a simple local variable, instance variable or constant path — the forms whose source
+          # a simple local variable, instance variable or constant path - the forms whose source
           # text identifies the object (`obj`, `@registry`, `Foo::Bar`).
           #
           # @param receiver [Parser::AST::Node] The receiver node of an `:sclass` node.
@@ -44,7 +46,7 @@ module SimpleCov
 
           # Determines the receiver a `def receiver.method` singleton definition targets: the
           # explicit constant path for a foreign receiver such as `def String.shout`, otherwise
-          # the enclosing context — for `self` and for any non-constant expression (`def obj.foo`).
+          # the enclosing context - for `self` and for any non-constant expression (`def obj.foo`).
           #
           # @param receiver [Parser::AST::Node] The receiver node of a `:defs` node.
           # @param context [String] The enclosing lexical context.

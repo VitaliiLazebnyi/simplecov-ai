@@ -1,5 +1,8 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
+
+require_relative '../ast_resolver/semantic_node'
 
 module SimpleCov
   module Formatter
@@ -13,9 +16,11 @@ module SimpleCov
 
           # The class name Ruby reports for the owner of a singleton method.
           SINGLETON_OWNER_PATTERN = /\A#<Class:(.+)>\z/.freeze
+          private_constant(:SINGLETON_OWNER_PATTERN)
           # Whether the installed SimpleCov implements method coverage at all (>= 1.0, where
           # SourceFile#missed_methods and Result#total_methods exist), decided once at load time.
           API_AVAILABLE = T.let(SimpleCov::SourceFile.method_defined?(:missed_methods), T::Boolean)
+          public_constant(:API_AVAILABLE)
 
           # @return [String] The method's semantic name (`Klass#name` or `Klass.name`).
           const :name, String
@@ -48,8 +53,12 @@ module SimpleCov
             missed_methods = (API_AVAILABLE && file.missed_methods) || []
             missed_methods.map do |missed_method|
               method_name = missed_method.method_name.to_s
-              new(name: qualified_name(missed_method.class_name.to_s, method_name), method_name: method_name,
-                  start_line: missed_method.start_line, end_line: missed_method.end_line)
+              new(
+                name: qualified_name(missed_method.class_name.to_s, method_name),
+                method_name: method_name,
+                start_line: missed_method.start_line,
+                end_line: missed_method.end_line
+              )
             end
           end
 
@@ -64,11 +73,30 @@ module SimpleCov
             singleton_owner = class_name[SINGLETON_OWNER_PATTERN, 1]
             singleton_owner ? "#{singleton_owner}.#{method_name}" : "#{class_name}##{method_name}"
           end
+
+          # The name the report gives this method under `node`, the node its deficit is grouped
+          # under. A method the resolver identified - a method node opening on the method's first
+          # line and carrying its bare name - is named like its heading: `Owner.name` for a
+          # singleton method, which SimpleCov's merged data reports under the plain owner name. A
+          # method the resolver cannot see (a dynamic definition, an unparsable file, a same-named
+          # method defined inside another) keeps the name SimpleCov derived, and so does one
+          # sharing its first line with another definition (`def a; end; def b; end`): nodes carry
+          # no columns, so the line's last node is not necessarily this method.
+          #
+          # @param node [ASTResolver::SemanticNode, nil] The node of the deficit group.
+          # @return [String] The node's name when it is this method's node, else {#name}.
+          sig { params(node: T.nilable(ASTResolver::SemanticNode)).returns(String) }
+          def display_name(node)
+            own_name = name
+            return own_name unless node
+
+            node.defines?(start_line, method_name) ? node.name : own_name
+          end
         end
 
         # Groups unexecuted lines, branches and methods under their common semantic node. The
-        # props declare no `default:` — sorbet-runtime's default machinery
-        # (`T::Props::Private::ApplyPrimitiveDefault`) fails on JRuby — so every construction
+        # props declare no `default:` - sorbet-runtime's default machinery
+        # (`T::Props::Private::ApplyPrimitiveDefault`) fails on JRuby - so every construction
         # site passes the collections it starts from; the nilable node may be left out, and is
         # nil then.
         class DeficitGroup < T::Struct

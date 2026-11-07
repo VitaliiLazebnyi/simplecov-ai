@@ -1,5 +1,8 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
+
+require_relative 'configuration/settings'
 
 module SimpleCov
   module Formatter
@@ -13,36 +16,32 @@ module SimpleCov
 
         # File name of the report inside SimpleCov's coverage directory when no report_path is set
         DEFAULT_REPORT_FILENAME = 'ai_report.md'
+        public_constant(:DEFAULT_REPORT_FILENAME)
         # Default output path of the report: {DEFAULT_REPORT_FILENAME} under SimpleCov's default
         # `coverage_dir` (a custom `coverage_dir` is honoured at format time)
         DEFAULT_REPORT_PATH = "coverage/#{DEFAULT_REPORT_FILENAME}"
+        public_constant(:DEFAULT_REPORT_PATH)
         # Default maximum size of the output file in kilobytes
         DEFAULT_MAX_FILE_SIZE_KB = 50
+        public_constant(:DEFAULT_MAX_FILE_SIZE_KB)
         # Default maximum number of lines for a single snippet
         DEFAULT_MAX_SNIPPET_LINES = 5
+        public_constant(:DEFAULT_MAX_SNIPPET_LINES)
         # Default flag for outputting to console
         DEFAULT_OUTPUT_TO_CONSOLE = T.let(false, T::Boolean)
+        public_constant(:DEFAULT_OUTPUT_TO_CONSOLE)
         # Default granularity level of the report
         DEFAULT_GRANULARITY = :fine
+        public_constant(:DEFAULT_GRANULARITY)
         # Default flag for including bypassed regions in the report
         DEFAULT_INCLUDE_BYPASSES = T.let(true, T::Boolean)
+        public_constant(:DEFAULT_INCLUDE_BYPASSES)
         # A value made of ASCII whitespace only (the characters String#strip removes), or empty.
         BLANK = /\A[ \t\n\v\f\r]*\z/.freeze
+        private_constant(:BLANK)
         # The set of granularity levels the report generator understands.
         VALID_GRANULARITIES = %i[fine coarse].freeze
-
-        # The values behind the readers. The props check each value's type on assignment
-        # (TypeError); the writers of {Configuration} check its domain first. The props declare
-        # no `default:` — sorbet-runtime's default machinery fails on JRuby — so
-        # {Configuration#initialize} passes every default; the report path is left unset (nil).
-        class Settings < T::Struct
-          prop :report_path, T.nilable(String)
-          prop :max_file_size_kb, Integer
-          prop :max_snippet_lines, Integer
-          prop :output_to_console, T::Boolean
-          prop :granularity, Symbol
-          prop :include_bypasses, T::Boolean
-        end
+        public_constant(:VALID_GRANULARITIES)
 
         # Domain check shared by the Integer writers.
         #
@@ -53,7 +52,7 @@ module SimpleCov
         # @raise [ArgumentError] When the value is zero or negative.
         sig { params(name: Symbol, value: Integer).returns(Integer) }
         def self.positive(name, value)
-          raise ArgumentError, "#{name} must be a positive Integer, got #{value}" unless value.positive?
+          raise(ArgumentError, "#{name} must be a positive Integer, got #{value}") unless value.positive?
 
           value
         end
@@ -61,9 +60,13 @@ module SimpleCov
         sig { void }
         def initialize
           @settings = T.let(
-            Settings.new(max_file_size_kb: DEFAULT_MAX_FILE_SIZE_KB, max_snippet_lines: DEFAULT_MAX_SNIPPET_LINES,
-                         output_to_console: DEFAULT_OUTPUT_TO_CONSOLE, granularity: DEFAULT_GRANULARITY,
-                         include_bypasses: DEFAULT_INCLUDE_BYPASSES),
+            Settings.new(
+              max_file_size_kb: DEFAULT_MAX_FILE_SIZE_KB,
+              max_snippet_lines: DEFAULT_MAX_SNIPPET_LINES,
+              output_to_console: DEFAULT_OUTPUT_TO_CONSOLE,
+              granularity: DEFAULT_GRANULARITY,
+              include_bypasses: DEFAULT_INCLUDE_BYPASSES
+            ),
             Settings
           )
         end
@@ -139,16 +142,16 @@ module SimpleCov
           Pathname.new(path).absolute? ? path : File.join(SimpleCov.root, path)
         end
 
-        # Every writer enforces its parameter TYPE at runtime (via sorbet-runtime) — a wrongly
+        # Every writer enforces its parameter TYPE at runtime (via sorbet-runtime) - a wrongly
         # typed value such as `output_to_console = "yes"` raises TypeError at assignment instead of
-        # failing at report time — and the explicit bodies additionally validate the VALUE domain.
+        # failing at report time - and the explicit bodies additionally validate the VALUE domain.
 
         # @param value [String] A non-empty destination path without NUL bytes.
         # @return [void]
         sig { params(value: String).void }
         def report_path=(value)
-          raise ArgumentError, 'report_path must not contain a NUL byte' if value.include?("\0")
-          raise ArgumentError, 'report_path must not be blank' if value.match?(BLANK)
+          raise(ArgumentError, 'report_path must not contain a NUL byte') if value.include?("\0")
+          raise(ArgumentError, 'report_path must not be blank') if value.match?(BLANK)
 
           @settings.report_path = value
         end
@@ -179,7 +182,7 @@ module SimpleCov
         sig { params(value: Symbol).void }
         def granularity=(value)
           unless VALID_GRANULARITIES.include?(value)
-            raise ArgumentError, "granularity must be one of #{VALID_GRANULARITIES}, got #{value.inspect}"
+            raise(ArgumentError, "granularity must be one of #{VALID_GRANULARITIES}, got #{value.inspect}")
           end
 
           @settings.granularity = value

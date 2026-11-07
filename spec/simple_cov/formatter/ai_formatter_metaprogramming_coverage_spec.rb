@@ -1,25 +1,34 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: false
 # frozen_string_literal: true
 
 require 'spec_helper'
-require 'tmpdir'
+
 require 'fileutils'
+require 'tmpdir'
 
 # Measures the fixture's real coverage through the suite's own Coverage session and formats it.
 # Under mutant no coverage session runs (see spec_helper.rb), so these examples are excluded
 # there (`mutant: false`); the formatter's subjects are covered by the exact-report specs. On an
 # engine that records no branch coverage the example is skipped after the report is produced.
-RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
+RSpec.describe(SimpleCov::Formatter::AIFormatter, mutant: false) do
   let(:fixture_path) { File.expand_path('../../fixtures/metaprogramming_constructs.rb', __dir__) }
-  let(:report_path) { 'coverage/metaprogramming_test_ai_report.md' }
+  let(:report_path)  { 'coverage/metaprogramming_test_ai_report.md' }
   # Each construct as its own node followed by its missed arm, in source order.
   let(:expected_lines) do
     deficit = '^  - \\*\\*Branch Deficit:\\*\\* \\[L\\d+\\] Missing coverage for `%s` branch: `%s`$'
-    ['^- `MetaprogrammingConstructs#dynamic_instance_method`$', format(deficit, 'else', ':dynamic_false'),
-     '^- `MetaprogrammingConstructs\\.dynamic_class_method`$', format(deficit, 'else', ':singleton_case_else'),
-     '^- `MetaprogrammingConstructs#evaled_method`$', format(deficit, 'else', ':evaled_false'),
-     '^- `MetaprogrammingConstructs#method_missing`$', format(deficit, 'else', 'super'),
-     '^- `MetaprogrammingConstructs\\.eigen_method`$', format(deficit, 'then', ':eigen_false')]
+    [
+      '^- `MetaprogrammingConstructs#dynamic_instance_method`$',
+      format(deficit, 'else', ':dynamic_false'),
+      '^- `MetaprogrammingConstructs\\.dynamic_class_method`$',
+      format(deficit, 'else', ':singleton_case_else'),
+      '^- `MetaprogrammingConstructs#evaled_method`$',
+      format(deficit, 'else', ':evaled_false'),
+      '^- `MetaprogrammingConstructs#method_missing`$',
+      format(deficit, 'else', 'super'),
+      '^- `MetaprogrammingConstructs\\.eigen_method`$',
+      format(deficit, 'then', ':eigen_false')
+    ]
   end
 
   # We use a class variable or standard local variable within a shared context to avoid before(:all)
@@ -60,12 +69,17 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
   # Formatting proves that what this engine's Coverage recorded builds a Result and renders; the
   # examples below assert branch deficits, which only an engine recording branches produces.
   it 'writes the report from what this engine recorded' do
-    expect(File.size?(report_path)).to be_positive
+    expect(File.size?(report_path)).to(be_positive)
   end
 
   if SimpleCovFixtures.branch_coverage_measurable?
     it 'lists each construct as its own node with the missed arm, in source order' do
-      expect(File.read(report_path, encoding: Encoding::UTF_8)).to match(Regexp.new(expected_lines.join('.*'), Regexp::MULTILINE))
+      expect(
+        File.read(
+          report_path,
+          encoding: Encoding::UTF_8
+        )
+      ).to(match(Regexp.new(expected_lines.join('.*'), Regexp::MULTILINE)))
     end
   end
 end

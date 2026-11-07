@@ -1,30 +1,34 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: false
 # frozen_string_literal: true
 
 require 'spec_helper'
+
 require 'fileutils'
 require 'tmpdir'
 
 # A resultset can carry a branch descriptor SimpleCov cannot decode (`.resultset.json` written
 # by a crashed run, hand-edited, or merged from a foreign tool). SimpleCov < 1.0 decodes the
-# stringified descriptors with `eval`, so such a key raises `SyntaxError` — a ScriptError that
+# stringified descriptors with `eval`, so such a key raises `SyntaxError` - a ScriptError that
 # escapes any `rescue StandardError`; SimpleCov >= 1.0's RubyDataParser raises ArgumentError.
 # Either way the error surfaces from every reader of the file's branches and, because SimpleCov
 # computes the statistics of every criterion at once, from the global percentages as well. The
 # report must contain the damage to that one file (SCAI-REQ-011).
-RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
+RSpec.describe(SimpleCov::Formatter::AIFormatter::MarkdownBuilder) do
   let(:tmpdir) { Dir.mktmpdir('scai') }
   let(:config) { SimpleCov::Formatter::AIFormatter::Configuration.new }
   # Named to sort after the healthy file by path, so the ordering of undecodable files is observable.
   let(:corrupt_path) { write_source(tmpdir, 'zzz_corrupt.rb', "def broken\n  1\nend\n") }
   let(:plain_path) { write_source(tmpdir, 'aaa_plain.rb', "def plain\n  1\nend\n") }
   let(:corrupt_result) do
-    result_for(corrupt_path => { 'lines' => [1, 1, nil], 'branches' => corrupt_branches },
-               plain_path => { 'lines' => [0, 0, nil] })
+    result_for(
+      corrupt_path => { 'lines' => [1, 1, nil], 'branches' => corrupt_branches },
+      plain_path => { 'lines' => [0, 0, nil] }
+    )
   end
 
   before do
-    allow(SimpleCov).to receive(:root).and_return(tmpdir)
+    allow(SimpleCov).to(receive(:root).and_return(tmpdir))
     freeze_time
   end
 
@@ -76,12 +80,13 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
 
   it 'reports the decode error for that file first, keeps the other files and marks every global figure N/A' do
     error = error_block(decode_error_class)
-    expect(digest_for(corrupt_result)).to eq(report(undecodable_header, [error, plain_deficits], [error]))
+    expect(digest_for(corrupt_result)).to(eq(report(undecodable_header, [error, plain_deficits], [error])))
   end
 
   it 'surfaces the exact decoder error the installed SimpleCov raises for the descriptor' do
     file = source_file(corrupt_path, { 'lines' => [1, 1, nil], 'branches' => corrupt_branches })
-    expect { file.branches }.to raise_error(decode_error_class)
+    expect { file.branches }
+      .to(raise_error(decode_error_class))
   end
 
   # A descriptor that is valid Ruby but not an array: the strict decoder rejects it like any
@@ -89,12 +94,13 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
   # signature checks (a TypeError) once the file's deficits are grouped.
   it 'contains a descriptor that decodes to something other than an array' do
     result = result_for(corrupt_path => { 'lines' => [1, 1, nil], 'branches' => { '42' => { 'nil' => 0 } } })
-    expected = if strict_decoder?
-                 report(undecodable_header, [error_block(ArgumentError)], [error_block(ArgumentError)])
-               else
-                 report(expected_header('FAILED', '100.0%', '0.0%'), [error_block(TypeError)])
-               end
-    expect(digest_for(result)).to eq(expected)
+    expected =
+      if strict_decoder?
+        report(undecodable_header, [error_block(ArgumentError)], [error_block(ArgumentError)])
+      else
+        report(expected_header('FAILED', '100.0%', '0.0%'), [error_block(TypeError)])
+      end
+    expect(digest_for(result)).to(eq(expected))
   end
 
   # The decode errors below are those of SimpleCov >= 1.0's descriptor parser.
@@ -102,16 +108,22 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
     context 'when a decodable file has a method deficit next to the corrupt file (SimpleCov >= 1.0)' do
       let(:methods) { { ['Object', :plain, 1, 0, 3, 3] => 0 } }
       let(:healthy_result) do
-        result_for(corrupt_path => { 'lines' => [1, 1, nil], 'branches' => corrupt_branches },
-                   plain_path => { 'lines' => [1, 1, nil], 'methods' => methods })
+        result_for(
+          corrupt_path => { 'lines' => [1, 1, nil], 'branches' => corrupt_branches },
+          plain_path => { 'lines' => [1, 1, nil], 'methods' => methods }
+        )
       end
 
       it 'still lists the method deficits of the files that decode, matching the N/A method line' do
         digest = measuring_methods(healthy_result, plain_path => methods) { digest_for(healthy_result) }
         method_deficit = "### `aaa_plain.rb`\n- `Object#plain`\n  " \
-                         "- **Method Deficit:** [L1-3] `Object#plain` never invoked\n\n"
-        expect(digest).to eq(report(undecodable_header, [error_block(ArgumentError), method_deficit],
-                                    [error_block(ArgumentError)]))
+          "- **Method Deficit:** [L1-3] `Object#plain` never invoked\n\n"
+        expected = report(
+          undecodable_header,
+          [error_block(ArgumentError), method_deficit],
+          [error_block(ArgumentError)]
+        )
+        expect(digest).to(eq(expected))
       end
     end
   end
@@ -120,14 +132,14 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
     let(:plain_result) { result_for(plain_path => { 'lines' => [1, 1, nil] }) }
 
     it 'labels a run without line coverage (a SimpleCov >= 1.0 branch- or method-only run) N/A without failing it' do
-      allow(plain_result).to receive(:covered_percent).and_return(nil)
-      expect(digest_for(plain_result)).to eq(expected_header('PASSED', 'N/A (line coverage not enabled)', '100.0%'))
+      allow(plain_result).to(receive(:covered_percent).and_return(nil))
+      expect(digest_for(plain_result)).to(eq(expected_header('PASSED', 'N/A (line coverage not enabled)', '100.0%')))
     end
 
     it 'fails the status when only the branch figure is undecodable' do
-      allow(plain_result).to receive(:total_branches).and_raise(SyntaxError, 'unexpected end-of-input')
+      allow(plain_result).to(receive(:total_branches).and_raise(SyntaxError, 'unexpected end-of-input'))
       expect(digest_for(plain_result))
-        .to eq(expected_header('FAILED', '100.0%', 'N/A (coverage data could not be decoded)'))
+        .to(eq(expected_header('FAILED', '100.0%', 'N/A (coverage data could not be decoded)')))
     end
   end
 end

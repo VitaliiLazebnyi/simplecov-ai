@@ -1,28 +1,35 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: false
 # frozen_string_literal: true
 
 require 'spec_helper'
+
 require 'fileutils'
 require 'tmpdir'
 
-RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
-  let(:tmpdir) { Dir.mktmpdir('scai') }
-  let(:config) { SimpleCov::Formatter::AIFormatter::Configuration.new }
-  let(:calc_path) { write_source(tmpdir, 'calc.rb', calc_source) }
+RSpec.describe(SimpleCov::Formatter::AIFormatter::MarkdownBuilder) do
+  let(:tmpdir)        { Dir.mktmpdir('scai') }
+  let(:config)        { SimpleCov::Formatter::AIFormatter::Configuration.new }
+  let(:calc_path)     { write_source(tmpdir, 'calc.rb', calc_source) }
   let(:perfect_lines) { line_hits(17, covered: [1, 2, 3, 4, 7, 8, 11, 12, 13]) }
   # SimpleCov's merged data names a singleton method's owner plainly (`build`); a live result
   # names it `#<Class:Owner>` (`phantom` and `ghost`, methods the resolver cannot see, on the
   # class's first line and at line 15). `sign_alias` sits inside `sign` without being it, and so
   # does a singleton `sign` defined dynamically inside the instance method `sign` (line 4).
   let(:method_descriptors) do
-    { ['Sample::Calc', :sign, 3, 4, 5, 7] => 3, ['Sample::Calc', :never_called, 7, 4, 9, 7] => 0,
-      ['Sample::Calc', :build, 12, 6, 14, 9] => 0, ['#<Class:Sample::Calc>', :phantom, 2, 2, 2, 20] => 0,
-      ['#<Class:Sample::Calc>', :ghost, 15, 2, 15, 20] => 0, ['Sample::Calc', :sign_alias, 4, 4, 4, 30] => 0,
-      ['#<Class:Sample::Calc>', :sign, 4, 4, 4, 30] => 0 }
+    {
+      ['Sample::Calc', :sign, 3, 4, 5, 7] => 3,
+      ['Sample::Calc', :never_called, 7, 4, 9, 7] => 0,
+      ['Sample::Calc', :build, 12, 6, 14, 9] => 0,
+      ['#<Class:Sample::Calc>', :phantom, 2, 2, 2, 20] => 0,
+      ['#<Class:Sample::Calc>', :ghost, 15, 2, 15, 20] => 0,
+      ['Sample::Calc', :sign_alias, 4, 4, 4, 30] => 0,
+      ['#<Class:Sample::Calc>', :sign, 4, 4, 4, 30] => 0
+    }
   end
 
   before do
-    allow(SimpleCov).to receive(:root).and_return(tmpdir)
+    allow(SimpleCov).to(receive(:root).and_return(tmpdir))
     freeze_time
   end
 
@@ -87,8 +94,8 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
   describe 'header percentages' do
     it 'prints one decimal without ever rounding a partial figure up to 100.0' do
       result = result_for(calc_path => { 'lines' => perfect_lines })
-      allow(result).to receive(:covered_percent).and_return(99.96)
-      expect(digest_for(result)).to eq(expected_header('FAILED', '99.9%', '100.0%'))
+      allow(result).to(receive(:covered_percent).and_return(99.96))
+      expect(digest_for(result)).to(eq(expected_header('FAILED', '99.9%', '100.0%')))
     end
   end
 
@@ -97,36 +104,37 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
 
     it 'adds the method line to the header, fails the status and lists each missed method under its node' do
       digest = measuring_methods(result, calc_path => method_descriptors) { digest_for(result) }
-      expect(digest).to eq(expected_method_digest)
+      expect(digest).to(eq(expected_method_digest))
     end
 
     it 'keeps the header byte-identical and the status PASSED when method coverage is not measured' do
-      expect(digest_for(result)).to eq(expected_header('PASSED', '100.0%', '100.0%'))
+      expect(digest_for(result)).to(eq(expected_header('PASSED', '100.0%', '100.0%')))
     end
 
     # SimpleCov < 1.0 has neither Result#total_methods nor SourceFile#missed_methods.
     it 'reports no method figures at all on a SimpleCov without the method coverage API' do
       stub_const("#{described_class}::MethodDeficit::API_AVAILABLE", false)
-      allow(result).to receive(:total_methods).and_raise(NoMethodError) if method_coverage_supported?
-      expect(digest_for(result)).to eq(expected_header('PASSED', '100.0%', '100.0%'))
+      allow(result).to(receive(:total_methods).and_raise(NoMethodError)) if method_coverage_supported?
+      expect(digest_for(result)).to(eq(expected_header('PASSED', '100.0%', '100.0%')))
     end
 
     it 'derives no method deficit from a file without the method coverage API' do
       stub_const("#{described_class}::MethodDeficit::API_AVAILABLE", false)
       file = result.files.first
-      allow(file).to receive(:missed_methods).and_raise(NoMethodError) if method_coverage_supported?
-      expect(described_class::MethodDeficit.from_file(file)).to eq([])
+      allow(file).to(receive(:missed_methods).and_raise(NoMethodError)) if method_coverage_supported?
+      expect(described_class::MethodDeficit.from_file(file)).to(eq([]))
     end
 
     it 'knows at load time whether the installed SimpleCov implements method coverage' do
-      expect(described_class::MethodDeficit::API_AVAILABLE).to eq(SimpleCov::SourceFile.method_defined?(:missed_methods))
+      implemented = SimpleCov::SourceFile.method_defined?(:missed_methods)
+      expect(described_class::MethodDeficit::API_AVAILABLE).to(eq(implemented))
     end
 
     it 'names a method whose owner SimpleCov reports as a Module, as a live result does' do
       methods = { [described_class, :never_called, 7, 4, 9, 7] => 0 }
       live = source_file(calc_path, { 'lines' => perfect_lines, 'methods' => methods })
       emulate_method_coverage!(live, methods) unless method_coverage_supported?
-      expect(described_class::MethodDeficit.from_file(live).map(&:name)).to eq(["#{described_class}#never_called"])
+      expect(described_class::MethodDeficit.from_file(live).map(&:name)).to(eq(["#{described_class}#never_called"]))
     end
 
     # Nodes carry no columns, so two definitions on one line resolve to the line's last node;
@@ -136,7 +144,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
       methods = { ['Object', :a, 1, 0, 1, 13] => 0, ['Object', :b, 1, 15, 1, 28] => 0 }
       pair = result_for(pair_path => { 'lines' => [1], 'methods' => methods })
       digest = measuring_methods(pair, pair_path => methods) { digest_for(pair) }
-      expect(digest).to eq(expected_header('FAILED', '100.0%', '100.0%', method_label: '0.0%') + <<~MARKDOWN)
+      expect(digest).to(eq(expected_header('FAILED', '100.0%', '100.0%', method_label: '0.0%') + <<~MARKDOWN))
         ## Coverage Deficits
 
         ### `pair.rb`
@@ -152,7 +160,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
       methods = { ['Broken', :half, 2, 2, 4, 5] => 0 }
       broken = result_for(broken_path => { 'lines' => [1, 1, 0, nil], 'methods' => methods })
       digest = measuring_methods(broken, broken_path => methods) { digest_for(broken) }
-      expect(digest).to eq(expected_header('FAILED', '66.6%', '100.0%', method_label: '0.0%') + <<~MARKDOWN)
+      expect(digest).to(eq(expected_header('FAILED', '66.6%', '100.0%', method_label: '0.0%') + <<~MARKDOWN))
         ## Coverage Deficits
 
         ### `broken.rb`
@@ -166,13 +174,14 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
 
   describe 'deficit files' do
     it 'lists files of equal coverage in path order, whatever order SimpleCov lists them in' do
-      coverage_by_path = (1..12).to_h do |index|
-        [write_source(tmpdir, format('tie%02d.rb', index), "def work\n  1\nend\n"), { 'lines' => [1, 0, nil] }]
-      end
+      coverage_by_path =
+        (1..12).to_h do |index|
+          [write_source(tmpdir, format('tie%02d.rb', index), "def work\n  1\nend\n"), { 'lines' => [1, 0, nil] }]
+        end
       result = result_for(coverage_by_path)
-      allow(result).to receive(:files).and_return(SimpleCov::FileList.new(result.files.to_a.reverse))
+      allow(result).to(receive(:files).and_return(SimpleCov::FileList.new(result.files.to_a.reverse)))
       headings = digest_for(result).scan(/^### `(tie\d+\.rb)`$/).flatten
-      expect(headings).to eq((1..12).map { |index| format('tie%02d.rb', index) })
+      expect(headings).to(eq((1..12).map { |index| format('tie%02d.rb', index) }))
     end
 
     # A then arm with columns and an else arm whose descriptor is too short for any.
@@ -186,7 +195,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
 
     it 'quotes a branch without column data from its whole line, truncating both to the snippet budget' do
       config.max_snippet_lines = 1
-      expect(digest_for(long_arm_result)).to end_with(<<~MARKDOWN)
+      expect(digest_for(long_arm_result)).to(end_with(<<~MARKDOWN))
         - `Object#pick`
           - **Branch Deficit:** [L2] Missing coverage for `then` branch: `:#{'a' * 79}...`
           - **Branch Deficit:** [L2] Missing coverage for `else` branch: `flag ? :#{'a' * 72}...`
@@ -196,11 +205,11 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
 
     it 'lists a file whose lines are all covered but a branch is missed' do
       source = "def sign(number)\n  number.positive? ? :pos : :neg\nend\n"
-      arms = { branch_descriptor(source, :then, 1, 2, ':pos') => 1,
-               branch_descriptor(source, :else, 2, 2, ':neg') => 0 }
+      positive = branch_descriptor(source, :then, 1, 2, ':pos')
+      arms = { positive => 1, branch_descriptor(source, :else, 2, 2, ':neg') => 0 }
       branches = { branch_descriptor(source, :if, 0, 2, 'number.positive? ? :pos : :neg') => arms }
       result = result_for(write_source(tmpdir, 'sign.rb', source) => { 'lines' => [1, 1, nil], 'branches' => branches })
-      expect(digest_for(result)).to eq(expected_header('FAILED', '100.0%', '50.0%') + <<~MARKDOWN)
+      expect(digest_for(result)).to(eq(expected_header('FAILED', '100.0%', '50.0%') + <<~MARKDOWN))
         ## Coverage Deficits
 
         ### `sign.rb`
@@ -226,12 +235,18 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
       RUBY
     end
     let(:chain_result) do
-      outer_arms = { branch_descriptor(chain_source, :then, 1, 3, ':zero') => 1,
-                     multiline_branch_descriptor(:else, 2, 4, 8) => 0 }
-      inner_arms = { branch_descriptor(chain_source, :then, 4, 5, ':odd') => 0,
-                     branch_descriptor(chain_source, :else, 5, 7, ':even') => 0 }
-      branches = { multiline_branch_descriptor(:if, 0, 2, 8) => outer_arms,
-                   multiline_branch_descriptor(:if, 3, 4, 8) => inner_arms }
+      outer_arms = {
+        branch_descriptor(chain_source, :then, 1, 3, ':zero') => 1,
+        multiline_branch_descriptor(:else, 2, 4, 8) => 0
+      }
+      inner_arms = {
+        branch_descriptor(chain_source, :then, 4, 5, ':odd') => 0,
+        branch_descriptor(chain_source, :else, 5, 7, ':even') => 0
+      }
+      branches = {
+        multiline_branch_descriptor(:if, 0, 2, 8) => outer_arms,
+        multiline_branch_descriptor(:if, 3, 4, 8) => inner_arms
+      }
       path = write_source(tmpdir, 'chain.rb', chain_source)
       result_for(path => { 'lines' => line_hits(9, covered: [1, 2, 3], missed: [4, 5, 7]), 'branches' => branches })
     end
@@ -252,18 +267,18 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
 
     def tail_result
       source = tail_source
-      outer_arms = { branch_descriptor(source, :then, 1, 3, ':zero') => 1,
-                     multiline_branch_descriptor(:else, 2, 5, 6) => 0 }
-      inner_arms = { branch_descriptor(source, :then, 4, 6, ':odd') => 0,
-                     branch_descriptor(source, :else, 5, 6, ':odd if parity') => 0 }
-      branches = { multiline_branch_descriptor(:if, 0, 2, 7) => outer_arms,
-                   branch_descriptor(source, :if, 3, 6, ':odd if parity') => inner_arms }
+      zero = branch_descriptor(source, :then, 1, 3, ':zero')
+      outer_arms = { zero => 1, multiline_branch_descriptor(:else, 2, 5, 6) => 0 }
+      odd = branch_descriptor(source, :then, 4, 6, ':odd')
+      inner_arms = { odd => 0, branch_descriptor(source, :else, 5, 6, ':odd if parity') => 0 }
+      inner_condition = branch_descriptor(source, :if, 3, 6, ':odd if parity')
+      branches = { multiline_branch_descriptor(:if, 0, 2, 7) => outer_arms, inner_condition => inner_arms }
       path = write_source(tmpdir, 'tail.rb', source)
       result_for(path => { 'lines' => line_hits(8, covered: [1, 2, 3], missed: [5, 6]), 'branches' => branches })
     end
 
     it 'cuts an arm that spans another missed arm ending on its last line' do
-      expect(digest_for(tail_result)).to end_with(<<~MARKDOWN)
+      expect(digest_for(tail_result)).to(end_with(<<~MARKDOWN))
         - `Object#classify`
           - **Line Deficit:** [L5] `parity = number.odd?`
           - **Line Deficit:** [L6] `:odd if parity`
@@ -275,7 +290,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
     end
 
     it 'cuts an arm that spans other missed arms of the same node to its first line' do
-      expect(digest_for(chain_result)).to eq(expected_header('FAILED', '50.0%', '25.0%') + <<~MARKDOWN)
+      expect(digest_for(chain_result)).to(eq(expected_header('FAILED', '50.0%', '25.0%') + <<~MARKDOWN))
         ## Coverage Deficits
 
         ### `chain.rb`
@@ -293,11 +308,12 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
 
   describe 'size budget' do
     let(:bulky_result) do
-      coverage_by_path = (1..3).to_h do |index|
-        body = "    @value#{index} = '#{'a' * 300}'\n"
-        source = "class Bulky#{index}\n  def work\n#{body}  end\nend\n"
-        [write_source(tmpdir, "bulky#{index}.rb", source), { 'lines' => [1, 1, 0, nil, nil] }]
-      end
+      coverage_by_path =
+        (1..3).to_h do |index|
+          body = "    @value#{index} = '#{'a' * 300}'\n"
+          source = "class Bulky#{index}\n  def work\n#{body}  end\nend\n"
+          [write_source(tmpdir, "bulky#{index}.rb", source), { 'lines' => [1, 1, 0, nil, nil] }]
+        end
       bypass_paths(2).each { |path| coverage_by_path[path] = { 'lines' => [1, nil, 1, 1, nil, nil, nil] } }
       result_for(coverage_by_path)
     end
@@ -319,25 +335,25 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
       omitted_deficits = 3 - section_headings(digest, 'Coverage Deficits')
       omitted_bypasses = 2 - section_headings(digest, 'Ignored Coverage Bypasses')
       expect([digest.bytesize <= 1000, digest.lines.last(2).join])
-        .to eq([true, expected_notice(omitted_deficits, omitted_bypasses)])
+        .to(eq([true, expected_notice(omitted_deficits, omitted_bypasses)]))
     end
 
     it 'still lists the lowest-coverage file first when truncating' do
       config.max_file_size_kb = 1
-      expect(digest_for(bulky_result)).to match(/## Coverage Deficits\n\n### `bulky1\.rb`\n- `Bulky1#work`\n/)
+      expect(digest_for(bulky_result)).to(match(/## Coverage Deficits\n\n### `bulky1\.rb`\n- `Bulky1#work`\n/))
     end
 
     it 'emits no notice when everything fits' do
-      expect(digest_for(bulky_result)).not_to include('TRUNCATION')
+      expect(digest_for(bulky_result)).not_to(include('TRUNCATION'))
     end
 
     it 'names zero bypass files in the notice when only deficit files were left out' do
       config.max_file_size_kb = 1
-      bulky_paths = bulky_result.files.first(3).map(&:filename)
+      bulky_paths = bulky_result.files.first(3).map!(&:filename)
       deficits_only = result_for(bulky_paths.to_h { |path| [path, { 'lines' => [1, 1, 0, nil, nil] }] })
       digest = digest_for(deficits_only)
       omitted = 3 - section_headings(digest, 'Coverage Deficits')
-      expect(digest.lines.last(2).join).to eq(expected_notice(omitted, 0))
+      expect(digest.lines.last(2).join).to(eq(expected_notice(omitted, 0)))
     end
 
     it 'counts no bypass files when bypass auditing is disabled' do
@@ -345,7 +361,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
       config.include_bypasses = false
       digest = digest_for(bulky_result)
       omitted = 3 - section_headings(digest, 'Coverage Deficits')
-      expect(digest.lines.last(2).join).to eq(expected_notice(omitted, 0))
+      expect(digest.lines.last(2).join).to(eq(expected_notice(omitted, 0)))
     end
 
     # Files after the one the budget stopped at are not resolved for the deficit section; the
@@ -354,12 +370,12 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
       config.max_file_size_kb = 1
       builder = described_class.new(bulky_result, config)
       resolved = []
-      allow(builder).to receive(:try_resolve_ast).and_wrap_original do |original, filename|
+      allow(builder).to(receive(:try_resolve_ast).and_wrap_original) do |original, filename|
         resolved << File.basename(filename)
         original.call(filename)
       end
       builder.build
-      expect(resolved).to eq(%w[bulky1.rb bulky2.rb skipped1.rb skipped2.rb])
+      expect(resolved).to(eq(%w[bulky1.rb bulky2.rb skipped1.rb skipped2.rb]))
     end
 
     it 'counts an overflowing bypass section toward the same budget even without deficits' do
@@ -367,7 +383,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
       bypass_only = result_for(bypass_paths(30).to_h { |path| [path, { 'lines' => [1, nil, 1, 1, nil, nil, nil] }] })
       digest = digest_for(bypass_only)
       omitted_bypasses = 30 - section_headings(digest, 'Ignored Coverage Bypasses')
-      expect([digest.bytesize <= 1000, digest.lines.last(2).join]).to eq([true, expected_notice(0, omitted_bypasses)])
+      expect([digest.bytesize <= 1000, digest.lines.last(2).join]).to(eq([true, expected_notice(0, omitted_bypasses)]))
     end
   end
 end

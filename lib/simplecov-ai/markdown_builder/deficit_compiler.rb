@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -14,9 +15,11 @@ module SimpleCov
 
           # Header for the coverage deficits section
           HEADING = "## Coverage Deficits\n\n"
+          private_constant(:HEADING)
           # Sort figure of a file whose coverage SimpleCov cannot decode: below any real
           # percentage, so the file precedes every decodable deficit file.
           UNDECODABLE_COVERAGE = -1.0
+          private_constant(:UNDECODABLE_COVERAGE)
 
           # Orders deficit files lowest-coverage first, by path among equals; a file whose
           # coverage SimpleCov cannot decode sorts as {UNDECODABLE_COVERAGE}, first of all.
@@ -74,7 +77,7 @@ module SimpleCov
             deficit_files.sort_by { |file| DeficitCompiler.sort_key(file) }
           end
 
-          # A file with a missed line, branch or method — or one whose data SimpleCov cannot
+          # A file with a missed line, branch or method - or one whose data SimpleCov cannot
           # decode, whose entry is the error line {#render_file} produces.
           sig { params(file: SimpleCov::SourceFile).returns(T::Boolean) }
           def deficit?(file)
@@ -94,7 +97,7 @@ module SimpleCov
           def render_file(file)
             DecodeGuard.render do
               DeficitFormatter.new(@config, SourceLines.of(file), BranchEnricher.enrich(file))
-                              .render(file, @builder.try_resolve_ast(file.filename), method_deficits_of(file))
+                .render(file, @builder.try_resolve_ast(file.filename), method_deficits_of(file))
             end
           end
         end

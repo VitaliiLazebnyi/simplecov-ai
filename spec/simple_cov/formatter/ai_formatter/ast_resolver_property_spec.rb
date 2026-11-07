@@ -1,17 +1,19 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: false
 # frozen_string_literal: true
 
 require 'spec_helper'
+
 require 'fileutils'
 require 'tmpdir'
 
 # Property check over generated programs (see spec/support/program_generator.rb): for every
 # program the resolver must derive exactly the node table the generator recorded while
-# composing it — root scope first, then every class, module and method in pre-order with its
-# expected `Ctx#name` / `Ctx.name` and line range — and the ranges must nest without partial
+# composing it - root scope first, then every class, module and method in pre-order with its
+# expected `Ctx#name` / `Ctx.name` and line range - and the ranges must nest without partial
 # overlap. Failures name the seed; RESOLVER_PROPERTY_SEED replays or shifts the sequence.
-RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
-  let(:tmpdir) { Dir.mktmpdir('scai-property') }
+RSpec.describe(SimpleCov::Formatter::AIFormatter::ASTResolver) do
+  let(:tmpdir)    { Dir.mktmpdir('scai-property') }
   let(:base_seed) { Integer(ENV.fetch('RESOLVER_PROPERTY_SEED', ProgramGenerator::DEFAULT_SEED)) }
 
   after { FileUtils.remove_entry(tmpdir) }
@@ -34,7 +36,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
     source, expected_nodes = ProgramGenerator.new(seed).generate
     expected = expected_nodes.map(&:to_a)
     actual = resolve(source)
-    return nil if actual == expected && overlaps(actual).empty?
+    return if actual == expected && overlaps(actual).empty?
 
     "seed #{seed}: expected #{expected}\n  actual #{actual}\n  overlaps #{overlaps(actual)}\n#{source}"
   rescue StandardError, ScriptError => error
@@ -44,6 +46,6 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
   it "derives the exact node table of #{ProgramGenerator::PROGRAM_COUNT} generated programs" do
     failures = (0...ProgramGenerator::PROGRAM_COUNT).filter_map { |offset| failure_for(base_seed + offset) }
     summary = "#{failures.size} of #{ProgramGenerator::PROGRAM_COUNT} programs failed; first:\n#{failures.first}"
-    expect(failures).to be_empty, summary
+    expect(failures).to(be_empty, summary)
   end
 end

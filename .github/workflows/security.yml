@@ -1,12 +1,13 @@
+---
 name: Security
 
-on:
+"on":
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   schedule:
-    - cron: '17 4 * * 1'
+    - cron: 17 4 * * 1
   workflow_dispatch:
 
 # Nothing is writable by default; every job re-declares the (read-only) permissions it needs.
@@ -16,6 +17,8 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Installs run with the deprecation category on; once the Ruby is installed, every command runs
+# with all warnings on (script/rubyopt.rb).
 env:
   RUBYOPT: -W:deprecated
 
@@ -23,96 +26,155 @@ jobs:
   bundler-audit:
     name: bundler-audit
     runs-on: ubuntu-26.04
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            *.blob.core.windows.net:443
+            api.github.com:443
+            github.com:443
+            index.rubygems.org:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            rubygems.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199  # v1.338.0
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+      - name: Check the Ruby version
+        run: script/check_ruby.sh
+      - name: Turn on every Ruby warning for the remaining steps
+        run: echo "RUBYOPT=$(ruby script/rubyopt.rb)" >> "${GITHUB_ENV}"
+      - run: bundle exec rake audit
 
-    - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
-      with:
-        ruby-version: .ruby-version
-        bundler-cache: true
-    - name: Check the Ruby version
-      run: script/check_ruby.sh
-    - run: bundle exec rake audit
-
-  # Requires the repository's Dependency graph to be enabled (Settings > Code security).
+  # Requires the repository's Dependency graph to be enabled (Settings > Code security). Fails on
+  # a vulnerability of any severity, in any dependency scope, introduced by the pull request.
   dependency-review:
     name: Dependency review
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-26.04
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
-
-    - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
-      with:
-        fail-on-severity: low
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            api.github.com:443
+            github.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294  # v5.0.0
+        with:
+          fail-on-severity: low
+          fail-on-scopes: runtime, development, unknown
 
   gitleaks:
     name: Secret scanning (gitleaks)
     runs-on: ubuntu-26.04
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        fetch-depth: 0
-        persist-credentials: false
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # The release binary is run directly (the gitleaks action needs a license for organisation
+      # repositories); the archive is verified against its published SHA-256 first.
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl --fail --silent --show-error --location --output "${RUNNER_TEMP}/${archive}" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          echo "${GITLEAKS_SHA256}  ${RUNNER_TEMP}/${archive}" | sha256sum --check --strict
+          tar -xzf "${RUNNER_TEMP}/${archive}" -C "${RUNNER_TEMP}" gitleaks
+      - name: Scan the full history for secrets
+        run: >-
+          "${RUNNER_TEMP}/gitleaks" git --redact --verbose --exit-code 1 .
 
-    # The release binary is run directly (the gitleaks action needs a license for organisation
-    # repositories); the archive is verified against its published SHA-256 first.
-    - name: Install gitleaks
-      env:
-        GITLEAKS_VERSION: 8.30.1
-        GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb # gitleaks_8.30.1_linux_x64.tar.gz
-      run: |
-        archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-        curl --fail --silent --show-error --location --output "$RUNNER_TEMP/$archive" \
-          "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$archive"
-        echo "$GITLEAKS_SHA256  $RUNNER_TEMP/$archive" | sha256sum --check --strict
-        tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
-
-    - name: Scan the full history for secrets
-      run: '"$RUNNER_TEMP/gitleaks" git --redact --verbose --exit-code 1 .'
-
+  # Semgrep runs in its pinned image, started from a step rather than as the job's container so
+  # Harden-Runner guards the job.
   semgrep:
     name: Semgrep
     runs-on: ubuntu-26.04
+    timeout-minutes: 15
     permissions:
       contents: read
-    container:
-      image: semgrep/semgrep:1.184.0@sha256:cc1b68266f267878b39739373ea9985b9a78e5d64497dd875c8de100b22695ed
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
-
-    - name: Scan with the Ruby, secrets, security-audit and GitHub Actions rule packs
-      run: >-
-        semgrep scan --config p/ruby --config p/secrets --config p/security-audit
-        --config p/github-actions --error --metrics=off .
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          allowed-endpoints: >-
+            auth.docker.io:443
+            docker-images-prod.6aa30f8b08e16409b46e0173d6de2f56.r2.cloudflarestorage.com:443
+            github.com:443
+            production.cloudflare.docker.com:443
+            registry-1.docker.io:443
+            semgrep.dev:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Scan with the Ruby, secrets, security-audit and GitHub Actions rule packs
+        env:
+          SEMGREP_IMAGE: semgrep/semgrep:1.184.0@sha256:cc1b68266f267878b39739373ea9985b9a78e5d64497dd875c8de100b22695ed
+        run: >-
+          docker run --rm --volume "${PWD}:/src" --workdir /src "${SEMGREP_IMAGE}"
+          semgrep scan --config p/ruby --config p/secrets --config p/security-audit
+          --config p/github-actions --error --metrics=off .
 
   warning-gate:
     name: Warning gate
     if: ${{ !cancelled() }}
     needs: [bundler-audit, dependency-review, gitleaks, semgrep]
     runs-on: ubuntu-26.04
+    timeout-minutes: 10
     permissions:
-      actions: read # reads the logs of the other jobs of this run
+      actions: read  # reads the logs of the other jobs of this run
       contents: read
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
-
-    - name: Fail on any warning or deprecation in the logs of this run
-      env:
-        GH_TOKEN: ${{ github.token }}
-        GATE_JOB_NAME: Warning gate
-      run: script/warning_gate.sh
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+            api.github.com:443
+            github.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fail on any warning or deprecation in the logs of this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GATE_JOB_NAME: Warning gate
+        run: script/warning_gate.sh

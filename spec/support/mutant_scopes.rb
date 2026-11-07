@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: false
 # frozen_string_literal: true
 
@@ -12,12 +13,17 @@
 # enclosing scope.
 module MutantScopes
   ROOT = SimpleCov::Formatter::AIFormatter
+  private_constant(:ROOT)
   SPEC_DIR = File.expand_path('..', __dir__)
+  private_constant(:SPEC_DIR)
 
   # @return [Array<String>] Every scope of the gem that has a spec file of its own, root first.
   def self.spec_levels
     nested = ObjectSpace.each_object(Module).select { |scope| scope.name.to_s.start_with?("#{ROOT.name}::") }
-    [ROOT.name] + nested.map(&:name).sort.select { |name| File.exist?(spec_path(name)) }
+    names = nested.map(&:name)
+    names.sort!
+    names.select! { |name| File.exist?(spec_path(name)) }
+    [ROOT.name] + names
   end
 
   # The scopes whose behaviour the resultset fuzz exercises: report assembly and its containment.
@@ -27,9 +33,10 @@ module MutantScopes
 
   # The spec file describing a scope, by the snake-case path RuboCop's spec path cop expects.
   def self.spec_path(name)
-    segments = name.split('::').map do |segment|
-      segment.gsub(/([A-Z]+)([A-Z][a-z])/, '\1_\2').gsub(/([a-z\d])([A-Z])/, '\1_\2').downcase
-    end
+    segments =
+      name.split('::').map do |segment|
+        segment.gsub(/([A-Z]+)([A-Z][a-z])/, '\1_\2').gsub(/([a-z\d])([A-Z])/, '\1_\2').downcase
+      end
     File.join(SPEC_DIR, "#{segments.join('/')}_spec.rb")
   end
 end

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -12,10 +13,13 @@ module SimpleCov
 
           # Section heading for bypassed coverage
           HEADING = "## Ignored Coverage Bypasses\n\n"
+          private_constant(:HEADING)
           # Template for a bypassed node heading
           NODE_HEADING_TEMPLATE = '- %s'
+          private_constant(:NODE_HEADING_TEMPLATE)
           # Template detailing the specific directive that ignored coverage for a node
           REASON_TEMPLATE = '  - **Bypass Present:** Coverage explicitly ignored via %s.'
+          private_constant(:REASON_TEMPLATE)
 
           sig { params(coverage_metrics: SimpleCov::Result, builder: MarkdownBuilder).void }
           def initialize(coverage_metrics, builder)
@@ -59,7 +63,10 @@ module SimpleCov
           end
 
           sig do
-            params(nodes: T::Array[ASTResolver::SemanticNode], reasons_by_node: ASTResolver::BypassScanner::ReasonsByNode)
+            params(
+              nodes: T::Array[ASTResolver::SemanticNode],
+              reasons_by_node: ASTResolver::BypassScanner::ReasonsByNode
+            )
               .returns(T::Array[String])
           end
           def render_nodes(nodes, reasons_by_node)

@@ -1,10 +1,11 @@
+---
 name: Mutation testing
 
-on:
+"on":
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 # Nothing is writable by default; every job re-declares the (read-only) permissions it needs.
@@ -14,6 +15,8 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Installs run with the deprecation category on; once the Ruby is installed, every command runs
+# with all warnings on (script/rubyopt.rb).
 env:
   RUBYOPT: -W:deprecated
   LANG: C.UTF-8
@@ -23,43 +26,69 @@ jobs:
   mutant:
     name: Mutant
     runs-on: ubuntu-26.04
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        fetch-depth: 0
-        persist-credentials: false
-
-    # Held at Ruby 3.3.13 (script/outdated_holds.yml): mutant requires `parser/current`, and the
-    # newest parser gem only has a grammar for Ruby 3.3, warning on every Ruby but 3.3.13. The
-    # mutation bundle is resolved for that Ruby, so the lockfile is deleted first.
-    - name: Resolve the bundle for the mutation Ruby
-      run: rm -f Gemfile.lock
-    - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
-      with:
-        ruby-version: "3.3.13"
-        bundler-cache: true
-    - name: Check the Ruby version
-      run: script/check_ruby.sh 3.3.13
-    # Every subject, every time: a full run takes minutes. Any alive mutation fails the build.
-    - run: bundle exec rake mutant
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            *.blob.core.windows.net:443
+            api.github.com:443
+            github.com:443
+            index.rubygems.org:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            rubygems.org:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Held at Ruby 3.3.13 (script/outdated_holds.yml): mutant requires `parser/current`, and the
+      # newest parser gem only has a grammar for Ruby 3.3, warning on every Ruby but 3.3.13. The
+      # mutation bundle is resolved for that Ruby, so the lockfile is deleted first.
+      - name: Resolve the bundle for the mutation Ruby
+        run: rm -f Gemfile.lock
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199  # v1.338.0
+        with:
+          ruby-version: 3.3.13
+          bundler-cache: true
+      - name: Check the Ruby version
+        run: script/check_ruby.sh 3.3.13
+      - name: Turn on every Ruby warning for the remaining steps
+        run: echo "RUBYOPT=$(ruby script/rubyopt.rb)" >> "${GITHUB_ENV}"
+      # Every subject, every time: a full run takes minutes. Any alive mutation fails the build.
+      - run: bundle exec rake mutant
 
   warning-gate:
     name: Warning gate
     if: ${{ !cancelled() }}
     needs: [mutant]
     runs-on: ubuntu-26.04
+    timeout-minutes: 10
     permissions:
-      actions: read # reads the logs of the other jobs of this run
+      actions: read  # reads the logs of the other jobs of this run
       contents: read
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        persist-credentials: false
-
-    - name: Fail on any warning or deprecation in the logs of this run
-      env:
-        GH_TOKEN: ${{ github.token }}
-        GATE_JOB_NAME: Warning gate
-      run: script/warning_gate.sh
+      - name: Harden the runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >-
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+            api.github.com:443
+            github.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fail on any warning or deprecation in the logs of this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GATE_JOB_NAME: Warning gate
+        run: script/warning_gate.sh

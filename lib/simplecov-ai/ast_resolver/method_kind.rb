@@ -1,5 +1,8 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
+
+require_relative 'semantic_node'
 
 module SimpleCov
   module Formatter
@@ -22,10 +25,12 @@ module SimpleCov
 
           # Methods defined with a plain `def` outside a singleton class.
           INSTANCE = T.let(new(separator: '#', type: 'Instance Method', top_level_owner: 'Object'), MethodKind)
+          public_constant(:INSTANCE)
           # Methods defined on an explicit receiver or inside a singleton class.
           SINGLETON = T.let(
             new(separator: '.', type: 'Singleton Method', top_level_owner: SemanticNode::ROOT_NAME), MethodKind
           )
+          public_constant(:SINGLETON)
 
           # Builds the node of a method of this kind. At the top level the context is empty and
           # the owner is the one Ruby uses there: `Object` for a plain `def` (`Object#name`, the
@@ -40,8 +45,13 @@ module SimpleCov
           def node_for(ast_node, context, name)
             owner = context.empty? ? top_level_owner : context
             location = ast_node.loc
-            SemanticNode.new(name: "#{owner}#{separator}#{name}", type: type, start_line: location.line,
-                             end_line: location.last_line, method_name: name)
+            SemanticNode.new(
+              name: "#{owner}#{separator}#{name}",
+              type: type,
+              start_line: location.line,
+              end_line: location.last_line,
+              method_name: name
+            )
           end
         end
       end

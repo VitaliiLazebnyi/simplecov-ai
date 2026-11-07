@@ -11,72 +11,100 @@ git clone https://github.com/VitaliiLazebnyi/simplecov-ai.git
 cd simplecov-ai
 bin/setup                              # bundle install
 git config core.hooksPath .githooks    # optional: run the fast gates before every commit
-bundle exec rake                       # every local gate, see below
+script/check                           # every gate CI runs, see below
 ```
 
 The gem supports Ruby `>= 2.7` and SimpleCov `>= 0.18, < 2.0`. Development happens on the Ruby
 in `.ruby-version` (the newest Ruby release); the development tooling installs on MRI >= 3.3 on
 Linux and macOS only (see the `Gemfile`), while every other Ruby, engine and platform installs
-the test bundle declared in the gemspec.
+the test bundle (`gemfiles/test.gemfile`).
 
 ## The gates
 
-`bundle exec rake` runs, in order:
+`script/check` runs every check CI runs, then fails on any warning in their output exactly as the
+CI warning gate does; `script/check --fast` leaves out the Docker runs (the Ruby matrix and
+mutation testing). Every Ruby command runs with all warnings on: `-w -W:deprecated
+-W:performance` (`script/rubyopt.rb`; the performance category exists on MRI >= 3.3 only).
+`script/upstream_warnings.rb` drops a short, version-pinned list of warnings that the newest
+releases of YARD, kramdown, Tapioca, bundler-audit and SimpleCov emit about their own code;
+every other warning fails.
 
-| Task | Gate |
-| --- | --- |
-| `rake spec` | RSpec with `ruby -w`; 100% line, branch and (SimpleCov >= 1.0) method coverage on MRI; no pending, skipped or focused example; any warning that reaches STDERR — from `lib/`, `spec/` or a dependency — fails the run (`spec/support/warnings.rb`) |
-| `rake rubocop` | RuboCop with rubocop-md, -packaging, -performance, -rake, -rspec, -sorbet and -thread_safety (`.rubocop.yml`); no todo file, no inline directives |
-| `rake suppressions` | no inline suppression anywhere (`script/forbidden_suppressions.sh`, see *Rules*) |
-| `rake typecheck` | Tapioca generates the gem RBIs, then `srb tc` must report no errors; every `lib/` file is `# typed: strong` except `branch_enricher.rb` (`strict`, see its header) |
-| `rake yard` | YARD builds without warnings and reports 100% documented |
-| `rake reek` | no code smell (Reek's default configuration; `.reek.yml` narrows one detector for one class, with the reason) |
-| `rake flay` / `rake flog` / `rake debride` | no structural duplication, no method above the flog threshold, no method without a caller (the few callers debride cannot see are listed in the `Rakefile`) |
-| `rake audit` | bundler-audit: no locked gem with a known vulnerability |
-| `rake build` | `gem build --strict`, then the gem is installed into a clean `GEM_HOME` and required with `ruby -w` |
+`bundle exec rake` runs the Ruby gates, in order:
 
-Also enforced in CI, outside the default task:
+- `rake spec`: RSpec; 100% line, branch and (SimpleCov >= 1.0) method coverage on MRI; no pending,
+  skipped or focused example; any warning that reaches STDERR, from `lib/`, `spec/` or a
+  dependency, fails the run (`spec/support/warnings.rb`).
+- `rake rubocop`: RuboCop with every cop of RuboCop and of rubocop-md, -packaging, -performance,
+  -rake, -rspec, -sorbet, -thread_safety and -yard enabled (`EnabledByDefault`); the few cops
+  that are off are listed in `.rubocop.yml`, each with the cop or contract it contradicts. No
+  todo file, no inline directives.
+- `rake suppressions`: no inline suppression anywhere (`script/forbidden_suppressions.sh`, see
+  *Rules*).
+- `rake typecheck`: Tapioca generates the gem RBIs, then `srb tc` must report no errors; every
+  `lib/` file is `# typed: strong` except `branch_enricher.rb` (`strict`, see its header), and
+  every other file Sorbet checks is at least `strict`.
+- `rake yard`: YARD builds without warnings and reports 100% documented.
+- `rake reek`: no code smell (Reek's default configuration; `.reek.yml` narrows one detector for
+  one class, with the reason).
+- `rake flay`, `rake flog`, `rake debride`: no structural duplication, no method above the flog
+  threshold, no method without a caller (the few callers debride cannot see are listed in the
+  `Rakefile`).
+- `rake audit`: bundler-audit, no locked gem with a known vulnerability.
+- `rake build`: `gem build --strict`, then the gem is installed into a clean `GEM_HOME` and
+  required with `ruby -w`.
 
-```sh
-bundle exec rake mutant     # mutation testing: every mutation of every subject must be killed
-bundle exec rake outdated   # every gem, Ruby, Action and tool at its newest release, or on the hold list
-```
+Also enforced on every pull request and every push to `main`:
 
-- **Mutation testing** (`.mutant.yml`) covers every method under `SimpleCov::Formatter::AIFormatter`
-  with no ignore patterns. CI runs it on Ruby 3.3.13: mutant requires `parser/current`, and the
-  newest `parser` gem only has a grammar for Ruby 3.3 and warns on any other Ruby (the hold is
-  documented in `script/outdated_holds.yml` and `rake outdated` fails once it is no longer
-  needed). Locally it runs on any Ruby >= 3.3 (on others than 3.3.13 with that one warning);
-  while iterating, run one scope at a time, e.g.
+- **Mutation testing** (`bundle exec rake mutant`, `.mutant.yml`) covers every method under
+  `SimpleCov::Formatter::AIFormatter` with no ignore patterns, and every mutation must be killed.
+  CI runs it on Ruby 3.3.13 (`script/check` in the `ruby:3.3.13` image): mutant requires
+  `parser/current`, and the newest `parser` gem only has a grammar for Ruby 3.3 and warns on any
+  other Ruby (the hold is documented in `script/outdated_holds.yml` and `rake outdated` fails once
+  it is no longer needed). While iterating, run one scope at a time, e.g.
   `bundle exec mutant run 'SimpleCov::Formatter::AIFormatter::LineSpan*'`. A surviving mutant
-  needs a test that kills it, or — when the mutation cannot change observable behaviour —
-  simpler code.
-- **Dependency freshness** (`script/outdated.rb`): `bundle outdated`, `.ruby-version` against the
-  newest Ruby release, every exact Ruby in the workflows against the newest release of its series,
-  every Action against the commit of its newest release tag, and the downloaded tools and the
-  Semgrep image against their newest releases, and every container image against the digest its
-  tag points to. The only exceptions are the holds in
-  `script/outdated_holds.yml`, each with the upstream constraint that blocks it.
+  needs a test that kills it, or, when the mutation cannot change observable behaviour, simpler
+  code.
+- **Dependency freshness** (`bundle exec rake outdated`, `script/outdated.rb`): `bundle outdated`,
+  `.ruby-version` against the newest Ruby release, every exact Ruby in the workflows against the
+  newest release of its series, every Action against the commit of its newest release tag, the
+  downloaded tools and the Semgrep image against their newest releases, every container image
+  against the digest its tag points to, the npm packages (`package.json`), the pip packages
+  (`.github/python/requirements.txt`) and `.node-version`. The only exceptions are the holds in
+  `script/outdated_holds.yml`, each with the upstream constraint that blocks it. Dependabot
+  proposes updates for every ecosystem (`.github/dependabot.yml`).
 - **Test matrix**: MRI 2.7, 3.2, 3.3, 3.4 and 4.0 (newest patch release each, each resolving its
   own test bundle; Ruby 2.7 in its official Docker image, as `ruby/setup-ruby` has no 2.7 build
   for the current runner image), the lockfile bundle, Windows, JRuby and TruffleRuby, and every
   SimpleCov line from 0.18 to 1.3 (`gemfiles/`).
-- **Linters and scanners**: actionlint (with ShellCheck on every `run:` script), ShellCheck on
-  `script/`, `bin/` and the hook, zizmor (pedantic), markdownlint (`.markdownlint.yml`), typos
-  (`_typos.toml`), Semgrep (`p/ruby`, `p/secrets`, `p/security-audit`, `p/github-actions`),
-  gitleaks over the full history, bundler-audit, the dependency review, CodeQL and the OpenSSF
-  Scorecard.
+- **Every other file type**: markdownlint with every rule (`.markdownlint-cli2.yaml`), yamllint
+  in strict mode with every rule but key-ordering (`.yamllint.yml`), ShellCheck with every
+  optional check at the style level (`.shellcheckrc`) and shfmt on every shell script
+  (`script/shell_scripts.sh`), actionlint (with ShellCheck on every `run:` script), zizmor
+  (pedantic), editorconfig-checker (`.editorconfig`), lychee on every link and anchor of the
+  Markdown files (`lychee.toml`), typos (`_typos.toml`).
+- **Security**: Semgrep (`p/ruby`, `p/secrets`, `p/security-audit`, `p/github-actions`), gitleaks
+  over the full history, bundler-audit, the dependency review (fails on a vulnerability of any
+  severity), CodeQL (Ruby and the workflows) and the OpenSSF Scorecard.
+- **Hardened runners**: every job starts with Harden-Runner and may only reach the endpoints
+  listed with it (audit mode on Windows, the only mode it supports there, and in the publishing
+  job of a release, whose endpoints only a release reaches); every Action is pinned to a commit,
+  every downloaded tool and Python package to its SHA-256, and every container image to its
+  digest.
 - **Warning gate**: every workflow ends with a job (`script/warning_gate.sh`) that fails the run
   when the log of any other job contains a warning or a deprecation notice.
 
-Locally, `actionlint`, `shellcheck`, `zizmor --offline --persona pedantic .github/workflows`,
-`typos`, `npx markdownlint-cli2 "**/*.md"` and `gitleaks git .` run the same checks.
+`script/check` expects `actionlint`, `docker`, `editorconfig-checker`, `gitleaks`, `lychee`,
+`npm`, `python3`, `shellcheck`, `shfmt`, `typos` and `zizmor` on the `PATH` (yamllint and
+markdownlint-cli2 are installed from the pinned `.github/python/requirements.txt` and
+`package-lock.json`). CI alone runs CodeQL, the Scorecard, the dependency review (GitHub
+services) and the Windows job.
 
 ## Rules
 
 - **No inline suppressions.** Nothing may silence a linter, scanner, type checker, coverage
   tool, warning or test in place: no `rubocop:disable`, `:reek:`, `nosemgrep`, `zizmor: ignore`,
-  `shellcheck disable`, `gitleaks:allow`, `mutant:disable`, nocov or `simplecov:disable`
+  `shellcheck disable`, `yamllint disable`, `markdownlint-disable`, `gitleaks:allow`,
+  `mutant:disable`, nocov or `simplecov:disable`
   directives in `lib/`, `T.unsafe` / `T.cast` / `T.bind` / `T.must` / `T.untyped` in `lib/`,
   `$VERBOSE = nil`, `skip` / `pending` / focused examples, `continue-on-error`, and so on
   (`script/forbidden_suppressions.sh` has the full list). Fix the cause. A rule that genuinely
@@ -147,8 +175,6 @@ pass the command through (do not commit the sample):
 ```sh
 bin/check-ruby 3.4 'cd e2e && bundle install --quiet && bundle exec rspec; cat coverage/ai_report.md'
 ```
-
-## Type checking
 
 ## Reporting bugs
 

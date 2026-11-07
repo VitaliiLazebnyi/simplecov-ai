@@ -1,10 +1,10 @@
 # typed: false
 # frozen_string_literal: true
 
-# Fixture for the AST resolver. It is parsed, never loaded: ast_resolver_spec.rb asserts the
-# exact node table (name, type, first and last line) the resolver derives from it, so line
-# numbers matter — append new constructs at the end rather than inserting them.
-# Justification: the constructs below intentionally use the exact shapes under test.
+# Copyright (c) 2026 Vitalii Lazebnyi
+# Fixture for the AST resolver, parsed, never loaded: ast_resolver_spec.rb asserts the exact node
+# table (name, type, first and last line) the resolver derives from it, so line numbers matter:
+# append new constructs at the end. Justification: the constructs use the exact shapes under test.
 
 # simplecov:disable
 TOP_LEVEL_SETTING = :bypassed_at_root
@@ -15,7 +15,7 @@ module Versioned
   MAJOR, MINOR, *OTHER = '1.2.3'.split('.')
   DEFAULT ||= 'stable'
   ORDERINGS = [REQUIRE_ORDER = 0, PERMUTE = 1].freeze
-
+  public_constant :ORDERINGS
   def version
     [MAJOR, MINOR].join('.')
   end

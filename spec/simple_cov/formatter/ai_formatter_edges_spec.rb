@@ -1,20 +1,22 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: false
 # frozen_string_literal: true
 
 require 'spec_helper'
-require 'tmpdir'
+
 require 'fileutils'
+require 'tmpdir'
 
 # Edge cases of the whole pipeline; part of every subject's selection under mutant (see
 # spec/support/mutant_scopes.rb).
-RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScopes.spec_levels do
-  let(:tmpdir) { Dir.mktmpdir('scai') }
+RSpec.describe(SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScopes.spec_levels) do
+  let(:tmpdir)      { Dir.mktmpdir('scai') }
   let(:report_path) { File.join(tmpdir, 'report.md') }
 
   before do
     described_class.reset_configuration!
     described_class.configure { |config| config.report_path = report_path }
-    allow(SimpleCov).to receive(:root).and_return(tmpdir)
+    allow(SimpleCov).to(receive(:root).and_return(tmpdir))
   end
 
   after do
@@ -32,40 +34,54 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
   end
 
   describe 'ASTResolver edge cases' do
+    let(:metaprogrammed_constants) do
+      [
+        'main (Root Script Scope)',
+        'Point (Struct)',
+        'Point#dist (Instance Method)',
+        'Cfg (Data)',
+        'Cfg#url (Instance Method)',
+        'Registry::Entry (Class)',
+        'Registry::Entry#render (Instance Method)',
+        'Box (Class)',
+        'Box::Item (Struct)',
+        'Box::Item#show (Instance Method)'
+      ]
+    end
+
     it 'attributes a singleton method to its explicit foreign receiver' do
       nodes = resolve("class Patcher\n  def String.shout\n    upcase\n  end\nend\n")
-      expect(nodes.map(&:name)).to eq(['main', 'Patcher', 'String.shout'])
+      expect(nodes.map(&:name)).to(eq(['main', 'Patcher', 'String.shout']))
     end
 
     it 'attributes a singleton method on a non-constant receiver to the enclosing context' do
       nodes = resolve("class Holder\n  obj = Object.new\n  def obj.assist\n  end\nend\n")
-      expect(nodes.map(&:name)).to eq(['main', 'Holder', 'Holder.assist'])
+      expect(nodes.map(&:name)).to(eq(['main', 'Holder', 'Holder.assist']))
     end
 
     it 'attributes methods in Struct.new / Data.define / Class.new blocks to the assigned constant' do
-      nodes = resolve("Point = Struct.new(:x) do\n  def dist\n  end\nend\n" \
-                      "Cfg = Data.define(:h) do\n  def url\n  end\nend\n" \
-                      "Registry::Entry = Class.new do\n  def render\n  end\nend\n" \
-                      "class Box\n  Item = Struct.new(:v) do\n    def show\n    end\n  end\nend\n")
-      expect(nodes.map { |node| [node.name, node.type] }).to eq(
-        [['main', 'Root Script Scope'], ['Point', 'Struct'], ['Point#dist', 'Instance Method'],
-         ['Cfg', 'Data'], ['Cfg#url', 'Instance Method'], ['Registry::Entry', 'Class'],
-         ['Registry::Entry#render', 'Instance Method'], ['Box', 'Class'], ['Box::Item', 'Struct'],
-         ['Box::Item#show', 'Instance Method']]
+      nodes = resolve(
+        "Point = Struct.new(:x) do\n  def dist\n  end\nend\n" \
+          "Cfg = Data.define(:h) do\n  def url\n  end\nend\n" \
+          "Registry::Entry = Class.new do\n  def render\n  end\nend\n" \
+          "class Box\n  Item = Struct.new(:v) do\n    def show\n    end\n  end\nend\n"
       )
+      expect(nodes.map { |node| "#{node.name} (#{node.type})" }).to(eq(metaprogrammed_constants))
     end
 
     it 'does not treat non-class constant assignments as metaprogramming classes' do
       # A plain value, a safe-navigation block call, a receiverless call, a non-const receiver,
       # and a constant receiver with the wrong constructor must all be rejected, leaving only
       # the root scope.
-      nodes = resolve("PLAIN = 42\n" \
-                      "SAFE = obj&.each do\n  1\nend\n" \
-                      "BARE = build do\n  2\nend\n" \
-                      "MAPPED = [1].map do |i|\n  i\nend\n" \
-                      "WRONG = Struct.old do\n  3\nend\n" \
-                      "OTHER = Registry.new do\n  4\nend\n")
-      expect(nodes.map(&:name)).to eq(['main'])
+      nodes = resolve(
+        "PLAIN = 42\n" \
+          "SAFE = obj&.each do\n  1\nend\n" \
+          "BARE = build do\n  2\nend\n" \
+          "MAPPED = [1].map do |i|\n  i\nend\n" \
+          "WRONG = Struct.old do\n  3\nend\n" \
+          "OTHER = Registry.new do\n  4\nend\n"
+      )
+      expect(nodes.map(&:name)).to(eq(['main']))
     end
   end
 
@@ -73,7 +89,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
     it 'restores defaults after reset_configuration!' do
       described_class.configure { |config| config.max_file_size_kb = 7 }
       described_class.reset_configuration!
-      expect(described_class.configuration.max_file_size_kb).to eq(50)
+      expect(described_class.configuration.max_file_size_kb).to(eq(50))
     end
   end
 
@@ -82,7 +98,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
       path = File.join(tmpdir, 'kana.rb')
       File.binwrite(path, "# encoding: Shift_JIS\ndef read\n  '\x82\xa0'\nend\n".b)
       expect(report_for(result_for(path => { 'lines' => [nil, 1, 0, nil] })))
-        .to match(/^  - \*\*Line Deficit:\*\* \[L3\] `'あ'`$/)
+        .to(match(/^  - \*\*Line Deficit:\*\* \[L3\] `'あ'`$/))
     end
 
     # SimpleCov < 1.1 raises on invalid UTF-8 bytes itself (1.1 scrubs them).
@@ -91,20 +107,20 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
         path = File.join(tmpdir, 'latin.rb')
         File.binwrite(path, "# Latin-1 \xe9\ndef read\n  1\nend\n".b)
         result = result_for(path => { 'lines' => [nil, 1, 0, nil] })
-        expect(report_for(result)).to end_with("  - **Line Deficit:** [L3] `1`\n\n")
+        expect(report_for(result)).to(end_with("  - **Line Deficit:** [L3] `1`\n\n"))
       end
     end
   end
 
   describe 'line endings' do
-    # SimpleCov reads sources in binary mode, so a CRLF file — every file written in text mode on
-    # Windows — reaches the formatter with "\r\n" on each line; snippets are stripped of it.
+    # SimpleCov reads sources in binary mode, so a CRLF file - every file written in text mode on
+    # Windows - reaches the formatter with "\r\n" on each line; snippets are stripped of it.
     it 'renders the snippets of a CRLF source without carriage returns' do
       freeze_time
       path = write_source(tmpdir, 'crlf.rb', "def read\r\n  1\r\nend\r\n")
       deficits = "## Coverage Deficits\n\n### `crlf.rb`\n- `Object#read`\n  - **Line Deficit:** [L2] `1`\n\n"
       expect(report_for(result_for(path => { 'lines' => [1, 0, nil] })))
-        .to eq(expected_header('FAILED', '50.0%', '100.0%') + deficits)
+        .to(eq(expected_header('FAILED', '50.0%', '100.0%') + deficits))
     end
   end
 

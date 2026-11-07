@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# Runs every check CI runs, locally, and then fails on any warning in their output, like the CI
+# warning gate (script/warning_patterns.sh). See CONTRIBUTING.md for the tools it expects.
+#
+#   script/check          # everything, including the Docker runs on the other Rubies and engines
+#   script/check --fast   # without the Docker runs (mutation testing and the Ruby matrix)
+#
+# CI alone runs CodeQL, Scorecard and the dependency review (GitHub services) and the Windows
+# job; the Ruby matrix and mutation testing run here in the same official Docker images.
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+# shellcheck source=warning_patterns.sh
+source script/warning_patterns.sh
+
+fast=false
+if [[ "${1:-}" == "--fast" ]]; then
+  fast=true
+fi
+
+mkdir -p tmp
+# The images CI pins (by digest) in its workflows.
+semgrep_image=$(sed -n 's/^ *SEMGREP_IMAGE: //p' .github/workflows/security.yml)
+ruby27_image=$(sed -n 's/^ *RUBY27_IMAGE: //p' .github/workflows/ci.yml)
+
+log=$(mktemp)
+trap 'rm -f "${log}"' EXIT
+
+step() {
+  printf '\n==> %s\n' "$*" | tee -a "${log}"
+  "$@" 2>&1 | tee -a "${log}"
+}
+
+required() {
+  local tool
+  for tool in "$@"; do
+    command -v "${tool}" >/dev/null || {
+      printf 'script/check needs %s on PATH (see CONTRIBUTING.md)\n' "${tool}" >&2
+      exit 1
+    }
+  done
+}
+
+required actionlint docker editorconfig-checker gitleaks lychee npm python3 shellcheck shfmt typos zizmor
+
+RUBYOPT="$(ruby script/rubyopt.rb)"
+export RUBYOPT
+
+# Ruby: the default Rake task (RSpec with 100% coverage, RuboCop, suppressions, Sorbet, YARD,
+# Reek, Flay, Flog, Debride, bundler-audit, gem build) and the dependency freshness check.
+step bundle exec rake
+step bundle exec rake outdated
+
+# Every other file type.
+step npm ci --silent
+step npm run --silent markdownlint
+if [[ ! -x tmp/venv/bin/yamllint ]]; then
+  python3 -m venv tmp/venv
+  tmp/venv/bin/pip install --quiet --disable-pip-version-check --require-hashes --no-deps \
+    -r .github/python/requirements.txt
+fi
+step tmp/venv/bin/yamllint --strict .
+script/shell_scripts.sh >tmp/shell_scripts.txt
+step xargs shellcheck --severity=style <tmp/shell_scripts.txt
+step xargs shfmt --diff <tmp/shell_scripts.txt
+step editorconfig-checker
+step lychee --root-dir "${PWD}" '**/*.md'
+step typos
+step actionlint
+step zizmor --persona=pedantic .github/workflows
+step gitleaks git --redact --exit-code 1 .
+step docker run --rm --volume "${PWD}:/src" --workdir /src "${semgrep_image}" semgrep scan \
+  --config p/ruby --config p/secrets --config p/security-audit --config p/github-actions --error --metrics=off .
+
+if [[ "${fast}" == false ]]; then
+  # The suite on every other Ruby and engine of the CI matrix, and mutation testing on the Ruby
+  # it is held at (script/outdated_holds.yml), each in its official image (bin/check-ruby).
+  for gemfile in Gemfile gemfiles/simplecov_0.18.gemfile; do
+    step env BUNDLE_GEMFILE="${gemfile}" bin/check-ruby "${ruby27_image}" \
+      'script/check_ruby.sh 2.7.8 && bundle exec rspec'
+  done
+  for ruby in 3.2 3.3 3.4; do
+    step bin/check-ruby "${ruby}"
+  done
+  for gemfile in gemfiles/simplecov_*.gemfile; do
+    step env BUNDLE_GEMFILE="${gemfile}" bin/check-ruby 3.4
+  done
+  step bundle exec rake check:jruby check:truffleruby
+  step bin/check-ruby 3.3.13 'bundle exec rake mutant'
+fi
+
+hits=$(warning_lines <"${log}")
+if [[ -n "${hits}" ]]; then
+  printf '\nWarnings in the output:\n%s\n' "${hits}" >&2
+  exit 1
+fi
+printf '\nAll checks passed, without a warning.\n'

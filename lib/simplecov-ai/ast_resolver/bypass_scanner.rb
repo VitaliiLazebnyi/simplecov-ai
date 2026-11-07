@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -8,15 +9,17 @@ module SimpleCov
         # Attributes coverage-skip regions (line ranges SimpleCov excluded from its metrics,
         # each paired with the directive text that caused the exclusion) to the semantic nodes
         # they cover. A region is attributed to the outermost semantic nodes it fully contains,
-        # or — when it sits inside a single node — to that innermost enclosing node; a region
+        # or - when it sits inside a single node - to that innermost enclosing node; a region
         # wrapping only top-level code therefore lands on the root scope.
         module BypassScanner
           extend T::Sig
 
           # A skipped line range together with the reason SimpleCov skipped it.
           Region = T.type_alias { [T::Range[Integer], String] }
+          public_constant(:Region)
           # Reasons keyed by the node they apply to.
           ReasonsByNode = T.type_alias { T::Hash[SemanticNode, T::Array[String]] }
+          public_constant(:ReasonsByNode)
 
           # Attributes every region to the matching semantic nodes. The result is a pure
           # function of its inputs: nodes are never mutated, and a reason is listed once per
@@ -34,6 +37,12 @@ module SimpleCov
             end
           end
 
+          # The nodes a skipped region is attributed to: the outermost nodes it fully contains, or else
+          # the innermost node enclosing it.
+          #
+          # @param nodes [Array<SemanticNode>] Every node of the file.
+          # @param range [Range<Integer>] The skipped lines.
+          # @return [Array<SemanticNode>] The nodes to list the region under.
           sig { params(nodes: T::Array[SemanticNode], range: T::Range[Integer]).returns(T::Array[SemanticNode]) }
           def self.targets_of(nodes, range)
             contained = nodes.select { |node| LineSpan.encloses?(range, node.line_range) }
@@ -42,18 +51,27 @@ module SimpleCov
             [innermost_enclosing(nodes, range)].compact
           end
 
+          # The contained nodes no other contained node encloses.
+          #
+          # @param contained [Array<SemanticNode>] The nodes a region fully contains.
+          # @return [Array<SemanticNode>] The outermost of them.
           sig { params(contained: T::Array[SemanticNode]).returns(T::Array[SemanticNode]) }
           def self.outermost(contained)
             contained.reject { |node| enclosed?(node, contained) }
           end
 
+          # Whether another candidate strictly encloses the node.
+          #
+          # @param node [SemanticNode] The node to test.
+          # @param candidates [Array<SemanticNode>] The nodes it may sit inside.
+          # @return [Boolean] Whether a candidate spans strictly more lines around it.
           sig { params(node: SemanticNode, candidates: T::Array[SemanticNode]).returns(T::Boolean) }
           def self.enclosed?(node, candidates)
             candidates.any? { |other| LineSpan.strictly_encloses?(other.line_range, node.line_range) }
           end
 
           # Nodes are in pre-order, so among the (nested) nodes enclosing a region the last one
-          # is the innermost — including when an inner node spans exactly the same lines as its
+          # is the innermost - including when an inner node spans exactly the same lines as its
           # parent (a method filling its class, or a class filling the root scope).
           sig { params(nodes: T::Array[SemanticNode], range: T::Range[Integer]).returns(T.nilable(SemanticNode)) }
           def self.innermost_enclosing(nodes, range)

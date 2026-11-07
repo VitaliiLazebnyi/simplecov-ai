@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -13,8 +14,10 @@ module SimpleCov
 
           # The name Ruby itself gives the top-level execution context of a script.
           ROOT_NAME = 'main'
+          public_constant(:ROOT_NAME)
           # Type label of the synthetic node that spans a whole file.
           ROOT_TYPE = 'Root Script Scope'
+          public_constant(:ROOT_TYPE)
 
           # @return [String] The fully qualified semantic name (`Sample::Calc#sign`).
           const :name, String

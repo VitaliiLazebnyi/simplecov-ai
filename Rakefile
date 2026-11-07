@@ -1,10 +1,11 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strict
 # frozen_string_literal: true
 
 require 'open3'
-require 'tmpdir'
 require 'rspec/core/rake_task'
 require 'sorbet-runtime'
+require 'tmpdir'
 
 # `bundle exec rake` runs every gate CI enforces (see CONTRIBUTING.md); each one is also a task
 # of its own. Mutation testing (`rake mutant`) and the dependency freshness check
@@ -45,8 +46,8 @@ module Report
   sig { params(command: T::Array[String], clean: String, failure: String).void }
   def self.require_clean(command, clean, failure)
     output, status = Open3.capture2e(*command)
-    puts output
-    abort failure unless status.success? && output.include?(clean)
+    puts(output)
+    abort(failure) unless status.success? && output.include?(clean)
   end
 end
 
@@ -73,8 +74,11 @@ end
 desc 'Build the YARD documentation (warnings are fatal) and require 100% documentation coverage'
 task :yard do
   sh 'bundle', 'exec', 'yardoc', '--fail-on-warning'
-  Report.require_clean(%w[bundle exec yard stats --list-undoc], FULLY_DOCUMENTED,
-                       'YARD: undocumented API objects found')
+  Report.require_clean(
+    %w[bundle exec yard stats --list-undoc],
+    FULLY_DOCUMENTED,
+    'YARD: undocumented API objects found'
+  )
 end
 
 desc 'Fail on any code smell (reek, default configuration; see .reek.yml)'
@@ -84,8 +88,11 @@ end
 
 desc 'Fail on any structural duplication (flay)'
 task :flay do
-  Report.require_clean(['bundle', 'exec', 'flay', '--mass', FLAY_MASS.to_s, 'lib'], 'Total score (lower is better) = 0',
-                       'Flay: duplicated code found')
+  Report.require_clean(
+    ['bundle', 'exec', 'flay', '--mass', FLAY_MASS.to_s, 'lib'],
+    'Total score (lower is better) = 0',
+    'Flay: duplicated code found'
+  )
 end
 
 desc "Fail on any method with a flog score above #{FLOG_METHOD_THRESHOLD}"
@@ -103,8 +110,11 @@ task :debride do
   Dir.mktmpdir('debride') do |dir|
     allowed = File.join(dir, 'allowed.txt')
     File.write(allowed, DEBRIDE_ALLOWED.keys.join("\n"))
-    Report.require_clean(['bundle', 'exec', 'debride', '--whitelist', allowed, 'lib'], 'Total suspect LOC: 0',
-                         'debride: methods without a caller found')
+    Report.require_clean(
+      ['bundle', 'exec', 'debride', '--whitelist', allowed, 'lib'],
+      'Total suspect LOC: 0',
+      'debride: methods without a caller found'
+    )
   end
 end
 
@@ -121,11 +131,21 @@ task :build do
   sh 'gem', 'specification', gem_file, 'version'
   Dir.mktmpdir('simplecov-ai-smoke') do |gem_home|
     # Drop Bundler's environment so the smoke test sees only the freshly installed gem.
-    clean_env = { 'GEM_HOME' => gem_home, 'GEM_PATH' => gem_home, 'RUBYOPT' => nil, 'RUBYLIB' => nil,
-                  'BUNDLE_GEMFILE' => nil, 'BUNDLE_BIN_PATH' => nil, 'BUNDLER_SETUP' => nil }
+    clean_env = {
+      'GEM_HOME' => gem_home,
+      'GEM_PATH' => gem_home,
+      'RUBYOPT' => nil,
+      'RUBYLIB' => nil,
+      'BUNDLE_GEMFILE' => nil,
+      'BUNDLE_BIN_PATH' => nil,
+      'BUNDLER_SETUP' => nil
+    }
     sh clean_env, 'gem', 'install', '--no-document', gem_file
-    sh clean_env, 'ruby', '-w', '-e',
-       'require "simplecov-ai"; puts "Loaded simplecov-ai " + SimpleCov::Formatter::AIFormatter::VERSION'
+    sh clean_env,
+      'ruby',
+      '-w',
+      '-e',
+      'require "simplecov-ai"; puts "Loaded simplecov-ai " + SimpleCov::Formatter::AIFormatter::VERSION'
   end
 end
 

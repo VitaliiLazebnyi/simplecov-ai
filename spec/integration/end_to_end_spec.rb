@@ -1,7 +1,9 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: false
 # frozen_string_literal: true
 
 require 'spec_helper'
+
 require 'fileutils'
 require 'open3'
 require 'rbconfig'
@@ -12,81 +14,17 @@ require 'tmpdir'
 # result merging, loads a small fixture project written to a temporary directory, exercises part
 # of it and lets SimpleCov's at_exit hook write the digest. SimpleCov merges through
 # .resultset.json, so the formatter receives a result whose branch descriptors were stringified
-# and decoded again — the path a real run takes, and the one the in-process specs cannot fake.
+# and decoded again - the path a real run takes, and the one the in-process specs cannot fake.
 module EndToEnd
   LIB_DIR = File.expand_path('../../lib', __dir__)
+  public_constant(:LIB_DIR)
   NOCOV = SimpleCovFixtures::NOCOV_MARKER
+  public_constant(:NOCOV)
 
   # What a child run produced: its streams and exit status, the digest it wrote (nil when it
   # wrote none) and the descriptor classes the probe formatter saw (see RUNNER).
   Run = Struct.new(:stdout, :stderr, :status, :report, :descriptor_classes)
-
-  # One covered method with a missed ternary arm, one never-invoked method with a repeated
-  # statement, and one never-invoked method whose only line is a backtick command.
-  CALC_SOURCE = <<~RUBY
-    # frozen_string_literal: true
-
-    module Shapes
-      class Calc
-        def sign(number)
-          number.positive? ? :pos : :neg
-        end
-
-        def never_called
-          @never = 1
-          @never = 1
-        end
-
-        def shell
-          `echo hi`
-        end
-      end
-    end
-  RUBY
-
-  # Every bypass form: a nocov pair, an inline `simplecov:disable` and a `simplecov:disable
-  # branch` block (the latter two are honoured by SimpleCov >= 1.0 only).
-  LEGACY_SOURCE = <<~RUBY
-    # frozen_string_literal: true
-
-    module Shapes
-      class Legacy
-        #{NOCOV}
-        def obsolete
-          raise NotImplementedError
-        end
-        #{NOCOV}
-
-        def fail_loudly
-          raise 'x' # simplecov:disable
-        end
-
-        def pick(flag)
-          # simplecov:disable branch
-          flag ? :yes : :no
-          # simplecov:enable branch
-        end
-      end
-    end
-  RUBY
-
-  # A Struct.new block, a top-level nocov region and a top-level branch, so root-scope
-  # attribution shows up for a deficit and for a bypass.
-  POINT_SOURCE = <<~RUBY
-    # frozen_string_literal: true
-
-    Point = Struct.new(:x, :y) do
-      def side
-        x.positive? ? :right : :left
-      end
-    end
-
-    #{NOCOV}
-    DEBUG = ENV.key?('SHAPES_DEBUG')
-    #{NOCOV}
-
-    puts 'debugging' if DEBUG
-  RUBY
+  private_constant(:Run)
 
   # The child's script. The probe formatter records the class of the branch descriptors the
   # formatters receive: Strings prove the result came back through the resultset merge.
@@ -122,15 +60,16 @@ module EndToEnd
     Shapes::Legacy.new.pick(true)
     Point.new(2, 0).side
   RUBY
+  private_constant(:RUNNER)
 
   module_function
 
   # Writes the fixture project (sources under lib/shapes and the runner) into `project_dir`.
   def write_project(project_dir)
     FileUtils.mkdir_p(File.join(project_dir, 'lib', 'shapes'))
-    File.write(File.join(project_dir, 'lib', 'shapes', 'calc.rb'), CALC_SOURCE)
-    File.write(File.join(project_dir, 'lib', 'shapes', 'legacy.rb'), LEGACY_SOURCE)
-    File.write(File.join(project_dir, 'lib', 'shapes', 'point.rb'), POINT_SOURCE)
+    File.write(File.join(project_dir, 'lib', 'shapes', 'calc.rb'), EndToEndSources::CALC)
+    File.write(File.join(project_dir, 'lib', 'shapes', 'legacy.rb'), EndToEndSources::LEGACY)
+    File.write(File.join(project_dir, 'lib', 'shapes', 'point.rb'), EndToEndSources::POINT)
     File.write(File.join(project_dir, 'run.rb'), RUNNER)
   end
 
@@ -139,17 +78,19 @@ module EndToEnd
   # directory like a real test run: SimpleCov 0.18 fixes its root filter from the working
   # directory when it is required, before `SimpleCov.root` can be set. The command line is fixed:
   # this interpreter, the gem's lib directory and the runner the spec wrote.
-  Child = Struct.new(:project_dir, :env) do
-    def run
-      stdout, stderr, status = Open3.capture3(env, RbConfig.ruby, '-I', LIB_DIR, 'run.rb', chdir: project_dir)
-      Run.new(stdout, stderr, status, read('ai_report.md'), read('descriptor_classes.txt'))
-    end
+  Child =
+    Struct.new(:project_dir, :env) do
+      def run
+        stdout, stderr, status = Open3.capture3(env, RbConfig.ruby, '-I', LIB_DIR, 'run.rb', chdir: project_dir)
+        Run.new(stdout, stderr, status, read('ai_report.md'), read('descriptor_classes.txt'))
+      end
 
-    def read(name)
-      path = File.join(project_dir, 'coverage', name)
-      File.exist?(path) ? File.read(path, encoding: Encoding::UTF_8) : nil
+      def read(name)
+        path = File.join(project_dir, 'coverage', name)
+        File.exist?(path) ? File.read(path, encoding: Encoding::UTF_8) : nil
+      end
     end
-  end
+  private_constant(:Child)
 
   def run(project_dir, env = {})
     Child.new(project_dir, env).run
@@ -161,15 +102,15 @@ module EndToEnd
   end
 end
 
-RSpec.describe EndToEnd do
+RSpec.describe(EndToEnd) do
   let(:project_dir) { Dir.mktmpdir('scai-e2e') }
   # SimpleCov >= 1.0 honours `# simplecov:disable`; older releases see plain code there.
   let(:directives) { simplecov_directives_supported? }
   # JRuby and TruffleRuby record no branch coverage: the child's `enable_coverage :branch` is
   # accepted there but yields no branch data, so its digest carries an N/A branch line, no branch
   # deficit, none of the files whose only deficits were branches and no bypass for a branch-scoped
-  # directive — the README's promise that only line deficits are reported on those engines.
-  let(:branches) { branch_coverage_measurable? }
+  # directive - the README's promise that only line deficits are reported on those engines.
+  let(:branches)     { branch_coverage_measurable? }
   let(:announcement) { "AI coverage digest written to #{described_class.report_path(project_dir)}\n" }
 
   before { described_class.write_project(project_dir) }
@@ -213,35 +154,42 @@ RSpec.describe EndToEnd do
   end
 
   def calc_deficits(method_deficits: false)
-    file_block('lib/shapes/calc.rb',
-               *sign_deficit,
-               '- `Shapes::Calc#never_called`',
-               *(method_deficits ? [method_deficit('9-12', 'Shapes::Calc#never_called')] : []),
-               '  - **Line Deficit:** [L10] `@never = 1` (Occurrence 1 of 2).',
-               '  - **Line Deficit:** [L11] `@never = 1` (Occurrence 2 of 2).',
-               '- `Shapes::Calc#shell`',
-               *(method_deficits ? [method_deficit('14-16', 'Shapes::Calc#shell')] : []),
-               '  - **Line Deficit:** [L15] `` `echo hi` ``')
+    never_called = method_deficits ? [method_deficit('9-12', 'Shapes::Calc#never_called')] : []
+    shell = method_deficits ? [method_deficit('14-16', 'Shapes::Calc#shell')] : []
+    never = ['- `Shapes::Calc#never_called`', *never_called, never_line(10, 1), never_line(11, 2)]
+    file_block('lib/shapes/calc.rb', *sign_deficit, *never, '- `Shapes::Calc#shell`', *shell, shell_line)
+  end
+
+  def never_line(line, occurrence)
+    "  - **Line Deficit:** [L#{line}] `@never = 1` (Occurrence #{occurrence} of 2)."
+  end
+
+  def shell_line
+    '  - **Line Deficit:** [L15] `` `echo hi` ``'
   end
 
   # Without directive support the inline-disabled line and the branch-disabled arm are
   # ordinary deficits (the arm only where branches are recorded).
   def legacy_deficits
     pick = ['- `Shapes::Legacy#pick`', '  - **Branch Deficit:** [L17] Missing coverage for `else` branch: `:no`']
-    file_block('lib/shapes/legacy.rb',
-               '- `Shapes::Legacy#fail_loudly`',
-               "  - **Line Deficit:** [L12] `raise 'x' # simplecov:disable`",
-               *(branches ? pick : []))
+    file_block(
+      'lib/shapes/legacy.rb',
+      '- `Shapes::Legacy#fail_loudly`',
+      "  - **Line Deficit:** [L12] `raise 'x' # simplecov:disable`",
+      *(branches ? pick : [])
+    )
   end
 
   # Both deficits of point.rb are branches: an engine recording none lists the file among the
   # bypasses only.
   def point_deficits
-    file_block('lib/shapes/point.rb',
-               '- `main`',
-               "  - **Branch Deficit:** [L13] Missing coverage for `then` branch: `puts 'debugging'`",
-               '- `Point#side`',
-               '  - **Branch Deficit:** [L5] Missing coverage for `else` branch: `:left`')
+    file_block(
+      'lib/shapes/point.rb',
+      '- `main`',
+      "  - **Branch Deficit:** [L13] Missing coverage for `then` branch: `puts 'debugging'`",
+      '- `Point#side`',
+      '  - **Branch Deficit:** [L5] Missing coverage for `else` branch: `:left`'
+    )
   end
 
   def bypass(node, reason)
@@ -255,8 +203,10 @@ RSpec.describe EndToEnd do
     legacy_entries = bypass('Shapes::Legacy#obsolete', described_class::NOCOV)
     legacy_entries += bypass('Shapes::Legacy#fail_loudly', '# simplecov:disable') if directives
     legacy_entries += bypass('Shapes::Legacy#pick', '# simplecov:disable branch') if directives && branches
-    [file_block('lib/shapes/legacy.rb', *legacy_entries),
-     file_block('lib/shapes/point.rb', *bypass('main', described_class::NOCOV))]
+    [
+      file_block('lib/shapes/legacy.rb', *legacy_entries),
+      file_block('lib/shapes/point.rb', *bypass('main', described_class::NOCOV))
+    ]
   end
 
   # The file blocks of the deficit section of the default run, lowest line coverage first.
@@ -296,9 +246,10 @@ RSpec.describe EndToEnd do
 
   it 'writes the exact digest through SimpleCov\'s merged result, announces it and emits no warning of its own' do
     child = described_class.run(project_dir)
-    expect([normalise(child.report), iso8601_timestamp?(child.report), child.stdout, child.status.exitstatus,
-            child.descriptor_classes, gem_warnings(child.stderr)])
-      .to eq([expected_default_report, true, announcement, 0, expected_descriptor_classes, []])
+    report = child.report
+    observed = [normalise(report), iso8601_timestamp?(report), child.stdout, child.status.exitstatus]
+    expect([*observed, child.descriptor_classes, gem_warnings(child.stderr)])
+      .to(eq([expected_default_report, true, announcement, 0, expected_descriptor_classes, []]))
   end
 
   it 'keeps a 1 kB report within 1000 bytes and closes it with the truncation notice' do
@@ -306,10 +257,11 @@ RSpec.describe EndToEnd do
     report = child.report.to_s
     omitted_deficits = omitted_count(report, default_deficit_blocks)
     omitted_bypasses = omitted_count(report, bypass_blocks)
-    expect([report.bytesize <= 1000, report.lines.last(2).join]).to eq([true, <<~MARKDOWN])
-      > **[WARNING] TRUNCATION NOTIFICATION:**
-      > The report reached the maximum token constraint (1 kB) and was truncated: #{omitted_deficits} deficit file(s) and #{omitted_bypasses} bypass file(s) omitted or cut short. Lowest-coverage files are listed first; resolve the deficits above to reveal the remaining ones in subsequent test runs.
-    MARKDOWN
+    notice = "> **[WARNING] TRUNCATION NOTIFICATION:**\n> The report reached the maximum token constraint (1 kB) " \
+      "and was truncated: #{omitted_deficits} deficit file(s) and #{omitted_bypasses} bypass file(s) omitted or " \
+      'cut short. Lowest-coverage files are listed first; resolve the deficits above to reveal the remaining ones ' \
+      "in subsequent test runs.\n"
+    expect([report.bytesize <= 1000, report.lines.last(2).join]).to(eq([true, notice]))
   end
 
   # Method coverage needs SimpleCov >= 1.0 on an engine that records it.
@@ -317,7 +269,7 @@ RSpec.describe EndToEnd do
     it 'reports the method line and every never-invoked method with method coverage on (SimpleCov >= 1.0)' do
       child = described_class.run(project_dir, 'SCAI_E2E_METHODS' => '1')
       expect([normalise(child.report), child.stdout, child.status.exitstatus, gem_warnings(child.stderr)])
-        .to eq([expected_method_report, announcement, 0, []])
+        .to(eq([expected_method_report, announcement, 0, []]))
     end
   end
 end

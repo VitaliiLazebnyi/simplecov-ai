@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -7,22 +8,26 @@ module SimpleCov
       class MarkdownBuilder
         # Groups missed lines, branches and methods into DeficitGroup objects based on AST
         # semantic boundaries. Every deficit inside the file lands on its innermost enclosing
-        # node (the resolver's root scope at worst); only a deficit no node spans — reported by
-        # SimpleCov for a file that vanished or shrank after coverage was recorded — falls back
+        # node (the resolver's root scope at worst); only a deficit no node spans - reported by
+        # SimpleCov for a file that vanished or shrank after coverage was recorded - falls back
         # to a positional label.
         class DeficitGrouper
           extend T::Sig
 
           # The groups by their key, in the order they were created.
           Groups = T.type_alias { T::Hash[String, DeficitGroup] }
+          private_constant(:Groups)
           # The sort key of every group, by group key.
           SortKeys = T.type_alias { T::Hash[String, [Integer, Integer]] }
+          private_constant(:SortKeys)
 
           # Positional label for a single-line deficit no resolved node spans; a missed line and
           # a single-line branch at the same line share it.
           FALLBACK_LINE_NAME = 'Line %d'
+          private_constant(:FALLBACK_LINE_NAME)
           # Positional label for a multi-line deficit no resolved node spans.
           FALLBACK_RANGE_NAME = 'Lines %d-%d'
+          private_constant(:FALLBACK_RANGE_NAME)
 
           # Groups every deficit of the file under its innermost node.
           #
@@ -31,8 +36,11 @@ module SimpleCov
           # @param method_deficits [Array<MethodDeficit>] The file's never-invoked methods.
           # @return [Hash{String => DeficitGroup}] Groups keyed by node identity, in source order.
           sig do
-            params(file: SimpleCov::SourceFile, nodes: T::Array[ASTResolver::SemanticNode],
-                   method_deficits: T::Array[MethodDeficit]).returns(T::Hash[String, DeficitGroup])
+            params(
+              file: SimpleCov::SourceFile,
+              nodes: T::Array[ASTResolver::SemanticNode],
+              method_deficits: T::Array[MethodDeficit]
+            ).returns(T::Hash[String, DeficitGroup])
           end
           def self.build(file, nodes, method_deficits)
             grouper = new(nodes)
@@ -78,19 +86,32 @@ module SimpleCov
           # lands on the innermost node covering it.
           sig { returns(T::Hash[String, DeficitGroup]) }
           def sort_deficits
-            @node_deficits.sort_by { |group_key, _group| @sort_keys.fetch(group_key) }.to_h
+            @node_deficits.sort_by { |group_key, _group| @sort_keys.fetch(group_key) }
+              .to_h
           end
 
+          # Files every missed line under the node it belongs to.
+          #
+          # @param file [SimpleCov::SourceFile] The file being grouped.
+          # @return [void]
           sig { params(file: SimpleCov::SourceFile).void }
           def group_missed_lines(file)
             file.missed_lines.each { |line| group_for(LineSpan.line(line.line_number)).lines << line }
           end
 
+          # Files every missed branch under the node it belongs to.
+          #
+          # @param file [SimpleCov::SourceFile] The file being grouped.
+          # @return [void]
           sig { params(file: SimpleCov::SourceFile).void }
           def group_missed_branches(file)
             file.missed_branches.each { |branch| group_for(LineSpan.of(branch)).branches << branch }
           end
 
+          # Files every never-invoked method under the node it belongs to.
+          #
+          # @param method_deficits [Array<MethodDeficit>] The file's method deficits.
+          # @return [void]
           sig { params(method_deficits: T::Array[MethodDeficit]).void }
           def group_missed_methods(method_deficits)
             method_deficits.each do |method_deficit|
@@ -102,7 +123,7 @@ module SimpleCov
 
           # Finds or creates the group of the deficit spanning `range`: the group of the innermost
           # node covering it (nodes are in pre-order, so that is the last one), keyed by name
-          # plus start line so two same-named methods redefined in one file do not merge — the
+          # plus start line so two same-named methods redefined in one file do not merge - the
           # key's suffix never reaches the report. A range no node covers gets a node-less group
           # keyed by its positional label, which doubles as the display name.
           sig { params(range: T::Range[Integer]).returns(DeficitGroup) }
@@ -110,8 +131,12 @@ module SimpleCov
             node = innermost_node(range)
             group_key = DeficitGrouper.group_key(node, range)
             @sort_keys[group_key] ||= LineSpan.sort_key(node ? node.line_range : range)
-            @node_deficits[group_key] ||= DeficitGroup.new(semantic_node: node, lines: [], branches: [],
-                                                           method_deficits: [])
+            @node_deficits[group_key] ||= DeficitGroup.new(
+              semantic_node: node,
+              lines: [],
+              branches: [],
+              method_deficits: []
+            )
           end
 
           # Nodes are in pre-order, so the last node covering a range is the innermost one.

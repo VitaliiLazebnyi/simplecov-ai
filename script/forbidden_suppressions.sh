@@ -16,9 +16,9 @@ status=0
 check() {
   local description=$1 pattern=$2 scope=${3:-.}
   local hits
-  hits=$(printf '%s\n' "$files" | grep -E "^${scope}" | xargs -r grep -nEH -e "$pattern" -- || true)
-  if [ -n "$hits" ]; then
-    printf 'Forbidden (%s):\n%s\n\n' "$description" "$hits"
+  hits=$(printf '%s\n' "${files}" | grep -E "^${scope}" | xargs -r grep -nEH -e "${pattern}" -- || true)
+  if [[ -n "${hits}" ]]; then
+    printf 'Forbidden (%s):\n%s\n\n' "${description}" "${hits}"
     status=1
   fi
 }
@@ -40,13 +40,17 @@ check 'zizmor ignore' 'zizmor: ?ignore'
 check 'shellcheck disable' 'shellcheck +disable'
 check 'typos ignore' 'typos: ?(ignore|off)|spellchecker: ?disable'
 check 'markdownlint directive' 'markdownlint-(disable|capture|configure-file)'
+check 'yamllint directive' 'yamllint (disable|enable)'
+check 'editorconfig-checker directive' 'editorconfig-checker-(disable|enable)'
 check 'Semgrep suppression' 'nosemgrep'
 check 'LGTM/CodeQL suppression' 'lgtm\[|codeql\[|codeql-disable|lgtm: ?ignore'
 check 'nosec' 'nosec'
-check 'warning silencing' '[$]VERBOSE *= *(nil|false)|Warning\.ignore|Warning\[[^]]*\] *= *false|silence_warnings|[$]stderr *= *File::NULL|-W0'
-check 'skipped or focused test' '^[[:space:]]*([xf](it|specify|example|describe|context)|skip|pending)([[:space:]]|\(|$)|focus: *true|, *:focus|, *(skip|pending): ' 'spec/'
+check 'warning silencing' \
+  '[$]VERBOSE *= *(nil|false)|Warning\.ignore|Warning\[[^]]*\] *= *false|silence_warnings|[$]stderr *= *File::NULL|-W0'
+skipped_test='^[[:space:]]*([xf](it|specify|example|describe|context)|skip|pending)([[:space:]]|\(|$)'
+check 'skipped or focused test' "${skipped_test}|focus: *true|, *:focus|, *(skip|pending): " 'spec/'
 check 'Sorbet escape hatch' 'T\.(unsafe|cast|bind|must|untyped)\b|T::Utils\.run_all_sig_blocks|T::Configuration' 'lib/'
 check 'Sorbet sigil below strict' 'typed: *(ignore|false|true)\b' 'lib/'
 check 'CI step allowed to fail' 'continue-on-error: *true' '.github/'
 
-exit "$status"
+exit "${status}"

@@ -1,0 +1,5 @@
+# ShellCheck (CI, script/check): every optional check is enabled, and no check is switched off
+# inline (script/forbidden_suppressions.sh). Sourced files are followed, relative to the script.
+enable=all
+external-sources=true
+source-path=SCRIPTDIR

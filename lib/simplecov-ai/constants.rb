@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -11,6 +12,7 @@ module SimpleCov
 
         # The explicit value used to designate a file or coverage block as perfectly covered.
         PERFECT_COVERAGE_PERCENT = 100.0
+        public_constant(:PERFECT_COVERAGE_PERCENT)
       end
     end
   end

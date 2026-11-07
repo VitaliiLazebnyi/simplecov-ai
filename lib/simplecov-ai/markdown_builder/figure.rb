@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -13,15 +14,20 @@ module SimpleCov
           # Line-coverage label shown when line coverage was not enabled for the run (SimpleCov
           # >= 1.0 allows a branch- or method-only run)
           LINE_DISABLED_LABEL = 'N/A (line coverage not enabled)'
+          public_constant(:LINE_DISABLED_LABEL)
           # Branch-coverage label shown when branch coverage was not enabled for the run
           BRANCH_DISABLED_LABEL = 'N/A (branch coverage not enabled)'
+          public_constant(:BRANCH_DISABLED_LABEL)
           # Label shown for a figure SimpleCov could not compute from a corrupt resultset
           UNDECODABLE_LABEL = 'N/A (coverage data could not be decoded)'
+          public_constant(:UNDECODABLE_LABEL)
           # Stands in for a figure SimpleCov raised on while decoding: not a number, so it never
           # compares as perfect and the status reads FAILED (typed as any figure's percentage)
           UNDECODABLE_PERCENT = T.let(Float::NAN, T.nilable(Float))
+          private_constant(:UNDECODABLE_PERCENT)
           # Percentages are printed with one decimal, floored (see #label)
           PERCENT_TEMPLATE = '%.1f%%'
+          private_constant(:PERCENT_TEMPLATE)
 
           # Reads a percentage through the decode guard: SimpleCov computes its statistics for
           # every criterion at once, so one corrupt branch descriptor makes every figure
@@ -40,7 +46,7 @@ module SimpleCov
           #   when the criterion is not measured.
           sig { params(covered: T.nilable(Integer), total: T.nilable(Integer)).returns(T.nilable(Float)) }
           def self.ratio(covered, total)
-            return nil unless covered && total
+            return unless covered && total
             return Constants::PERFECT_COVERAGE_PERCENT if total.zero?
 
             covered.fdiv(total) * Constants::PERFECT_COVERAGE_PERCENT
@@ -67,7 +73,7 @@ module SimpleCov
           sig { returns(T.nilable(String)) }
           def label
             percent = @percent
-            return nil unless percent
+            return unless percent
 
             percent.nan? ? UNDECODABLE_LABEL : format(PERCENT_TEMPLATE, percent.floor(1))
           end

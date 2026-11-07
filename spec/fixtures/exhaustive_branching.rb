@@ -1,10 +1,10 @@
 # typed: false
 # frozen_string_literal: true
 
-# This file is a test fixture containing intentional branch deficits
-# and edge cases for the coverage formatter. Applying standard linting rules alters
-# the AST and destroys the specific branch coverage scenarios we are testing.
-# Justification: Intentional branch deficits for AST test
+# Copyright (c) 2026 Vitalii Lazebnyi
+# Test fixture with intentional branch deficits and edge cases for the coverage formatter.
+# Applying standard linting rules alters the AST and destroys the specific branch coverage
+# scenarios under test. Justification: intentional branch deficits for AST tests.
 
 module ExhaustiveBranching
   extend T::Sig
@@ -124,14 +124,14 @@ module ExhaustiveBranching
 
   sig { returns(Object) }
   def self.test_inline_rescue
-    raise 'error'
+    raise(StandardError, 'error')
   rescue StandardError
     :rescued
   end
 
   sig { params(raise_err: Object).returns(Object) }
   def self.test_begin_rescue(raise_err)
-    raise 'error' if raise_err
+    raise(StandardError, 'error') if raise_err
 
     :success
   rescue StandardError

@@ -1,3 +1,4 @@
+---
 gem:
   # `rake typecheck` runs `srb tc --typed strong`, which raises every `# typed: true` file to
   # strong and would then demand a `sig` on each reflected gem method. Generated gem RBIs are

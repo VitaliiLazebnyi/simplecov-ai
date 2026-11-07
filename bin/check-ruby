@@ -8,6 +8,7 @@
 #   bin/check-ruby jruby:9.4                             # any image reference works
 #   BUNDLE_GEMFILE=gemfiles/simplecov_0.22.gemfile bin/check-ruby 3.4
 #
+# Every command runs with all Ruby warnings on (script/rubyopt.rb), as in CI.
 # CHECK_RUBY_SETUP runs inside the container before `bundle install`; the official jruby images
 # ship no C compiler, which prism (a development dependency) needs to build:
 #   CHECK_RUBY_SETUP='apt-get update -qq && apt-get install -y -qq build-essential' bin/check-ruby jruby:9.4
@@ -15,18 +16,19 @@ set -euo pipefail
 
 ruby=${1:?usage: bin/check-ruby <ruby-version|image> [command]}
 command=${2:-bundle exec rspec}
-case "$ruby" in
-  *:* | */*) image=$ruby ;;
-  *) image="ruby:$ruby" ;;
+case "${ruby}" in
+*:* | */*) image=${ruby} ;;
+*) image="ruby:${ruby}" ;;
 esac
 
 cd "$(dirname "$0")/.."
-COPYFILE_DISABLE=1 tar --no-xattrs --exclude=./.git --exclude=./.claude --exclude=./coverage --exclude=./vendor --exclude=./doc \
-    --exclude=./.yardoc --exclude=./tmp --exclude=./node_modules --exclude=./.bundle -cf - . \
-  | docker run --rm -i -e CI=true -e "BUNDLE_GEMFILE=${BUNDLE_GEMFILE:-}" "$image" bash -c "
+COPYFILE_DISABLE=1 tar --no-xattrs --exclude=./.git --exclude=./.claude --exclude=./coverage --exclude=./vendor \
+  --exclude=./doc --exclude=./.yardoc --exclude=./tmp --exclude=./node_modules --exclude=./.bundle -cf - . |
+  docker run --rm -i -e CI=true -e "BUNDLE_GEMFILE=${BUNDLE_GEMFILE:-}" "${image}" bash -c "
       set -euo pipefail
       mkdir -p /app && tar -xf - -C /app && cd /app
       rm -f Gemfile.lock gemfiles/*.lock
       ${CHECK_RUBY_SETUP:-true}
       bundle install --quiet
-      $command"
+      export RUBYOPT=\"\$(ruby script/rubyopt.rb)\"
+      ${command}"

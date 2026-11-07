@@ -1,16 +1,17 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
-require 'sorbet-runtime'
-require 'simplecov'
 require 'fileutils'
 require 'pathname'
+require 'simplecov'
+require 'sorbet-runtime'
 
-require_relative 'simplecov-ai/constants'
-require_relative 'simplecov-ai/version'
-require_relative 'simplecov-ai/configuration'
 require_relative 'simplecov-ai/ast_resolver'
+require_relative 'simplecov-ai/configuration'
+require_relative 'simplecov-ai/constants'
 require_relative 'simplecov-ai/markdown_builder'
+require_relative 'simplecov-ai/version'
 
 # The root namespace for the simplecov test coverage library.
 module SimpleCov
@@ -25,8 +26,10 @@ module SimpleCov
 
       # STDOUT notice printed after the report is written, unless the digest itself is echoed
       WRITTEN_MESSAGE = 'AI coverage digest written to %s'
+      private_constant(:WRITTEN_MESSAGE)
       # STDERR notice printed when the report cannot be written, naming the path and the error
       WRITE_FAILED_MESSAGE = 'AI coverage digest could not be written to %s (%s)'
+      private_constant(:WRITE_FAILED_MESSAGE)
 
       @configuration = T.let(nil, T.nilable(Configuration))
 
@@ -88,14 +91,14 @@ module SimpleCov
         path = config.report_destination
         written = write_report(path, digest)
         if config.output_to_console
-          puts digest
+          puts(digest)
         elsif written
-          puts Kernel.format(WRITTEN_MESSAGE, path)
+          puts(Kernel.format(WRITTEN_MESSAGE, path))
         end
       end
 
-      # Creates the report's directory and writes the digest. A filesystem error — a parent
-      # path that is a regular file, a read-only or full disk, a permission denial — is reported
+      # Creates the report's directory and writes the digest. A filesystem error - a parent
+      # path that is a regular file, a read-only or full disk, a permission denial - is reported
       # on STDERR with {WRITE_FAILED_MESSAGE} instead: SimpleCov runs its formatters from an
       # at_exit hook, where an exception would turn a passing test run into a failed one, so
       # nothing is raised.
@@ -109,7 +112,7 @@ module SimpleCov
         FileUtils.mkdir_p(File.dirname(path))
         File.write(path, digest)
       rescue SystemCallError, IOError => error
-        warn Kernel.format(WRITE_FAILED_MESSAGE, path, error)
+        warn(Kernel.format(WRITE_FAILED_MESSAGE, path, error))
       end
     end
   end

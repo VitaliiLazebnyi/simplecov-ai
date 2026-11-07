@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: strong
 # frozen_string_literal: true
 
@@ -13,18 +14,22 @@ module SimpleCov
 
           # Text representation for a passed coverage check
           STATUS_PASSED = 'PASSED'
+          private_constant(:STATUS_PASSED)
           # Text representation for a failed coverage check
           STATUS_FAILED = 'FAILED'
+          private_constant(:STATUS_FAILED)
           # Template for the report header; the method line is empty unless SimpleCov measured
           # method coverage, keeping the header byte-identical for every other run.
           TEMPLATE = "# AI Coverage Digest\n" \
-                     "**Status:** %<status>s\n" \
-                     "**Global Line Coverage:** %<line>s\n" \
-                     "**Global Branch Coverage:** %<branch>s\n" \
-                     '%<method_line>s' \
-                     "**Generated At:** %<time>s (Local Timezone)\n"
+            "**Status:** %<status>s\n" \
+            "**Global Line Coverage:** %<line>s\n" \
+            "**Global Branch Coverage:** %<branch>s\n" \
+            '%<method_line>s' \
+            "**Generated At:** %<time>s (Local Timezone)\n"
+          private_constant(:TEMPLATE)
           # Header line for SimpleCov >= 1.0 method coverage (`enable_coverage :method`)
           METHOD_COVERAGE_LINE = "**Global Method Coverage:** %<figure>s\n"
+          private_constant(:METHOD_COVERAGE_LINE)
 
           # @param coverage_metrics [SimpleCov::Result] The result the figures are read from.
           sig { params(coverage_metrics: SimpleCov::Result).void }
@@ -35,18 +40,27 @@ module SimpleCov
           # @return [String] The header, ending in a newline.
           sig { returns(String) }
           def render
-            line = line_figure
-            branch = branch_figure
-            method = method_figure
-            format(TEMPLATE,
-                   status: [line, branch, method].all?(&:passing?) ? STATUS_PASSED : STATUS_FAILED,
-                   line: line.label || Figure::LINE_DISABLED_LABEL,
-                   branch: branch.label || Figure::BRANCH_DISABLED_LABEL,
-                   method_line: method.line(METHOD_COVERAGE_LINE),
-                   time: Time.now.iso8601)
+            format(TEMPLATE, **figure_fields, time: Time.now.iso8601)
           end
 
           private
+
+          # The template fields read from the coverage figures.
+          #
+          # @return [Hash{Symbol => String}] The status, the line and branch labels and the
+          #   method line.
+          sig { returns(T::Hash[Symbol, String]) }
+          def figure_fields
+            line = line_figure
+            branch = branch_figure
+            method = method_figure
+            {
+              status: [line, branch, method].all?(&:passing?) ? STATUS_PASSED : STATUS_FAILED,
+              line: line.label || Figure::LINE_DISABLED_LABEL,
+              branch: branch.label || Figure::BRANCH_DISABLED_LABEL,
+              method_line: method.line(METHOD_COVERAGE_LINE)
+            }
+          end
 
           sig { returns(Figure) }
           def line_figure

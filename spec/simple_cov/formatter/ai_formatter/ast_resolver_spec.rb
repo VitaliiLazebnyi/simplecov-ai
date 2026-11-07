@@ -1,12 +1,14 @@
+# Copyright (c) 2026 Vitalii Lazebnyi
 # typed: false
 # frozen_string_literal: true
 
 require 'spec_helper'
-require 'tmpdir'
-require 'fileutils'
 
-RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
-  let(:tmpdir) { Dir.mktmpdir }
+require 'fileutils'
+require 'tmpdir'
+
+RSpec.describe(SimpleCov::Formatter::AIFormatter::ASTResolver) do
+  let(:tmpdir)       { Dir.mktmpdir }
   let(:fixture_path) { File.expand_path('../../../fixtures/resolver_constructs.rb', __dir__) }
 
   after { FileUtils.remove_entry(tmpdir) }
@@ -60,8 +62,31 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
   end
 
   describe '.resolve' do
+    let(:host_inner_row) { ['Host#inner', 'Instance Method', 3, 4] }
+    let(:host_rows)      { [['main', 'Root Script Scope', 1, 6], ['Host', 'Class', 1, 6]] }
+
     context 'with the resolver fixture' do
       let(:nodes) { described_class.resolve(fixture_path) }
+      let(:expected_method_names) do
+        %w[
+          version
+          helper
+          distance
+          literal_symbol
+          braced
+          numbered
+          build
+          singleton_scoped
+          relay
+          assist
+          make
+          opaque
+          initialize
+          install
+          lookup
+          registered
+        ]
+      end
       let(:expected_table) do
         [
           ['main', 'Root Script Scope', 1, 114],
@@ -92,23 +117,23 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
       end
 
       it 'derives the exact node table in source order, root scope first' do
-        expect(node_table(nodes)).to eq(expected_table)
+        expect(node_table(nodes)).to(eq(expected_table))
       end
 
       it 'types only the first node as the root scope' do
         root_flags = nodes.map { |node| node.type == described_class::SemanticNode::ROOT_TYPE }
-        expect(root_flags).to eq([true] + Array.new(nodes.size - 1, false))
+        expect(root_flags).to(eq([true] + Array.new(nodes.size - 1, false)))
       end
 
       it 'gives exactly the instance and singleton methods their bare method name' do
-        expect(nodes.map(&:method_name)).to eq([nil, nil, 'version', nil, 'helper', nil, 'distance', nil, nil,
-                                                'literal_symbol', 'braced', 'numbered', 'build', 'singleton_scoped',
-                                                nil, 'relay', nil, 'assist', 'make', 'opaque', 'initialize',
-                                                'install', 'lookup', 'registered'])
+        method_nodes = nodes.select { |node| node.type.end_with?('Method') }
+        expect([nodes.filter_map(&:method_name), method_nodes.map(&:method_name)]).to(
+          eq([expected_method_names, expected_method_names])
+        )
       end
 
       it 'exposes each node\'s lines as an inclusive range' do
-        expect(nodes[2].line_range).to eq(19..21)
+        expect(nodes[2].line_range).to(eq(19..21))
       end
     end
 
@@ -118,90 +143,140 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
       latin1_path = File.join(tmpdir, 'latin1.rb')
       File.binwrite(latin1_path, "# Latin-1 \xe9\n".b)
       encodings = [described_class.read_source(utf8_path).encoding, described_class.read_source(latin1_path).encoding]
-      expect(encodings).to eq([Encoding::UTF_8, Encoding::BINARY])
+      expect(encodings).to(eq([Encoding::UTF_8, Encoding::BINARY]))
     end
 
     it 'returns an empty array for a missing file' do
-      expect(described_class.resolve(File.join(tmpdir, 'missing.rb'))).to eq([])
+      expect(described_class.resolve(File.join(tmpdir, 'missing.rb'))).to(eq([]))
     end
 
     it 'returns only a root scope spanning line 1 for an empty file' do
-      expect(node_table(resolve(''))).to eq([['main', 'Root Script Scope', 1, 1]])
+      expect(node_table(resolve(''))).to(eq([['main', 'Root Script Scope', 1, 1]]))
     end
 
     it 'spans every line of a comment-only file with the root scope' do
-      expect(node_table(resolve("# one\n# two\n"))).to eq([['main', 'Root Script Scope', 1, 2]])
+      expect(node_table(resolve("# one\n# two\n"))).to(eq([['main', 'Root Script Scope', 1, 2]]))
     end
 
     it 'counts a final line that lacks a trailing newline' do
-      expect(node_table(resolve("def solo\nend"))).to eq([['main', 'Root Script Scope', 1, 2],
-                                                          ['Object#solo', 'Instance Method', 1, 2]])
+      expect(node_table(resolve("def solo\nend"))).to(
+        eq(
+          [
+            ['main', 'Root Script Scope', 1, 2],
+            ['Object#solo', 'Instance Method', 1, 2]
+          ]
+        )
+      )
     end
 
     it 'names a define_method block by its string literal name' do
       nodes = resolve("class Named\n  define_method('by_string') { 1 }\nend\n")
-      expect(node_table(nodes)).to eq([['main', 'Root Script Scope', 1, 3], ['Named', 'Class', 1, 3],
-                                       ['Named#by_string', 'Instance Method', 2, 2]])
+      expect(node_table(nodes)).to(
+        eq(
+          [
+            ['main', 'Root Script Scope', 1, 3],
+            ['Named', 'Class', 1, 3],
+            ['Named#by_string', 'Instance Method', 2, 2]
+          ]
+        )
+      )
     end
 
     it 'treats define_method with an explicit self receiver like the receiverless form' do
       nodes = resolve("class Named\n  self.define_method(:explicit) do\n    1\n  end\nend\n")
-      expect(node_table(nodes)).to eq([['main', 'Root Script Scope', 1, 5], ['Named', 'Class', 1, 5],
-                                       ['Named#explicit', 'Instance Method', 2, 4]])
+      expect(node_table(nodes)).to(
+        eq(
+          [
+            ['main', 'Root Script Scope', 1, 5],
+            ['Named', 'Class', 1, 5],
+            ['Named#explicit', 'Instance Method', 2, 4]
+          ]
+        )
+      )
     end
 
     it 'leaves a block-less define_method call transparent' do
       nodes = resolve("class Named\n  define_method(:alias_like, instance_method(:other))\nend\n")
-      expect(node_table(nodes)).to eq([['main', 'Root Script Scope', 1, 3], ['Named', 'Class', 1, 3]])
+      expect(node_table(nodes)).to(eq([['main', 'Root Script Scope', 1, 3], ['Named', 'Class', 1, 3]]))
     end
 
     it 'recognizes a builder block written with the it parameter' do
       # Ruby 3.4 `it` blocks; older grammars parse the same source as an ordinary block.
       nodes = resolve("Q2 = Struct.new(:a) { it }\n")
-      expect(node_table(nodes)).to eq([['main', 'Root Script Scope', 1, 1], ['Q2', 'Struct', 1, 1]])
+      expect(node_table(nodes)).to(eq([['main', 'Root Script Scope', 1, 1], ['Q2', 'Struct', 1, 1]]))
     end
 
     it 'accepts string literals whose escapes are invalid in UTF-8, as MRI does' do
       nodes = resolve("class Bytes\n  def mask\n    \"\\xf0-\\xff\"\n  end\nend\n")
-      expect(node_table(nodes)).to eq([['main', 'Root Script Scope', 1, 5], ['Bytes', 'Class', 1, 5],
-                                       ['Bytes#mask', 'Instance Method', 2, 4]])
+      expect(node_table(nodes)).to(
+        eq(
+          [
+            ['main', 'Root Script Scope', 1, 5],
+            ['Bytes', 'Class', 1, 5],
+            ['Bytes#mask', 'Instance Method', 2, 4]
+          ]
+        )
+      )
     end
 
     it 'honours an encoding magic comment for a non-UTF-8 source' do
       nodes = resolve("# encoding: Shift_JIS\nclass Kana\n  def read\n    '\x82\xa0'\n  end\nend\n".b)
-      expect(node_table(nodes)).to eq([['main', 'Root Script Scope', 1, 6], ['Kana', 'Class', 2, 6],
-                                       ['Kana#read', 'Instance Method', 3, 5]])
+      expect(node_table(nodes)).to(
+        eq(
+          [
+            ['main', 'Root Script Scope', 1, 6],
+            ['Kana', 'Class', 2, 6],
+            ['Kana#read', 'Instance Method', 3, 5]
+          ]
+        )
+      )
     end
 
     it 'keeps the structure of a file whose comments contain stray non-UTF-8 bytes' do
       nodes = resolve("# Latin-1 \xe9\nclass Latin\n  def read\n    1\n  end\nend\n".b)
-      expect(node_table(nodes)).to eq([['main', 'Root Script Scope', 1, 6], ['Latin', 'Class', 2, 6],
-                                       ['Latin#read', 'Instance Method', 3, 5]])
+      expect(node_table(nodes)).to(
+        eq(
+          [
+            ['main', 'Root Script Scope', 1, 6],
+            ['Latin', 'Class', 2, 6],
+            ['Latin#read', 'Instance Method', 3, 5]
+          ]
+        )
+      )
     end
 
     it 'raises Parser::SyntaxError for invalid Ruby, naming the file in the diagnostic' do
       error = syntax_error_for("class Broken\nend def =")
       expect([error.class, error.diagnostic.location.source_buffer.name])
-        .to eq([Parser::SyntaxError, File.join(tmpdir, 'sample.rb')])
+        .to(eq([Parser::SyntaxError, File.join(tmpdir, 'sample.rb')]))
     end
 
     it 'leaves a block on a call that defines no method transparent even when its argument is a literal' do
       nodes = resolve("class Named\n  register(:hook) do\n    def inner\n    end\n  end\nend\n")
-      expect(node_table(nodes)).to eq([['main', 'Root Script Scope', 1, 6], ['Named', 'Class', 1, 6],
-                                       ['Named#inner', 'Instance Method', 3, 4]])
+      expect(node_table(nodes)).to(
+        eq(
+          [
+            ['main', 'Root Script Scope', 1, 6],
+            ['Named', 'Class', 1, 6],
+            ['Named#inner', 'Instance Method', 3, 4]
+          ]
+        )
+      )
     end
 
     it 'does not mistake a method named like a builder for one' do
       nodes = resolve("Shape = factory.Struct.new(:x) do\n  def area\n  end\nend\n")
-      expect(node_table(nodes)).to eq([['main', 'Root Script Scope', 1, 4], ['Object#area', 'Instance Method', 2, 3]])
+      expect(node_table(nodes)).to(eq([['main', 'Root Script Scope', 1, 4], ['Object#area', 'Instance Method', 2, 3]]))
     end
 
     it 'prints no diagnostic to STDERR for invalid Ruby' do
-      expect { resolve_quietly("class Broken\nend def =") }.not_to output.to_stderr
+      expect { resolve_quietly("class Broken\nend def =") }
+        .not_to(output.to_stderr)
     end
 
     it 'prints no warning to STDERR for code the grammar merely warns about' do
-      expect { resolve("def ambiguous\n  puts -1\nend\n") }.not_to output.to_stderr
+      expect { resolve("def ambiguous\n  puts -1\nend\n") }
+        .not_to(output.to_stderr)
     end
 
     context 'when resolving modules, methods and singleton classes' do
@@ -222,11 +297,9 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
       end
 
       it 'lists the root scope, module, class and methods in source order with their types' do
-        expect(nodes.map { |node| [node.name, node.type] }).to eq(
-          [['main', 'Root Script Scope'], ['Analytics', 'Module'], ['Analytics::Event', 'Class'],
-           ['Analytics::Event#tracked', 'Instance Method'],
-           ['Analytics::Event.singleton_tracked', 'Singleton Method']]
-        )
+        names = %w[main Analytics Analytics::Event Analytics::Event#tracked Analytics::Event.singleton_tracked]
+        types = ['Root Script Scope', 'Module', 'Class', 'Instance Method', 'Singleton Method']
+        expect([nodes.map(&:name), nodes.map(&:type)]).to(eq([names, types]))
       end
     end
 
@@ -234,39 +307,34 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::ASTResolver do
     # at that point: the lexical class, or its singleton class inside `class << self`.
     it 'attributes a def nested in an instance method body to the class as an instance method' do
       nodes = resolve("class Host\n  def outer\n    def inner\n    end\n  end\nend\n")
-      expect(node_table(nodes)).to eq([['main', 'Root Script Scope', 1, 6], ['Host', 'Class', 1, 6],
-                                       ['Host#outer', 'Instance Method', 2, 5],
-                                       ['Host#inner', 'Instance Method', 3, 4]])
+      expect(node_table(nodes)).to(eq([*host_rows, ['Host#outer', 'Instance Method', 2, 5], host_inner_row]))
     end
 
     it 'attributes a def nested in a `def self.` body to the class as an instance method' do
       nodes = resolve("class Host\n  def self.outer\n    def inner\n    end\n  end\nend\n")
-      expect(node_table(nodes)).to eq([['main', 'Root Script Scope', 1, 6], ['Host', 'Class', 1, 6],
-                                       ['Host.outer', 'Singleton Method', 2, 5],
-                                       ['Host#inner', 'Instance Method', 3, 4]])
+      expect(node_table(nodes)).to(eq([*host_rows, ['Host.outer', 'Singleton Method', 2, 5], host_inner_row]))
     end
 
     it 'attributes defs nested in `class << self` method bodies to the singleton class' do
       expect(resolve(singleton_scoped_source).map(&:name))
-        .to eq(['main', 'Host', 'Host.outer', 'Host.inner', 'Host.meta', 'Host.inner_meta', 'Host.dynamic',
-                'Host.inner_dynamic'])
+        .to(eq(%w[main Host Host.outer Host.inner Host.meta Host.inner_meta Host.dynamic Host.inner_dynamic]))
     end
 
     it 'preserves the full namespace of a compact class definition' do
       nodes = resolve("class Outer::Inner\n  def probe\n  end\nend\n")
-      expect(nodes.map(&:name)).to eq(['main', 'Outer::Inner', 'Outer::Inner#probe'])
+      expect(nodes.map(&:name)).to(eq(['main', 'Outer::Inner', 'Outer::Inner#probe']))
     end
 
     # Ruby defines a top-level `def` as a private instance method of Object (the owner SimpleCov's
     # method coverage reports) and a top-level `def self.` as a singleton method of `main`.
     it 'names top-level methods after their owners: Object for a def, main for a singleton definition' do
       nodes = resolve("def root_method\nend\n\ndef self.root_class_method\nend\n")
-      expect(nodes.map(&:name)).to eq(['main', 'Object#root_method', 'main.root_class_method'])
+      expect(nodes.map(&:name)).to(eq(['main', 'Object#root_method', 'main.root_class_method']))
     end
 
     it 'names the methods of a top-level `class << self` as singleton methods of main' do
       nodes = resolve("class << self\n  def hook\n  end\nend\ndefine_singleton_method(:dynamic) { 1 }\n")
-      expect(nodes.map(&:name)).to eq(['main', 'main.hook', 'main.dynamic'])
+      expect(nodes.map(&:name)).to(eq(['main', 'main.hook', 'main.dynamic']))
     end
   end
 end
