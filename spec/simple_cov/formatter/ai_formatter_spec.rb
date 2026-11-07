@@ -84,7 +84,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
 
   def format_and_read(result)
     capture_stdout { formatter.format(result) }
-    File.read(report_path)
+    File.read(report_path, encoding: Encoding::UTF_8)
   end
 
   # Runs the block with both standard streams captured; returns what each received.
@@ -112,7 +112,7 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
   describe '#format' do
     it 'writes the digest to the configured path and announces the path on STDOUT' do
       announcement = capture_stdout { formatter.format(calc_result) }
-      expect([announcement, File.read(report_path)])
+      expect([announcement, File.read(report_path, encoding: Encoding::UTF_8)])
         .to eq(["AI coverage digest written to #{report_path}\n", expected_calc_digest])
     end
 
@@ -132,7 +132,8 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
     it 'echoes the whole digest instead of the announcement when output_to_console is on' do
       config.output_to_console = true
       printed = capture_stdout { formatter.format(calc_result) }
-      expect([printed, File.read(report_path)]).to eq([expected_calc_digest, expected_calc_digest])
+      expect([printed,
+              File.read(report_path, encoding: Encoding::UTF_8)]).to eq([expected_calc_digest, expected_calc_digest])
     end
 
     it 'summarises each node with coarse granularity' do
@@ -415,20 +416,21 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
       coverage_dir = File.join(tmpdir, 'custom_cov')
       allow(SimpleCov).to receive(:coverage_path).and_return(coverage_dir)
       format_refusing_relative_paths(calc_result)
-      expect(File.read(File.join(coverage_dir, 'ai_report.md'))).to eq(expected_calc_digest)
+      expect(File.read(File.join(coverage_dir, 'ai_report.md'), encoding: Encoding::UTF_8)).to eq(expected_calc_digest)
     end
 
     it 'resolves a relative report_path against SimpleCov.root' do
       config.report_path = 'reports/digest.md'
       format_refusing_relative_paths(calc_result)
-      expect(File.read(File.join(tmpdir, 'reports', 'digest.md'))).to eq(expected_calc_digest)
+      expect(File.read(File.join(tmpdir, 'reports', 'digest.md'),
+                       encoding: Encoding::UTF_8)).to eq(expected_calc_digest)
     end
 
     it 'uses an absolute report_path unchanged' do
       absolute = File.join(tmpdir, 'nested', 'abs_report.md')
       config.report_path = absolute
       format_refusing_relative_paths(calc_result)
-      expect(File.read(absolute)).to eq(expected_calc_digest)
+      expect(File.read(absolute, encoding: Encoding::UTF_8)).to eq(expected_calc_digest)
     end
   end
 
@@ -438,14 +440,15 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
       broken_path = write_source(tmpdir, 'broken.rb', source)
       coverage = { 'lines' => [1, nil, 1, nil, nil, 1, 0, nil] }
       capture_stdout { formatter.format(result_for(broken_path => coverage)) }
-      expect(File.read(report_path)).to eq(expected_header('FAILED', '66.6%', '100.0%') + <<~MARKDOWN)
-        ## Coverage Deficits
+      expect(File.read(report_path,
+                       encoding: Encoding::UTF_8)).to eq(expected_header('FAILED', '66.6%', '100.0%') + <<~MARKDOWN)
+                         ## Coverage Deficits
 
-        ### `broken.rb`
-          - **ERROR:** AST Parsing Failed. Showing raw line numbers instead.
-          - **Line Deficit:** [L7] `1 +`
+                         ### `broken.rb`
+                           - **ERROR:** AST Parsing Failed. Showing raw line numbers instead.
+                           - **Line Deficit:** [L7] `1 +`
 
-      MARKDOWN
+                       MARKDOWN
     end
   end
 end

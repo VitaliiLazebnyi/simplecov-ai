@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -15,20 +15,18 @@ module SimpleCov
           extend T::Sig
 
           # The number of bytes in a kilobyte (metric kB, matching the "kB" unit shown to users)
-          BYTES_PER_KB = T.let(1000, Integer)
+          BYTES_PER_KB = 1000
           # Alert heading for truncated reports
-          TRUNCATION_ALERT_HEADING = T.let("> **[WARNING] TRUNCATION NOTIFICATION:**\n", String)
+          TRUNCATION_ALERT_HEADING = "> **[WARNING] TRUNCATION NOTIFICATION:**\n"
           # Alert body for truncated reports, naming what the size budget left out
-          TRUNCATION_ALERT_BODY = T.let(
+          TRUNCATION_ALERT_BODY =
             '> The report reached the maximum token constraint (%<limit>d kB) and was truncated: ' \
             '%<deficit_files>d deficit file(s) and %<bypass_files>d bypass file(s) omitted or cut short. ' \
             'Lowest-coverage files are listed first; resolve the deficits above to reveal the remaining ' \
-            "ones in subsequent test runs.\n",
-            String
-          )
+            "ones in subsequent test runs.\n"
           # Bytes kept free, beyond the notice itself, for the blank-line separators the
           # sections write outside the admission check.
-          SEPARATOR_MARGIN = T.let(4, Integer)
+          SEPARATOR_MARGIN = 4
 
           # @param buffer [StringIO] The report being composed.
           # @param limit_kb [Integer] The configured ceiling for the whole file, in kB.
@@ -64,13 +62,16 @@ module SimpleCov
             @buffer.write(fragment)
           end
 
-          # Appends the truncation notice naming what the budget left out.
+          # Appends the truncation notice naming what the budget left out, when it left out
+          # anything; a report that fit carries no notice.
           #
           # @param omitted_deficit_files [Integer] Deficit files omitted or cut short.
           # @param omitted_bypass_files [Integer] Bypass files omitted or cut short.
           # @return [void]
           sig { params(omitted_deficit_files: Integer, omitted_bypass_files: Integer).void }
           def write_notice(omitted_deficit_files, omitted_bypass_files)
+            return if (omitted_deficit_files + omitted_bypass_files).zero?
+
             write(notice(omitted_deficit_files, omitted_bypass_files))
           end
 

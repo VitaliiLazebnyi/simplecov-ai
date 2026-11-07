@@ -14,11 +14,15 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
   let(:report_path) { File.join(tmpdir, 'report.md') }
   let(:base_seed) { Integer(ENV.fetch('FORMATTER_FUZZ_SEED', CoverageFuzzer::DEFAULT_SEED)) }
   # A parsable file with a branch, an unparsable one and one with a nocov region, so deficit
-  # rendering, the raw fallback and bypass auditing all run over the fuzzed data.
+  # rendering, the raw fallback and bypass auditing all run over the fuzzed data. Each is padded
+  # with blank lines to the longest fuzzed line array: a line array longer than its file is a
+  # resultset of a different file, which SimpleCov < 1.0 reports with a warning of its own.
   let(:paths) do
-    [write_source(tmpdir, 'plain.rb', "def plain(flag)\n  flag ? 1 : 2\nend\n"),
-     write_source(tmpdir, 'broken.rb', "class Broken\n  def half\n    1 +\n  end\n"),
-     write_source(tmpdir, 'skipped.rb', "#{nocov_marker}\nLIMIT = 1\n#{nocov_marker}\ndef kept\n  LIMIT\nend\n")]
+    { 'plain.rb' => "def plain(flag)\n  flag ? 1 : 2\nend\n",
+      'broken.rb' => "class Broken\n  def half\n    1 +\n  end\n",
+      'skipped.rb' => "#{nocov_marker}\nLIMIT = 1\n#{nocov_marker}\ndef kept\n  LIMIT\nend\n" }.map do |name, code|
+      write_source(tmpdir, name, code + ("\n" * (CoverageFuzzer::MAX_LINES - code.lines.size)))
+    end
   end
 
   before do

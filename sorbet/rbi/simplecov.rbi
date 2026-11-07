@@ -4,9 +4,8 @@
 # method but carries no signatures, and `srb tc --typed strong` rejects untyped intermediate
 # values, so the SimpleCov API the library consumes directly is given signatures here. Each
 # definition must keep the exact arity of its generated counterpart (delegated methods are
-# `(*args, **kwargs, &block)`), otherwise Sorbet reports a conflicting redefinition. Methods the
-# library narrows with `T.cast` at the call site (e.g. `SimpleCov.root`) are deliberately left
-# untyped so those casts stay meaningful. Members that only exist on simplecov >= 1.0 are noted;
+# `(*args, **kwargs, &block)`), otherwise Sorbet reports a conflicting redefinition. Members
+# that only exist on simplecov >= 1.0 are noted;
 # the library reaches them behind `respond_to?` / `defined?` guards and never names them in a
 # runtime-evaluated signature, so it still loads on simplecov < 1.0.
 module SimpleCov
@@ -15,6 +14,18 @@ module SimpleCov
     # SimpleCov's output directory (`root` joined with `coverage_dir`), created on demand.
     sig { params(path: T.nilable(String)).returns(String) }
     def coverage_path(path = nil); end
+
+    # The project root (an expanded path); every relative path SimpleCov reports is under it.
+    sig { params(root: T.nilable(String)).returns(String) }
+    def root(root = nil); end
+
+    # simplecov >= 1.0 only: the configured nocov token, without a deprecation warning.
+    sig { params(value: T.nilable(String)).returns(String) }
+    def current_nocov_token(value = nil); end
+
+    # The configured nocov token; deprecated (and warning) on simplecov >= 1.0.
+    sig { params(nocov_token: T.nilable(String)).returns(String) }
+    def nocov_token(nocov_token = nil); end
   end
 
   # SimpleCov::Result#files returns a FileList (an Enumerable wrapper), not a plain Array.
@@ -30,6 +41,13 @@ module SimpleCov
         .returns(T::Array[SimpleCov::SourceFile])
     end
     def select(&blk); end
+
+    sig do
+      type_parameters(:Result)
+        .params(blk: T.proc.params(file: SimpleCov::SourceFile).returns(T.nilable(T.type_parameter(:Result))))
+        .returns(T::Array[T.type_parameter(:Result)])
+    end
+    def filter_map(&blk); end
 
     sig do
       params(arg: T.untyped, arg1: T.untyped, arg2: T.proc.params(file: SimpleCov::SourceFile).void)

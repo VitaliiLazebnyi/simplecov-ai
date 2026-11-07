@@ -9,7 +9,7 @@
 #   BUNDLE_GEMFILE=gemfiles/simplecov_0.22.gemfile bin/check-ruby 3.4
 #
 # CHECK_RUBY_SETUP runs inside the container before `bundle install`; the official jruby images
-# ship no C compiler, which prism (pulled in through rubocop-ast) needs to build:
+# ship no C compiler, which prism (a development dependency) needs to build:
 #   CHECK_RUBY_SETUP='apt-get update -qq && apt-get install -y -qq build-essential' bin/check-ruby jruby:9.4
 set -euo pipefail
 

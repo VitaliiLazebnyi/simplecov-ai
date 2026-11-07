@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -17,7 +17,7 @@ module SimpleCov
                            T::Hash[String, Symbol])
           # Every AST node type that attaches a block to a call: `do … end` / `{ … }` blocks,
           # numbered-parameter blocks (`{ _1 }`) and Ruby 3.4 `it` blocks.
-          BLOCK_TYPES = T.let(%i[block numblock itblock].freeze, T::Array[Symbol])
+          BLOCK_TYPES = %i[block numblock itblock].freeze
 
           # @param node [Parser::AST::Node] A `:casgn` constant-assignment node.
           # @return [String, nil] The builder label ("Struct"/"Class"/"Module"/"Data"), or nil
@@ -25,13 +25,7 @@ module SimpleCov
           sig { params(node: Parser::AST::Node).returns(T.nilable(String)) }
           def self.builder_kind(node)
             send_node = builder_send(node)
-            return nil unless send_node
-
-            receiver = NodeChildren.node_at(send_node, 0)
-            return nil unless receiver && receiver.type == :const
-
-            kind = NodeChildren.symbol_at(receiver, 1).to_s
-            kind if BUILDERS[kind] == NodeChildren.symbol_at(send_node, 1)
+            send_node && constructor_kind(send_node)
           end
 
           # @param node [Parser::AST::Node] Any AST node.
@@ -63,7 +57,17 @@ module SimpleCov
             block_call(value)
           end
 
-          private_class_method :builder_send
+          # The builder a `Struct.new` / `Class.new` / `Module.new` / `Data.define` call names.
+          sig { params(send_node: Parser::AST::Node).returns(T.nilable(String)) }
+          def self.constructor_kind(send_node)
+            receiver = NodeChildren.node_at(send_node, 0)
+            return nil unless receiver && receiver.type == :const
+
+            kind = NodeChildren.symbol_at(receiver, 1).to_s
+            kind if BUILDERS[kind] == NodeChildren.symbol_at(send_node, 1)
+          end
+
+          private_class_method :builder_send, :constructor_kind
         end
       end
     end

@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -10,7 +10,7 @@ module SimpleCov
         extend T::Sig
 
         # The explicit value used to designate a file or coverage block as perfectly covered.
-        PERFECT_COVERAGE_PERCENT = T.let(100.0, Float)
+        PERFECT_COVERAGE_PERCENT = 100.0
       end
     end
   end

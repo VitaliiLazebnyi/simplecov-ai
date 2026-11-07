@@ -31,4 +31,32 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::LineSpan do
       expect(verdicts).to eq([false, false, false, false])
     end
   end
+
+  describe '.of' do
+    it 'spans a branch, a node or a method deficit from its first to its last line' do
+      branch = SimpleCov::SourceFile::Branch.new(start_line: 4, end_line: 6, coverage: 0, inline: false, type: :then)
+      node = SimpleCov::Formatter::AIFormatter::ASTResolver::SemanticNode.new(
+        name: 'A', type: 'Class', start_line: 1, end_line: 9
+      )
+      expect([described_class.of(branch), described_class.of(node)]).to eq([4..6, 1..9])
+    end
+  end
+
+  describe '.line' do
+    it 'is the range of one line' do
+      expect(described_class.line(7)).to eq(7..7)
+    end
+  end
+
+  describe '.label' do
+    it 'labels a single line by its number and a span by its bounds, as strings' do
+      expect([described_class.label(12..12), described_class.label(12..15)]).to eq(%w[12 12-15])
+    end
+  end
+
+  describe '.sort_key' do
+    it 'orders by first line, then wider ranges first' do
+      expect([3..9, 1..2, 3..12].sort_by { |range| described_class.sort_key(range) }).to eq([1..2, 3..12, 3..9])
+    end
+  end
 end

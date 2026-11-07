@@ -1,4 +1,4 @@
-# typed: strict
+# typed: strong
 # frozen_string_literal: true
 
 module SimpleCov
@@ -12,7 +12,10 @@ module SimpleCov
           extend T::Sig
 
           # The class name Ruby reports for the owner of a singleton method.
-          SINGLETON_OWNER_PATTERN = T.let(/\A#<Class:(.+)>\z/.freeze, Regexp)
+          SINGLETON_OWNER_PATTERN = /\A#<Class:(.+)>\z/.freeze
+          # Whether the installed SimpleCov implements method coverage at all (>= 1.0, where
+          # SourceFile#missed_methods and Result#total_methods exist), decided once at load time.
+          API_AVAILABLE = T.let(SimpleCov::SourceFile.method_defined?(:missed_methods), T::Boolean)
 
           # @return [String] The method's semantic name (`Klass#name` or `Klass.name`).
           const :name, String
@@ -32,7 +35,7 @@ module SimpleCov
           # @return [Boolean] Whether method coverage was measured.
           sig { params(coverage_metrics: SimpleCov::Result).returns(T::Boolean) }
           def self.measured?(coverage_metrics)
-            coverage_metrics.respond_to?(:total_methods) && !coverage_metrics.total_methods.nil?
+            API_AVAILABLE && coverage_metrics.total_methods ? true : false
           end
 
           # The methods of a file SimpleCov reported as missed. SimpleCov reports methods only
@@ -42,7 +45,7 @@ module SimpleCov
           # @return [Array<MethodDeficit>] The missed methods in SimpleCov's order.
           sig { params(file: SimpleCov::SourceFile).returns(T::Array[MethodDeficit]) }
           def self.from_file(file)
-            missed_methods = (file.respond_to?(:missed_methods) && file.missed_methods) || []
+            missed_methods = (API_AVAILABLE && file.missed_methods) || []
             missed_methods.map do |missed_method|
               method_name = missed_method.method_name.to_s
               new(name: qualified_name(missed_method.class_name.to_s, method_name), method_name: method_name,

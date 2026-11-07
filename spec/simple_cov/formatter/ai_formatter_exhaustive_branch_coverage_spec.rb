@@ -30,8 +30,18 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
     headings.insert(headings.index('ExhaustiveBranching.test_chained_safe_nav'), one_line_pattern)
   end
 
+  # Ruby 2.7 flags the fixture's pattern matching as experimental while it compiles the file, so
+  # that notice is asserted as the fixture is first loaded instead of being left to reach STDERR;
+  # every later Ruby loads it silently.
+  def load_fixture
+    return if defined?(ExhaustiveBranching)
+
+    notice = Gem::Version.new(RUBY_VERSION) < Gem::Version.new('3.0') ? /Pattern matching is experimental/ : ''
+    expect { require_relative '../../fixtures/exhaustive_branching' }.to output(notice).to_stderr
+  end
+
   before do
-    require_relative '../../fixtures/exhaustive_branching'
+    load_fixture
 
     # Execute specific paths to ensure at least one missed branch per construct
     ExhaustiveBranching.test_if_else(true)
@@ -65,9 +75,6 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
       config.output_to_console = false
     end
     capture_stdout { described_class.new.format(session_result(fixture_path)) }
-    # Formatting proves that what this engine's Coverage recorded builds a Result and renders; the
-    # examples assert branch deficits, which only an engine recording branches can produce.
-    skip 'this engine records no branch coverage' unless branch_coverage_measurable?
   end
 
   after do
@@ -84,39 +91,48 @@ RSpec.describe SimpleCov::Formatter::AIFormatter, mutant: false do
     Regexp.new(lines.join('.*'), Regexp::MULTILINE)
   end
 
-  it 'lists the standard control-flow deficits in source order under their methods' do
-    pattern = ordered_deficit_lines(
-      'Missing coverage for `else` branch: `:if_false`',
-      'Missing coverage for `then` branch: `:unless_true`',
-      'Missing coverage for `else` branch: `:ternary_false`',
-      'Missing coverage for `when` branch: `:case_two`',
-      'Missing coverage for `else` branch: `:case_else`',
-      'Missing coverage for `then` branch: `obj&.name`'
-    )
-    expect(File.read(report_path)).to match(pattern)
+  # Formatting proves that what this engine's Coverage recorded builds a Result and renders; the
+  # examples below assert branch deficits, which only an engine recording branches produces.
+  it 'writes the report from what this engine recorded' do
+    expect(File.size?(report_path)).to be_positive
   end
 
-  it 'lists the loop and pattern-matching deficits in source order' do
-    pattern = ordered_deficit_lines(
-      'Missing coverage for `body` branch: `break :while_break`',
-      'Missing coverage for `body` branch: `break :until_break`',
-      'Missing coverage for `in` branch: `:pattern_two`',
-      'Missing coverage for `else` branch: `:pattern_else`'
-    )
-    expect(File.read(report_path)).to match(pattern)
-  end
+  if SimpleCovFixtures.branch_coverage_measurable?
+    it 'lists the standard control-flow deficits in source order under their methods' do
+      pattern = ordered_deficit_lines(
+        'Missing coverage for `else` branch: `:if_false`',
+        'Missing coverage for `then` branch: `:unless_true`',
+        'Missing coverage for `else` branch: `:ternary_false`',
+        'Missing coverage for `when` branch: `:case_two`',
+        'Missing coverage for `else` branch: `:case_else`',
+        'Missing coverage for `then` branch: `obj&.name`'
+      )
+      expect(File.read(report_path, encoding: Encoding::UTF_8)).to match(pattern)
+    end
 
-  it 'lists the edge-case deficits in source order' do
-    pattern = ordered_deficit_lines(
-      'Missing coverage for `else` branch: `:inline_yes if cond`',
-      'Missing coverage for `else` branch: `:multiple_when_else`',
-      'Missing coverage for `then` branch: `obj&.a`',
-      'Missing coverage for `then` branch: `obj&.a&.b`'
-    )
-    expect(File.read(report_path)).to match(pattern)
-  end
+    it 'lists the loop and pattern-matching deficits in source order' do
+      pattern = ordered_deficit_lines(
+        'Missing coverage for `body` branch: `break :while_break`',
+        'Missing coverage for `body` branch: `break :until_break`',
+        'Missing coverage for `in` branch: `:pattern_two`',
+        'Missing coverage for `else` branch: `:pattern_else`'
+      )
+      expect(File.read(report_path, encoding: Encoding::UTF_8)).to match(pattern)
+    end
 
-  it 'attributes every deficit to a method of the fixture module, in source order' do
-    expect(File.read(report_path).scan(/^- `(ExhaustiveBranching\.\w+)`$/).flatten).to eq(expected_headings)
+    it 'lists the edge-case deficits in source order' do
+      pattern = ordered_deficit_lines(
+        'Missing coverage for `else` branch: `:inline_yes if cond`',
+        'Missing coverage for `else` branch: `:multiple_when_else`',
+        'Missing coverage for `then` branch: `obj&.a`',
+        'Missing coverage for `then` branch: `obj&.a&.b`'
+      )
+      expect(File.read(report_path, encoding: Encoding::UTF_8)).to match(pattern)
+    end
+
+    it 'attributes every deficit to a method of the fixture module, in source order' do
+      headings = File.read(report_path, encoding: Encoding::UTF_8).scan(/^- `(ExhaustiveBranching\.\w+)`$/).flatten
+      expect(headings).to eq(expected_headings)
+    end
   end
 end

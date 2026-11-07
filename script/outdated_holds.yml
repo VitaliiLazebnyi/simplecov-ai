@@ -1,0 +1,22 @@
+# Everything in the toolchain that is deliberately NOT at its newest release, each with the exact
+# upstream reason. `rake outdated` (script/outdated.rb) fails for anything outdated that is not
+# listed here, and for a listed hold that is no longer needed. Checked on 2026-10-28.
+gems:
+  diff-lcs:
+    newest: 2.0.0
+    blocked_by:
+      - 'rspec-expectations 3.13.5 (newest): diff-lcs >= 1.2.0, < 2.0'
+      - 'rspec-mocks 3.13.8 (newest): diff-lcs >= 1.2.0, < 2.0'
+  prism:
+    newest: 2.1.0
+    blocked_by:
+      - 'rubocop-ast 1.50.0 (newest): prism ~> 1.7'
+      - 'flay 2.14.4, flog 4.9.4, debride 1.15.2 (newest): prism ~> 1.7'
+      - 'rbi 0.5.0 (newest, via tapioca): prism ~> 1.0'
+# Mutation testing runs on this Ruby instead of .ruby-version: mutant 0.17.1 (newest) requires
+# `parser/current` unconditionally (lib/mutant.rb), and parser 3.3.13.0 (newest; the parser gem
+# ships no grammar for Ruby 3.4 or later, upstream points to Prism) prints
+# "warning: parser/current is loading parser/ruby33, which recognizes 3.3.x-compliant syntax" on
+# every Ruby except 3.3.13. The check fails once the installed mutant stops requiring
+# parser/current, or the installed parser gains a grammar for the Ruby in .ruby-version.
+mutation_ruby: 3.3.13

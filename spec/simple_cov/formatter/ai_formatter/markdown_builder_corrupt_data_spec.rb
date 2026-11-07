@@ -97,20 +97,22 @@ RSpec.describe SimpleCov::Formatter::AIFormatter::MarkdownBuilder do
     expect(digest_for(result)).to eq(expected)
   end
 
-  context 'when a decodable file has a method deficit next to the corrupt file (SimpleCov >= 1.0)' do
-    let(:healthy_result) do
-      methods = { ['Object', :plain, 1, 0, 3, 3] => 0 }
-      result_for(corrupt_path => { 'lines' => [1, 1, nil], 'branches' => corrupt_branches },
-                 plain_path => { 'lines' => [1, 1, nil], 'methods' => methods })
-    end
+  # The decode errors below are those of SimpleCov >= 1.0's descriptor parser.
+  if SimpleCovFixtures.method_coverage_supported?
+    context 'when a decodable file has a method deficit next to the corrupt file (SimpleCov >= 1.0)' do
+      let(:methods) { { ['Object', :plain, 1, 0, 3, 3] => 0 } }
+      let(:healthy_result) do
+        result_for(corrupt_path => { 'lines' => [1, 1, nil], 'branches' => corrupt_branches },
+                   plain_path => { 'lines' => [1, 1, nil], 'methods' => methods })
+      end
 
-    it 'still lists the method deficits of the files that decode, matching the N/A method line' do
-      skip 'method coverage needs SimpleCov >= 1.0' unless method_coverage_supported?
-      digest = measuring_methods(healthy_result, {}) { digest_for(healthy_result) }
-      method_deficit = "### `aaa_plain.rb`\n- `Object#plain`\n  " \
-                       "- **Method Deficit:** [L1-3] `Object#plain` never invoked\n\n"
-      expect(digest).to eq(report(undecodable_header, [error_block(ArgumentError), method_deficit],
-                                  [error_block(ArgumentError)]))
+      it 'still lists the method deficits of the files that decode, matching the N/A method line' do
+        digest = measuring_methods(healthy_result, plain_path => methods) { digest_for(healthy_result) }
+        method_deficit = "### `aaa_plain.rb`\n- `Object#plain`\n  " \
+                         "- **Method Deficit:** [L1-3] `Object#plain` never invoked\n\n"
+        expect(digest).to eq(report(undecodable_header, [error_block(ArgumentError), method_deficit],
+                                    [error_block(ArgumentError)]))
+      end
     end
   end
 

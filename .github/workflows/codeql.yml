@@ -2,41 +2,63 @@ name: CodeQL
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
   schedule:
-    - cron: '17 6 * * 1' # weekly, Monday 06:17 UTC
+    - cron: '41 5 * * 1'
+  workflow_dispatch:
 
-permissions:
-  contents: read
+# Nothing is writable by default; every job re-declares the (read-only) permissions it needs.
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 # If "default setup" code scanning is enabled in the repository settings, GitHub rejects results
-# from this advanced workflow; switch the repository to "advanced" setup (or disable default
-# setup) so the analyses below are accepted.
+# from this advanced workflow; switch the repository to "advanced" setup.
 jobs:
   analyze:
-    name: Analyze (${{ matrix.language }})
-    runs-on: ubuntu-latest
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-26.04
     permissions:
-      security-events: write # upload results to code scanning
-      actions: read
+      actions: read # CodeQL reads workflow metadata
       contents: read
+      security-events: write # upload CodeQL results to code scanning
     strategy:
       fail-fast: false
       matrix:
-        # `ruby` scans lib/ and spec/; `actions` scans the workflow files themselves.
         language: [ruby, actions]
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
-        with:
-          languages: ${{ matrix.language }}
-          queries: security-and-quality
-      - name: Perform CodeQL analysis
-        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
-        with:
-          category: "/language:${{ matrix.language }}"
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      with:
+        languages: ${{ matrix.language }}
+        queries: security-and-quality
+        build-mode: none
+    - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      with:
+        category: "/language:${{ matrix.language }}"
+
+  warning-gate:
+    name: Warning gate
+    if: ${{ !cancelled() }}
+    needs: [analyze]
+    runs-on: ubuntu-26.04
+    permissions:
+      actions: read # reads the logs of the other jobs of this run
+      contents: read
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Fail on any warning or deprecation in the logs of this run
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GATE_JOB_NAME: Warning gate
+      run: script/warning_gate.sh
