@@ -53,6 +53,7 @@ step bundle exec rake outdated
 
 # Every other file type.
 step npm ci --silent
+step npm audit --audit-level=low
 step npm run --silent markdownlint
 if [[ ! -x tmp/venv/bin/yamllint ]]; then
   python3 -m venv tmp/venv

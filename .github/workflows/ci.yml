@@ -506,6 +506,8 @@ jobs:
           node-version-file: .node-version
           package-manager-cache: false
       - run: npm ci
+      # Every installed package, transitive ones included, free of known vulnerabilities.
+      - run: npm audit --audit-level=low
       - run: npm run markdownlint
 
   yamllint:

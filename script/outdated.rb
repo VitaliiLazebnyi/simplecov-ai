@@ -391,11 +391,12 @@ module Outdated
       end
     end
 
-    # npm: every package package.json pins is at its newest release.
+    # npm: every package package.json pins (its dependencies and the overrides of transitive ones)
+    # is at its newest release.
     sig { void }
     def npm_packages
       package = JSON.parse(File.read(File.join(ROOT, 'package.json')))
-      package.fetch('devDependencies').each do |name, pinned|
+      package.fetch('devDependencies').merge(package.fetch('overrides', {})).each do |name, pinned|
         newest = Upstream.npm(name)
         @problems.add("npm package #{name} #{pinned} is not the newest #{newest}") if pinned != newest
       end
