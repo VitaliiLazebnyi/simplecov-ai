@@ -28,7 +28,7 @@ DEBRIDE_ALLOWED = {
 # Docker images the `check:*` tasks run the suite in through bin/check-ruby. The official jruby
 # image ships no C compiler, which prism (pulled in through parser's dependents) needs to build,
 # so the JRuby task installs one before `bundle install`.
-JRUBY_IMAGE = 'jruby:10.0'
+JRUBY_IMAGE = 'jruby:10.1'
 JRUBY_SETUP = 'apt-get update -qq && apt-get install -y -qq build-essential'
 TRUFFLERUBY_IMAGE = 'ghcr.io/graalvm/truffleruby-community:latest'
 

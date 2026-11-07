@@ -22,7 +22,7 @@ if tooling_supported
     gem 'mutant-rspec', '~> 0.17.1'
     gem 'reek', '~> 6.6'
     gem 'rubocop', '~> 1.92'
-    gem 'rubocop-md', '~> 2.0'
+    gem 'rubocop-md', '~> 3.0'
     gem 'rubocop-packaging', '~> 0.6'
     gem 'rubocop-performance', '~> 1.27'
     gem 'rubocop-rake', '~> 0.7'
