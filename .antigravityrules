@@ -49,7 +49,7 @@
   tools to modify code (`replace_file_content` / `multi_replace_file_content`) to inject updates directly into
   repositories rather than reprinting massive files in the chat interface.
 - **Zero-Tolerance Quality Gates**: Every modification I make to any file—be it Markdown or Ruby—MUST strictly comply
-  with the project’s mandates (e.g., zero markdownlint warnings, 0 RuboCop errors, 100% test coverage).
+  with the project’s mandates (e.g., zero rumdl warnings, 0 RuboCop errors, 100% test coverage).
 - **Architectural Traceability**: Whenever I mutate the `REQUIREMENTS.md` file based on "здоровий глузд", I will
   explicitly annotate the rationale and link the new state clearly to the project's vision, ensuring historical
   evolution is perfectly transparent to human auditors.

@@ -1,10 +1,9 @@
 ---
 # Weekly dependency update proposals for every ecosystem of the repository: the Ruby bundle, the
-# pinned GitHub Actions, the npm tooling (package.json) and the pip tooling
-# (.github/python/requirements.txt). The cooldown keeps brand-new releases out for a week so
-# hijacked or quickly-yanked versions are never proposed automatically. The container images and
-# the downloaded tools pinned in the workflows are checked by `rake outdated` (script/outdated.rb),
-# which also fails when an override of package.json is behind.
+# pinned GitHub Actions and the pip tooling (.github/python/requirements.txt). The cooldown keeps
+# brand-new releases out for a week so hijacked or quickly-yanked versions are never proposed
+# automatically. The container images and the downloaded tools pinned in the workflows are checked
+# by `rake outdated` (script/outdated.rb).
 version: 2
 updates:
   - package-ecosystem: bundler
@@ -15,12 +14,6 @@ updates:
       default-days: 7
     open-pull-requests-limit: 10
   - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
-    cooldown:
-      default-days: 7
-  - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly

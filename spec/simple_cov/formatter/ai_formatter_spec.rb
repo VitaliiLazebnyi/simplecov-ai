@@ -11,11 +11,11 @@ require 'tmpdir'
 # Whole-report expectations: the strongest oracle for every subject of the gem under mutant
 # (see spec/support/mutant_scopes.rb).
 RSpec.describe(SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScopes.spec_levels) do
-  let(:tmpdir)      { Dir.mktmpdir('scai') }
-  let(:report_path) { File.join(tmpdir, 'report.md') }
-  let(:config)      { described_class.configuration }
+  let(:tmpdir)      { Dir.mktmpdir('scai')                         }
+  let(:report_path) { File.join(tmpdir, 'report.md')               }
+  let(:config)      { described_class.configuration                }
   let(:calc_path)   { write_source(tmpdir, 'calc.rb', calc_source) }
-  let(:calc_result) { result_for(calc_path => calc_coverage) }
+  let(:calc_result) { result_for(calc_path => calc_coverage)       }
 
   before do
     described_class.reset_configuration!
@@ -361,7 +361,7 @@ RSpec.describe(SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
     # SimpleCov runs formatters from its at_exit hook, where an exception would fail an
     # otherwise passing test run.
     context 'when the report cannot be written' do
-      let(:blocking_file) { File.join(tmpdir, 'blocker') }
+      let(:blocking_file) { File.join(tmpdir, 'blocker')          }
       let(:report_path)   { File.join(blocking_file, 'report.md') }
 
       before { File.write(blocking_file, '') }

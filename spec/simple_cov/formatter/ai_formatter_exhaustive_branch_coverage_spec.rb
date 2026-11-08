@@ -13,7 +13,7 @@ require 'tmpdir'
 # engine that records no branch coverage the examples are skipped after the report is produced.
 RSpec.describe(SimpleCov::Formatter::AIFormatter, mutant: false) do
   let(:fixture_path) { File.expand_path('../../fixtures/exhaustive_branching.rb', __dir__) }
-  let(:report_path)  { 'coverage/exhaustive_test_ai_report.md' }
+  let(:report_path)  { 'coverage/exhaustive_test_ai_report.md'                             }
   # Every method with a missed arm or line, in source order. `&&`, `||` and their assignment
   # forms produce no branch data in Ruby's coverage, and neither does the one-line `in` pattern
   # since Ruby 3.4 compiles with Prism, so those methods have no deficit.

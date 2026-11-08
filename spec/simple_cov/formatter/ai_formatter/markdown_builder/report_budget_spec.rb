@@ -7,7 +7,7 @@ require 'spec_helper'
 require 'stringio'
 
 RSpec.describe(SimpleCov::Formatter::AIFormatter::MarkdownBuilder::ReportBudget) do
-  let(:buffer) { StringIO.new }
+  let(:buffer) { StringIO.new                      }
   let(:budget) { described_class.new(buffer, 1, 0) }
 
   def notice(deficit_files, bypass_files)

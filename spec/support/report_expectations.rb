@@ -1,11 +1,14 @@
 # Copyright (c) 2026 Vitalii Lazebnyi
-# typed: false
+# typed: strict
 # frozen_string_literal: true
 
 # Shared by the specs that compare whole reports: the instant every report is generated at
 # (SCAI-REQ-008: time is mocked), in a fixed offset so the header's local-timezone label is the
 # same on every machine, and the header a run at that instant produces.
 module ReportExpectations
+  extend T::Sig
+  include RSpec::Mocks::ExampleMethods
+
   FROZEN_TIME = Time.new(2026, 4, 21, 23, 40, 44, '+09:00').freeze
   private_constant(:FROZEN_TIME)
   # {FROZEN_TIME} as the header prints it.
@@ -13,11 +16,15 @@ module ReportExpectations
   public_constant(:FROZEN_ISO8601)
 
   # Pins `Time.now` to {FROZEN_TIME} for the example.
+  sig { void }
   def freeze_time
     allow(Time).to(receive(:now).and_return(FROZEN_TIME))
   end
 
   # The report header of a run at {FROZEN_TIME}, with the method line only when given.
+  sig do
+    params(status: String, line_label: String, branch_label: String, method_label: T.nilable(String)).returns(String)
+  end
   def expected_header(status, line_label, branch_label, method_label: nil)
     method_line = method_label ? "**Global Method Coverage:** #{method_label}\n" : ''
     "# AI Coverage Digest\n**Status:** #{status}\n**Global Line Coverage:** #{line_label}\n" \

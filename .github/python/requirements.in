@@ -1,3 +1,6 @@
-# yamllint, run by the yamllint CI job and script/check. Compiled with hashes into requirements.txt:
+# The Python linters of CI and script/check: yamllint, rumdl (Markdown) and zizmor (GitHub workflows).
+# Compiled with hashes into requirements.txt:
 #   uv pip compile --generate-hashes --universal --python-version 3.12 requirements.in -o requirements.txt
+rumdl==0.3.2
 yamllint==1.38.0
+zizmor==1.32.0

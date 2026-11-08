@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **sorbet-runtime 0.6.** The runtime dependency now accepts `sorbet-runtime >= 0.5, < 0.7`.
+- **`sorbet-runtime` 0.6.** The runtime dependency now accepts `sorbet-runtime >= 0.5, < 0.7`.
 - **Parser fallback without global state.** On a Ruby for which neither Prism nor the `parser` gem
   has an exact grammar, the newest `parser/rubyXY` grammar not newer than the running Ruby is
   loaded directly. Previously `parser/current` was required with `$VERBOSE` set to `nil` for the
@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Development
 
 - The strictest settings of every tool, on every file type: RuboCop with every cop of RuboCop and
-  its plugins enabled (`EnabledByDefault`, plus rubocop-yard), each cop that stays off documented
+  its plugins enabled (`EnabledByDefault`, plus `rubocop-yard`), each cop that stays off documented
   with what it contradicts; every Ruby command run with `-w -W:deprecated -W:performance`;
   markdownlint with every rule; yamllint in strict mode; ShellCheck with every optional check and
   shfmt; editorconfig-checker; lychee on every link and anchor; Harden-Runner blocking all
@@ -39,11 +39,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   patterns and every mutant killed, no skipped examples, no warning anywhere in a run or a CI log,
   and every dependency at its newest release unless `script/outdated_holds.yml` documents why
   (see CONTRIBUTING.md).
-- Dependencies updated to their newest releases (2026-11-07): rubocop-md 3.0 (Kramdown-based
-  Markdown parsing), rubocop 1.92.2, RSpec 3.13.7 / 3.13.6 / 3.13.9, Sorbet 0.6.13645, spoom
-  1.8.13; ruby/setup-ruby 1.338.0, github/codeql-action 4.39.3, crate-ci/typos 1.52.0,
+- Dependencies updated to their newest releases (2026-11-07): `rubocop-md` 3.0 (Kramdown-based
+  Markdown parsing), RuboCop 1.92.2, RSpec 3.13.7 / 3.13.6 / 3.13.9, Sorbet 0.6.13645, spoom
+  1.8.13; `ruby/setup-ruby` 1.338.0, `github/codeql-action` 4.39.3, `crate-ci/typos` 1.52.0,
   zizmorcore/zizmor-action 0.8.1, Semgrep 1.184.0, JRuby 10.1.3.0 in CI and `jruby:10.1` for
   `rake check:jruby`.
+- Stricter still, matching the strictest settings of the sibling repositories:
+  `RSpec/AlignRightLetBrace` is on; Sorbet checks `spec/` as well, with `spec_helper.rb` and
+  `spec/support/` at `strict`; Reek, Flay, Flog and debride check `script/`, the `Rakefile`, the
+  gemspec and the Gemfiles as well as `lib/`, with Flog's threshold lowered to 20 and Flay's mass to
+  20; Markdown is linted by rumdl with every markdownlint rule and rumdl's own (the npm tooling is
+  gone); zizmor runs with the auditor persona and its online audits; Trivy scans the lockfiles for
+  vulnerabilities of any severity and the tree for secrets; every gem, Action and pip package must
+  reach OpenSSF Scorecard 3 or be allowed with a reason (`rake scorecard`); every Harden-Runner step
+  drops telemetry and sudo; the release job blocks unlisted egress and refuses to publish an
+  unsigned gem.
 
 ## [0.11.0] - 2026-08-29
 
@@ -138,7 +148,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as `b`.
 - An empty snippet (a file that cannot be read) renders as a code span holding one space instead
   of two bare backticks, which CommonMark shows literally.
-- `DeficitGroup` no longer relies on sorbet-runtime prop defaults, which fail on JRuby.
+- `DeficitGroup` no longer relies on `sorbet-runtime` prop defaults, which fail on JRuby.
 - JRuby and TruffleRuby test runs: SimpleCov's engine gate (`branch_coverage?` /
   `method_coverage?`) is lifted for the examples, so branch and method rendering is exercised
   with hand-built data there; in-process coverage results go through `SimpleCov::ResultAdapter`;
@@ -212,7 +222,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Gemfile.lock` is committed (resolved on Ruby 4.0) for the single-version gates; the CI test
   matrix resolves dependencies per Ruby. The Sorbet toolchain moved to the `Gemfile` behind an
   MRI/non-Windows guard so the bundle installs on Windows, JRuby and TruffleRuby.
-- `bundle exec rake` runs every gate (spec, rubocop, typecheck, docs, audit, build);
+- `bundle exec rake` runs every gate (`spec`, `rubocop`, `typecheck`, `docs`, `audit`, `build`);
   `bin/setup`, `bin/check-ruby` (any Ruby in Docker), `rake quality` (reek, flay, flog,
   debride) and `rake rbi` are added.
 - CI adds actionlint, zizmor, markdownlint, typos, bundler-audit, a strict gem build with a
@@ -221,7 +231,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   TruffleRuby runs; all actions are SHA-pinned and updated by Dependabot.
 - Releases verify that `lib/simplecov-ai/version.rb` matches the tag and refuse to publish
   without a `CHANGELOG.md` heading for it.
-- The test suite drives the formatter with real SimpleCov objects, with sorbet-runtime signature
+- The test suite drives the formatter with real SimpleCov objects, with `sorbet-runtime` signature
   checks enabled, across SimpleCov 0.18–1.1.
 - Mutation testing with mutant is a blocking gate (`rake mutant`; 100% of mutations killed). The
   suite additionally runs an end-to-end child-process spec through SimpleCov's real result-merging

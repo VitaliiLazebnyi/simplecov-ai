@@ -8,12 +8,12 @@ require 'fileutils'
 require 'tmpdir'
 
 RSpec.describe(SimpleCov::Formatter::AIFormatter::MarkdownBuilder::BranchEnricher) do
-  let(:tmpdir)        { Dir.mktmpdir('scai') }
-  let(:source)        { "def sign(number)\n  number.positive? ? :pos : :neg\nend\n" }
-  let(:path)          { write_source(tmpdir, 'sign.rb', source) }
-  let(:condition)     { branch_descriptor(source, :if, 0, 2, 'number.positive? ? :pos : :neg') }
-  let(:then_arm)      { branch_descriptor(source, :then, 1, 2, ':pos') }
-  let(:else_arm)      { branch_descriptor(source, :else, 2, 2, ':neg') }
+  let(:tmpdir)        { Dir.mktmpdir('scai')                                                                        }
+  let(:source)        { "def sign(number)\n  number.positive? ? :pos : :neg\nend\n"                                 }
+  let(:path)          { write_source(tmpdir, 'sign.rb', source)                                                     }
+  let(:condition)     { branch_descriptor(source, :if, 0, 2, 'number.positive? ? :pos : :neg')                      }
+  let(:then_arm)      { branch_descriptor(source, :then, 1, 2, ':pos')                                              }
+  let(:else_arm)      { branch_descriptor(source, :else, 2, 2, ':neg')                                              }
   let(:live_coverage) { { 'lines' => [1, 1, nil], 'branches' => { condition => { then_arm => 1, else_arm => 0 } } } }
 
   after { FileUtils.remove_entry(tmpdir) }

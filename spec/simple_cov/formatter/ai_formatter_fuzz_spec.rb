@@ -12,8 +12,8 @@ require 'tmpdir'
 # be contained to that file (SCAI-REQ-011), so the formatter never raises and always writes a
 # report. Failures name the seed; FORMATTER_FUZZ_SEED replays or shifts the sequence.
 RSpec.describe(SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScopes.containment) do
-  let(:tmpdir)      { Dir.mktmpdir('scai-fuzz') }
-  let(:report_path) { File.join(tmpdir, 'report.md') }
+  let(:tmpdir)      { Dir.mktmpdir('scai-fuzz')                                               }
+  let(:report_path) { File.join(tmpdir, 'report.md')                                          }
   let(:base_seed)   { Integer(ENV.fetch('FORMATTER_FUZZ_SEED', CoverageFuzzer::DEFAULT_SEED)) }
   # A parsable file with a branch, an unparsable one and one with a nocov region, so deficit
   # rendering, the raw fallback and bypass auditing all run over the fuzzed data. Each is padded

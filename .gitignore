@@ -6,7 +6,6 @@ gemfiles/*.lock
 .yardoc/
 doc/
 tmp/
-node_modules/
 .claude/worktrees/
 .mutant/
 # Backstop against a report resolved against the working directory (see the report destination specs).

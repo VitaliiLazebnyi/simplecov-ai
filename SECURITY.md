@@ -1,4 +1,4 @@
-# Security Policy
+# Security policy
 
 ## Supported versions
 
@@ -23,7 +23,7 @@ a patched release will be published to RubyGems and the advisory disclosed.
 
 ## Scope notes
 
-simplecov-ai reads project source files and coverage results and writes a Markdown report. It
+`simplecov-ai` reads project source files and coverage results and writes a Markdown report. It
 does not execute project code, open network connections, or run in production. The most relevant
 consideration is that uncovered source snippets are copied verbatim into the generated report; if
 that report is fed to an autonomous agent, treat the source content as untrusted input to the
@@ -39,7 +39,7 @@ under the formatter's control; it does not make the *content* trustworthy. A com
 must treat it as data.
 
 On SimpleCov < 1.0, branch descriptors read back from `coverage/.resultset.json` are decoded by
-SimpleCov's own `eval`-based `restore_ruby_data_structure` helper (which simplecov-ai calls
+SimpleCov's own `eval`-based `restore_ruby_data_structure` helper (which `simplecov-ai` calls
 through a `respond_to?` guard). A tampered resultset file can therefore execute Ruby inside the
 test process on those versions, so treat `coverage/.resultset.json` as a trust boundary there:
 do not merge or format resultsets from untrusted sources. SimpleCov 1.0 replaced that helper

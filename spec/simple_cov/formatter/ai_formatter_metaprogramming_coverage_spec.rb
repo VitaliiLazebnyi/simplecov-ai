@@ -13,7 +13,7 @@ require 'tmpdir'
 # engine that records no branch coverage the example is skipped after the report is produced.
 RSpec.describe(SimpleCov::Formatter::AIFormatter, mutant: false) do
   let(:fixture_path) { File.expand_path('../../fixtures/metaprogramming_constructs.rb', __dir__) }
-  let(:report_path)  { 'coverage/metaprogramming_test_ai_report.md' }
+  let(:report_path)  { 'coverage/metaprogramming_test_ai_report.md'                              }
   # Each construct as its own node followed by its missed arm, in source order.
   let(:expected_lines) do
     deficit = '^  - \\*\\*Branch Deficit:\\*\\* \\[L\\d+\\] Missing coverage for `%s` branch: `%s`$'

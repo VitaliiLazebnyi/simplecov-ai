@@ -31,7 +31,7 @@ Gem::Specification.new do |spec|
   spec.metadata['allowed_push_host'] = 'https://rubygems.org'
 
   # Code signing is opt-in: set SIMPLECOV_AI_SIGN to any non-empty value (the release workflow
-  # does so only when the GEM_PRIVATE_KEY secret is present). When enabled, the private key must
+  # always does, and fails when the GEM_PRIVATE_KEY secret is missing). When enabled, the private key must
   # exist and must match the public certificate, otherwise the build aborts with a clear error
   # instead of producing a gem carrying a broken signature. When unset, the gem builds unsigned.
   if ENV['SIMPLECOV_AI_SIGN'].to_s.empty?

@@ -7,8 +7,6 @@ coverage/
 --ignore
 doc/
 --ignore
-spec/
---ignore
 .git/
 --ignore
 .claude/

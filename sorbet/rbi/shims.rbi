@@ -16,3 +16,9 @@ module SimpleCov
     end
   end
 end
+
+# Ruby >= 3.2 (and TruffleRuby); the suite asks for it only where `Coverage` responds to it.
+module Coverage
+  sig { params(mode: Symbol).returns(T::Boolean) }
+  def self.supported?(mode); end
+end

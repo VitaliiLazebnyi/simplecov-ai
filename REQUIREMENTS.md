@@ -1,6 +1,6 @@
-# SimpleCov AI Formatter
+# SimpleCov AI formatter
 
-## 1. Goal & Vision
+## Goal and vision
 
 The goal of this library is to provide a custom `SimpleCov::Formatter` designed explicitly for consumption by Large
 Language Models (LLMs) and autonomous engineering agents. Standard coverage reporters generate massive HTML files or
@@ -11,7 +11,7 @@ This gem will consume standard SimpleCov result sets and output a highly concise
 document** containing only the exact missing semantic coverage blocks, formatted to minimize token use and maximize
 actionable context.
 
-## 2. Why This is the "Best" Approach for AI
+## Why this approach suits AI agents
 
 Generating reports via conventional coverage tools relies heavily on line numbers (e.g., identifying deficits via
 transient line coordinates). This directly conflicts with secure and modern AI development standards, explicitly the
@@ -29,14 +29,14 @@ This gem provides the best approach because it introduces **Semantic Resolution*
 3. **Actionable Delta Directives:** By seeing a missing branch mapped directly to a method name, the AI can instantly
    search the code and write a spec targeting that exact logical boundary.
 
-## 3. Specifications & Constraints
+## Specifications and constraints
 
 **Sub-Domain Identifier:** `SCAI` (SimpleCov AI)
 
 Requirements revised for the 0.11.0 release carry a trailing *Revised in 0.11.0* note stating the reason for the change
 and the defect behind it; requirements introduced by that release state what introduced them.
 
-### 3.1. Functional Behavior
+### Functional behavior
 
 - **SCAI-REQ-001 (Formatter Hook):** The library MUST natively integrate with SimpleCov via
   `SimpleCov.formatter = SimpleCov::Formatter::AIFormatter`.
@@ -130,14 +130,14 @@ and the defect behind it; requirements introduced by that release state what int
   still printed when `output_to_console` is set. *Introduced in 0.11.0 so the artifact's location is discoverable from
   the test log; revised in 0.11.0 to cover an unwritable destination.*
 
-### 3.2. Formatter Implementation & UX
+### Formatter implementation and UX
 
-- **SCAI-REQ-006 (Summary Header):** The markdown output MUST begin with a consolidated telemetry header documenting
+- **SCAI-REQ-006 (Summary Header):** The Markdown output MUST begin with a consolidated telemetry header documenting
   overall line percentage, branch percentage (`N/A (branch coverage not enabled)` when branch coverage was not
   measured), method percentage only when method coverage was measured, generation timestamp, and PASS/FAIL state, where
   `PASSED` requires 100% on every measured criterion. Percentages MUST be printed with one decimal, floored, so a run at
   99.96% reads `99.9%` and never `100.0%` beside `FAILED`. While internal temporal logic MUST be mathematically UTC,
-  this markdown report acts as a presentation layer and MUST dynamically convert and format the timestamp to the user's
+  this Markdown report acts as a presentation layer and MUST dynamically convert and format the timestamp to the user's
   preferred local timezone. *Revised in 0.11.0: rounding could read 100.0% next to FAILED; the method line was added.*
 - **SCAI-REQ-007 (Context Window Preservation):** The formatter MUST NOT print surrounding code blocks or contextual
   snippets around the deficit. It is strictly limited to printing the exact, localized text of the isolated AST node
@@ -174,13 +174,13 @@ and the defect behind it; requirements introduced by that release state what int
   containing a NUL byte. `SimpleCov::Formatter::AIFormatter.reset_configuration!` MUST discard the process-global
   configuration so the next access starts from the defaults. *Introduced in 0.11.0.*
 
-### 3.3. Internal Gem Standards
+### Internal gem standards
 
 - **SCAI-REQ-008 (Maximum Rigor Test Coverage & Anti-Coverage Paradox):** The gem's test suite MUST rigorously establish
   and maintain 100% deterministic line and branch coverage. However, achieving 100% execution coverage is meaningless if
   assertions are weak (the "Coverage Paradox"). Tests MUST NOT be tautological. The suite MUST drive the formatter
   through real SimpleCov objects (`SourceFile`, `Result`, and the merged `Result.from_hash` shape) built from sources
-  written to disk, with sorbet-runtime signature checks enabled, and MUST pass on every supported SimpleCov release
+  written to disk, with Sorbet-runtime signature checks enabled, and MUST pass on every supported SimpleCov release
   line; where a mock is unavoidable it MUST strictly adhere to the exact real-world interfaces and exceptions of its
   target (e.g., matching specific native exception classes like `Parser::SyntaxError` instead of generic
   `StandardError`). Furthermore, structural testing MUST employ deep, nested data fixtures rather than simple flat lists
@@ -204,7 +204,8 @@ and the defect behind it; requirements introduced by that release state what int
   aborting the test run. If the AST parser encounters structurally unparsable Ruby code (e.g., a dynamically generated
   file), it MUST gracefully degrade: it records the file as a deficit using the raw SimpleCov line coordinates,
   explicitly denoting the parsing failure in the Markdown output, before safely continuing to process the remaining
-  valid files. Missing branch-column telemetry, unreadable or non-UTF-8 source files degrade the same way (see §4.5).
+  valid files. Missing branch-column telemetry, unreadable or non-UTF-8 source files degrade the same way (see
+  [Error handling](README.md#error-handling) in the README).
 - **SCAI-REQ-020 (AST Caching & Performance):** To eliminate redundant file system I/O and overhead, the formatter MUST
   maintain an internal AST cache memory buffer mapping file paths to resolved syntax trees, so a file is parsed exactly
   once even when subjected to multiple traversals for deficit detection and bypass auditing, and MUST read a file's text
@@ -222,7 +223,7 @@ and the defect behind it; requirements introduced by that release state what int
 - **SCAI-REQ-029 (Quality Gates):** `bundle exec rake` MUST run every blocking gate locally — `rspec` (100% line and
   branch coverage), `rubocop`, `srb tc --typed strong`, `yardoc --fail-on-warning` with 100% documentation,
   `bundler-audit`, and `gem build --strict` followed by an install-and-require smoke test from a clean `GEM_HOME` — and
-  CI MUST enforce those gates plus mutation testing, actionlint and zizmor on the workflow files, markdownlint,
+  CI MUST enforce those gates plus mutation testing, actionlint and zizmor on the workflow files, rumdl,
   yamllint, ShellCheck and shfmt, editorconfig-checker, lychee, typos, Semgrep (`p/ruby`,
   `p/secrets`, `p/security-audit`, `p/github-actions`), Gitleaks over the full history, CodeQL (Ruby and workflow
   files), the RSpec matrix on Ruby 2.7, 3.2, 3.3, 3.4 and 4.0, and the SimpleCov compatibility matrix (0.18, 0.21, 0.22,
@@ -236,7 +237,7 @@ and the defect behind it; requirements introduced by that release state what int
   process depends on; revised in 0.11.0 when the engine
   and Windows runs became blocking once the suite passed there.*
 
-### 3.4. System Prerequisites & Dependencies
+### System prerequisites and dependencies
 
 - **SCAI-REQ-015 (Ruby Version Constraint):** The gem MUST enforce a minimum Ruby version of `>= 2.7.0` and is tested on
   MRI 2.7, 3.2, 3.3, 3.4 and 4.0 on Linux, and, as blocking jobs, on Windows (Ruby 3.4), JRuby 9.4 and TruffleRuby
@@ -264,7 +265,7 @@ and the defect behind it; requirements introduced by that release state what int
   (`"\xf0-\xff"`) MUST be accepted as MRI accepts them; sources MUST be read as bytes and decoded per their
   `# encoding:` magic comment or byte-order mark. *Introduced in 0.11.0.*
 
-## 4. Usage, Configuration & Example Output
+## Usage, configuration and example output
 
 Installation, the `configure` block with every setting and its default, validation rules, and a
 full example digest are documented in [README.md](README.md), which is the authoritative reference

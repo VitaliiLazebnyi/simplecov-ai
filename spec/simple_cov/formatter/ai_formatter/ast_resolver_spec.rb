@@ -8,7 +8,7 @@ require 'fileutils'
 require 'tmpdir'
 
 RSpec.describe(SimpleCov::Formatter::AIFormatter::ASTResolver) do
-  let(:tmpdir)       { Dir.mktmpdir }
+  let(:tmpdir)       { Dir.mktmpdir                                                          }
   let(:fixture_path) { File.expand_path('../../../fixtures/resolver_constructs.rb', __dir__) }
 
   after { FileUtils.remove_entry(tmpdir) }

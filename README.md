@@ -1,4 +1,4 @@
-# simplecov-ai
+# `simplecov-ai`
 
 A `SimpleCov::Formatter` that writes a compact Markdown digest of missing coverage for Large
 Language Models (LLMs) and autonomous engineering agents.
@@ -104,7 +104,7 @@ end
 - `output_to_console`, `include_bypasses` — `true` or `false`.
 
 Every setting is validated when it is assigned: a value of the wrong type raises `TypeError`
-(the writers are typed with sorbet-runtime) and an out-of-range value raises `ArgumentError`
+(the writers are typed with `sorbet-runtime`) and an out-of-range value raises `ArgumentError`
 naming the setting, for example `granularity must be one of [:fine, :coarse], got :medium`.
 `SimpleCov::Formatter::AIFormatter.reset_configuration!` discards the configuration so the next
 access starts from the defaults (useful in test suites).

@@ -8,15 +8,27 @@ require 'sorbet-runtime'
 require 'tmpdir'
 
 # `bundle exec rake` runs every gate CI enforces (see CONTRIBUTING.md); each one is also a task
-# of its own. Mutation testing (`rake mutant`) and the dependency freshness check
-# (`rake outdated`) are enforced in CI as well but kept out of the default task: the first takes
-# minutes, the second needs the network.
+# of its own. Mutation testing (`rake mutant`), the dependency freshness check (`rake outdated`)
+# and the dependency Scorecard check (`rake scorecard`) are enforced in CI as well but kept out of
+# the default task: the first takes minutes, the other two need the network.
 
-# Flay mass threshold. Below it Flay only reports Sorbet `sig` declarations that two methods
-# share (mass 32 at most in lib/); from it up every duplicated piece of logic is reported.
-FLAY_MASS = 33
-# Flog score above which a single method counts as too complex and must be split up.
-FLOG_METHOD_THRESHOLD = 30
+# Every Ruby source of the gem and of its tooling that Reek, Flay, Flog and debride check: the
+# library, the repository scripts, the Rakefile, the gemspec and the Gemfiles. The specs are
+# checked by RuboCop (rubocop-rspec) instead; see CONTRIBUTING.md.
+CODE_SOURCES = T.let(
+  %w[lib script Rakefile simplecov-ai.gemspec Gemfile].concat(Dir['gemfiles/*.gemfile'].sort).freeze,
+  T::Array[String]
+)
+# Flay mass threshold. Below it (at Flay's default of 16) Flay only reports Sorbet `sig`
+# declarations that two methods share (mass 17 at most); from it up every duplicated piece of
+# logic is reported.
+FLAY_MASS = 20
+# Flog score above which a single method counts as too complex and must be split up (the end of
+# Flog's "good" band).
+FLOG_METHOD_THRESHOLD = 20
+# The gems whose RBIs Tapioca generates for `rake typecheck`: those lib/ calls into, and RSpec,
+# which spec/spec_helper.rb configures.
+TYPED_GEMS = %w[ast parser prism racc simplecov rspec-core rspec-expectations rspec-mocks rspec-support].freeze
 # Output of `yard stats` when every API object is documented.
 FULLY_DOCUMENTED = '100.00% documented'
 # Methods debride cannot see a caller for, each with the caller it cannot see.
@@ -65,9 +77,9 @@ task :suppressions do
   sh 'script/forbidden_suppressions.sh'
 end
 
-desc 'Generate the gem RBIs with Tapioca, then type-check with Sorbet (lib/ is typed: strong)'
+desc 'Generate the gem RBIs with Tapioca, then type-check lib/ (typed: strong) and the rest with Sorbet'
 task :typecheck do
-  sh 'bundle', 'exec', 'tapioca', 'gem', 'ast', 'parser', 'prism', 'racc', 'simplecov'
+  sh 'bundle', 'exec', 'tapioca', 'gem', *TYPED_GEMS
   sh 'bundle', 'exec', 'srb', 'tc'
 end
 
@@ -83,13 +95,13 @@ end
 
 desc 'Fail on any code smell (reek, default configuration; see .reek.yml)'
 task :reek do
-  sh 'bundle', 'exec', 'reek', 'lib'
+  sh 'bundle', 'exec', 'reek', *CODE_SOURCES
 end
 
 desc 'Fail on any structural duplication (flay)'
 task :flay do
   Report.require_clean(
-    ['bundle', 'exec', 'flay', '--mass', FLAY_MASS.to_s, 'lib'],
+    ['bundle', 'exec', 'flay', '--mass', FLAY_MASS.to_s, *CODE_SOURCES],
     'Total score (lower is better) = 0',
     'Flay: duplicated code found'
   )
@@ -97,10 +109,10 @@ end
 
 desc "Fail on any method with a flog score above #{FLOG_METHOD_THRESHOLD}"
 task :flog do
-  report, status = Open3.capture2e('bundle', 'exec', 'flog', '--all', '--methods-only', 'lib')
+  report, status = Open3.capture2e('bundle', 'exec', 'flog', '--all', '--methods-only', *CODE_SOURCES)
   puts report
   abort 'flog failed' unless status.success?
-  scores = report.scan(%r{^\s*(\d+\.\d+): (\S+)\s+lib/})
+  scores = report.scan(/^\s*(\d+\.\d+): (\S+)\s+\S+:\d+/)
   complex = scores.filter_map { |score, name| name if Float(score) > FLOG_METHOD_THRESHOLD }
   abort "flog: methods scoring above #{FLOG_METHOD_THRESHOLD}: #{complex.join(', ')}" unless complex.empty?
 end
@@ -111,7 +123,7 @@ task :debride do
     allowed = File.join(dir, 'allowed.txt')
     File.write(allowed, DEBRIDE_ALLOWED.keys.join("\n"))
     Report.require_clean(
-      ['bundle', 'exec', 'debride', '--whitelist', allowed, 'lib'],
+      ['bundle', 'exec', 'debride', '--whitelist', allowed, *CODE_SOURCES],
       'Total suspect LOC: 0',
       'debride: methods without a caller found'
     )
@@ -159,6 +171,11 @@ end
 desc 'Fail on any outdated Ruby, gem or GitHub Action not on the documented hold list (script/outdated_holds.yml)'
 task :outdated do
   ruby 'script/outdated.rb'
+end
+
+desc 'Fail on any dependency whose OpenSSF Scorecard is below 3 unless allowed (script/scorecard_allowlist.yml)'
+task :scorecard do
+  ruby 'script/scorecard.rb'
 end
 
 # `rake check:jruby`, `rake check:truffleruby` and `rake 'check:ruby[2.7]'` run the suite on another

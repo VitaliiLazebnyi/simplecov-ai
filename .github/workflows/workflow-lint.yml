@@ -28,6 +28,7 @@ jobs:
         uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
         with:
           egress-policy: block
+          disable-telemetry: true
           disable-sudo-and-containers: true
           allowed-endpoints: >-
             github.com:443
@@ -58,8 +59,11 @@ jobs:
       - run: >-
           "${RUNNER_TEMP}/actionlint" -color -shellcheck "${RUNNER_TEMP}/shellcheck"
 
+  # Every audit of the auditor persona, the most thorough one, on the workflows and dependabot.yml;
+  # with a token, zizmor also runs its online audits (known-vulnerable Actions, impostor commits,
+  # ref confusion). Any finding fails the job.
   zizmor:
-    name: zizmor (pedantic)
+    name: zizmor (auditor persona)
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
@@ -69,6 +73,8 @@ jobs:
         uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
         with:
           egress-policy: block
+          disable-telemetry: true
+          disable-sudo-and-containers: true
           allowed-endpoints: >-
             api.github.com:443
             files.pythonhosted.org:443
@@ -77,10 +83,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd  # v0.8.1
-        with:
-          advanced-security: false
-          persona: pedantic
+      # Every package is pinned by its SHA-256 (.github/python/requirements.txt).
+      - name: Install zizmor
+        run: |
+          python3 -m venv "${RUNNER_TEMP}/venv"
+          "${RUNNER_TEMP}/venv/bin/pip" install --quiet --disable-pip-version-check --require-hashes --no-deps \
+            -r .github/python/requirements.txt
+      - name: Audit the workflows and dependabot.yml
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          "${RUNNER_TEMP}/venv/bin/zizmor" --persona=auditor --format=plain --no-progress .
 
   warning-gate:
     name: Warning gate (workflow lint)
@@ -96,6 +109,7 @@ jobs:
         uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
         with:
           egress-policy: block
+          disable-telemetry: true
           disable-sudo-and-containers: true
           allowed-endpoints: >-
             *.actions.githubusercontent.com:443

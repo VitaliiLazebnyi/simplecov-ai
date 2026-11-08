@@ -13,7 +13,7 @@ require 'tmpdir'
 # expected `Ctx#name` / `Ctx.name` and line range - and the ranges must nest without partial
 # overlap. Failures name the seed; RESOLVER_PROPERTY_SEED replays or shifts the sequence.
 RSpec.describe(SimpleCov::Formatter::AIFormatter::ASTResolver) do
-  let(:tmpdir)    { Dir.mktmpdir('scai-property') }
+  let(:tmpdir)    { Dir.mktmpdir('scai-property')                                                }
   let(:base_seed) { Integer(ENV.fetch('RESOLVER_PROPERTY_SEED', ProgramGenerator::DEFAULT_SEED)) }
 
   after { FileUtils.remove_entry(tmpdir) }
