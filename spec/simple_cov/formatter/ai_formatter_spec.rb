@@ -89,15 +89,18 @@ RSpec.describe(SimpleCov::Formatter::AIFormatter, mutant_expression: MutantScope
     File.read(report_path, encoding: Encoding::UTF_8)
   end
 
-  # Runs the block with both standard streams captured; returns what each received.
+  # Runs the block with both standard streams captured; returns what each received. The originals are saved
+  # before the `begin`, so the `ensure` always restores streams that were actually saved.
   def capture_streams
     original_streams = [$stdout, $stderr]
-    $stdout = StringIO.new
-    $stderr = StringIO.new
-    yield
-    [$stdout.string, $stderr.string]
-  ensure
-    $stdout, $stderr = original_streams
+    begin
+      $stdout = StringIO.new
+      $stderr = StringIO.new
+      yield
+      [$stdout.string, $stderr.string]
+    ensure
+      $stdout, $stderr = original_streams
+    end
   end
 
   describe '.configure' do
